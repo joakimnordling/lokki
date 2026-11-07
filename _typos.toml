@@ -4,7 +4,11 @@ extend-exclude = ["tests/fixtures/", "*.woff2", "*.svg", "public/fonts/", "packa
 
 [default]
 # Unicode ranges in @font-face rules
-extend-ignore-re = ["U\\+[0-9A-Fa-f?-]+"]
+extend-ignore-re = [
+  "U\\+[0-9A-Fa-f?-]+",
+  # Old Loggr export file names, with characters encoded as #U00e9
+  "\\w*#U[0-9A-Fa-f]{4}\\w*",
+]
 
 [default.extend-words]
 ser = "ser" # a chart series

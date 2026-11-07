@@ -2,6 +2,12 @@
 
 Lokki includes material from the following projects.
 
+## Jost font
+
+[Jost](https://github.com/indestructible-type/Jost) by The Jost Project Authors, served with the app from
+`public/fonts/` (via [Fontsource](https://fontsource.org)) and embedded in the claude.ai build. Licensed under the
+SIL Open Font License 1.1; the full licence is in [`public/fonts/OFL.txt`](public/fonts/OFL.txt).
+
 ## Lucide icons
 
 Icons from [Lucide](https://lucide.dev), used under the ISC License:
