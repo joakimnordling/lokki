@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lokki</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#f96f45">
+<meta name="apple-mobile-web-app-title" content="Lokki">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" href="fonts/jost-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+<!-- app:begin -->
+<div class="app">
+  <header class="gut" id="hdr"></header>
+  <main class="gut" id="main"><div class="state"><b>Loading your logs…</b></div></main>
+</div>
+<div class="toolbar gut" id="toolbar" hidden><div class="in">
+  <button type="button" id="tbEntries" aria-label="Import or export this metric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 16 4 4 4-4"/> <path d="M7 20V4"/> <path d="m21 8-4-4-4 4"/> <path d="M17 4v16"/></svg></button>
+  <button type="button" id="tbAdd" aria-label="Add entry"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/> <path d="M12 5v14"/></svg></button>
+  <button type="button" id="tbDelete" aria-label="Delete metric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/> <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/> <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/> <line x1="10" x2="10" y1="11" y2="17"/> <line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+</div></div>
+<div id="layer"></div>
+<input type="file" id="fileIn" accept=".csv,text/csv" multiple hidden>
+<input type="file" id="bakIn" accept=".zip,.jsonl,.gz,application/zip,application/gzip,application/x-gzip,application/json" hidden>
+<!-- app:end -->
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

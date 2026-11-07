@@ -30,6 +30,7 @@ repos:
     rev: v1.52.0
     hooks:
       - id: typos
+        args: [--force-exclude] # report only: never rewrite code
 
   # Accidentally committed secrets (tokens, keys)
   - repo: https://github.com/gitleaks/gitleaks
