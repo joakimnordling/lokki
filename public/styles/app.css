@@ -130,6 +130,8 @@ select:focus-visible,
 .app {
   max-width: 560px;
   margin: 0 auto;
+  /* As an iPhone home screen app the page starts under the status bar: start the content below it */
+  padding-top: env(safe-area-inset-top, 0px);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
