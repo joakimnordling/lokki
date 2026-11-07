@@ -114,12 +114,14 @@ describe("CSV and names", () => {
     assert.equal((await saved(A)).filename, "Walk-Run.csv");
   });
 
-  it("carries over settings saved under the old Loggr names", async () => {
-    const C = await h.device("/nodb", { wait: 0 });
-    await C.evaluate(() => localStorage.setItem("loggr:look", '"dark"'));
+  it("keeps per-device settings across reloads", async () => {
+    const C = await h.device("/nodb");
+    await C.click("#hSet");
+    await C.click('[data-look="dark"]');
     await C.reload();
     await C.waitForTimeout(400);
     assert.equal(await C.evaluate(() => document.documentElement.dataset.look), "dark");
+    assert.equal(await C.evaluate(() => localStorage.getItem("lokki:look")), '"dark"');
   });
 
   it("had no script errors", () => assert.deepEqual(h.errors, []));

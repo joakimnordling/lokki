@@ -1,13 +1,8 @@
-// Per-device settings in localStorage. Keys moved from "loggr:" to "lokki:"; an old value is copied over the first time it's read.
+// Per-device settings in localStorage, under "lokki:<name>".
 export const store = {
   get(k) {
     try {
-      let v = localStorage.getItem(`lokki:${k}`);
-      if (v === null) {
-        v = localStorage.getItem(`loggr:${k}`);
-        if (v !== null) localStorage.setItem(`lokki:${k}`, v);
-      }
-      return JSON.parse(v);
+      return JSON.parse(localStorage.getItem(`lokki:${k}`));
     } catch (_e) {
       return null;
     }
