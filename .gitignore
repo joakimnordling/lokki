@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.cache/
+*.log
+.DS_Store
+.idea/
+.vscode/
+# never commit personal data exports or backups
+*.jsonl
+*.jsonl.gz
+lokki-backup-*.zip
+lokki-export-*.csv
