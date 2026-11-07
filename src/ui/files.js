@@ -11,7 +11,35 @@ import { toast } from "./sheets.js";
 
 let importTarget = null;
 
+const MIME = { zip: "application/zip", csv: "text/csv", txt: "text/plain" };
+// Without claude.ai: the share sheet where it can take files (iPhone: Save to Files), otherwise an ordinary download.
+async function saveLocally(filename, data, what) {
+  const file = new File([data], filename, { type: MIME[filename.split(".").pop()] || "application/octet-stream" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return true;
+    } catch (e) {
+      if (e?.name === "AbortError") return false; // closed the share sheet
+      // NotAllowedError: the tap is too long ago (compressing a big backup takes a moment); download instead
+    }
+  }
+  try {
+    const url = URL.createObjectURL(file);
+    const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return true;
+  } catch (e) {
+    toast(`${what} didn't finish: ${e?.message || "unknown error"}.`);
+    return false;
+  }
+}
+
 export async function saveFile(filename, data, what = "Export") {
+  if (S.local) return saveLocally(filename, data, what);
   if (!S.dl) {
     toast("Downloads aren't available here.");
     return false;

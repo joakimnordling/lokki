@@ -2,6 +2,7 @@
 //   /       the built claude.ai artifact (dist/lokki-artifact.html), with the database and downloads
 //   /nodb   the same page with downloads only (a copy that doesn't sync)
 //   /dev/   the unbundled modules (index.html), with the database and downloads
+//   /site/  the built GitHub Pages site (dist/site); open it with { claude: false } to run it standalone
 // Add "#off" to start a page offline.
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -37,6 +38,7 @@ const mock = `(() => {
 })();`;
 
 const types = {
+  ".html": "text/html",
   ".js": "text/javascript",
   ".css": "text/css",
   ".woff2": "font/woff2",
@@ -62,15 +64,16 @@ export async function startHarness() {
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, "http://x").pathname;
     if (path === "/" || path.startsWith("/nodb")) return res.writeHead(200, { "content-type": "text/html" }).end(page);
-    if (path.startsWith("/dev/")) {
-      const rel = path.slice(5) || "index.html";
-      for (const dir of [root, join(root, "public")]) {
+    const site = path.startsWith("/site/");
+    if (path.startsWith("/dev/") || site) {
+      const rel = (site ? path.slice(6) : path.slice(5)) || "index.html";
+      for (const dir of site ? [join(root, "dist", "site")] : [root, join(root, "public")]) {
         const file = resolve(dir, rel);
         if (!file.startsWith(dir)) break;
         try {
           const body = await readFile(file);
           const ext = file.slice(file.lastIndexOf("."));
-          return res.writeHead(200, { "content-type": types[ext] || "text/html" }).end(body);
+          return res.writeHead(200, { "content-type": types[ext] || "application/octet-stream" }).end(body);
         } catch {}
       }
     }
@@ -91,11 +94,11 @@ export async function startHarness() {
   }
 
   // A new device: its own browser context (own IndexedDB and localStorage).
-  async function device(path = "/", { viewport = { width: 393, height: 852 }, wait = 1500 } = {}) {
-    const ctx = await browser.newContext({ viewport, acceptDownloads: false });
+  async function device(path = "/", { viewport = { width: 393, height: 852 }, wait = 1500, claude = true } = {}) {
+    const ctx = await browser.newContext({ viewport, acceptDownloads: !claude });
     const pg = await ctx.newPage();
     pg.on("pageerror", (e) => errors.push(e.message));
-    await pg.addInitScript(mock);
+    if (claude) await pg.addInitScript(mock);
     await pg.exposeBinding("__srvSub", async ({ page }, c) => {
       if (!subs.has(page)) subs.set(page, new Set());
       subs.get(page).add(c);

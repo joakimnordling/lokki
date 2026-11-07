@@ -24,7 +24,7 @@ export function openSettings() {
     <button class="setrow" id="sRes"><span>Restore from Backup<small>Merges a Lokki backup into the app. Shows what will change before anything does.</small></span><span>›</span></button>
     <button class="setrow" id="sExp"><span>Export CSV<small>Every entry as metric, date, value and note, for spreadsheets.</small></span><span>›</span></button>
     <button class="setrow" id="sImp"><span>Import CSV<small>Adds entries from CSV files, including the old Loggr app's. Entries you already have are skipped.</small></span><span>›</span></button>
-    <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. Saved on this device and synced privately through your claude.ai account${outbox.size ? ` (${outbox.size} waiting to sync)` : ""}.</div>`,
+    <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. ${S.local ? "Saved on this device only." : `Saved on this device and synced privately through your claude.ai account${outbox.size ? ` (${outbox.size} waiting to sync)` : ""}.`}</div>`,
     { cancel: "Done" },
   );
   const group = (attr, fn) => {

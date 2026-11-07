@@ -9,8 +9,10 @@ exports.
 
 ## Status
 
-Early days: the app currently runs as a private artifact on claude.ai and syncs through it. It is being moved to
-its own hosting. See the issues and pull requests for progress.
+Lokki runs at <https://lokki.jocke.fi>, where it keeps everything on your device (use Preferences → Back Up now and
+then). Syncing between devices works when it runs as an artifact on claude.ai; a sync service of its own is planned.
+
+On an iPhone, open the site in Safari and choose Share → Add to Home Screen. It works offline once opened.
 
 ## Layout
 
@@ -21,7 +23,7 @@ src/core/           pure functions: formatting, periods, statistics, ids, CSV, z
 src/data/           this device's copy: state, IndexedDB, local changes, backups
 src/sync/           merging remote changes; the claude.ai database adapter
 src/ui/             rendering, sheets, chart, entry list, preferences, files
-scripts/            dev server and the claude.ai artifact build
+scripts/            dev server, the site build (with its service worker) and the claude.ai artifact build
 tests/unit/         node:test unit tests
 tests/e2e/          Playwright tests: several simulated devices syncing through a fake database
 ```
@@ -37,8 +39,11 @@ npm run serve                        # http://localhost:8080
 npm test                             # unit tests
 npx playwright install chromium      # once, for the end-to-end tests
 npm run test:e2e                     # builds the artifact, then runs the end-to-end tests
+npm run build:site                   # dist/site, the site deployed to GitHub Pages
 npm run build:artifact               # dist/lokki-artifact.html, the single page published on claude.ai
 ```
+
+Every push to `main` deploys the site to GitHub Pages (`.github/workflows/pages.yml`).
 
 The end-to-end tests run against both the built artifact and the unbundled modules, with generated data only.
 

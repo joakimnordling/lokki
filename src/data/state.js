@@ -17,6 +17,9 @@ export const knownDocs = new Set(); // year documents that exist on the server
 
 // Scalars shared between modules.
 export const S = {
+  // Standalone: not running inside claude.ai, so there is no sync partner yet; everything stays on this device.
+  // Decided at start-up, once this device's copy is loaded (claude.ai provides window.claude by then).
+  local: false,
   db: null, // sync database (claude.ai), null when not available
   dl: null, // downloads (claude.ai), null when not available
   fullCopy: store.get("fullCopy") === true, // this device has finished saving a complete copy at least once
