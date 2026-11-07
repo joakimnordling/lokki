@@ -53,6 +53,7 @@ render();
   }
   refreshMetrics();
   rebuild();
+  S.local = !window.claude;
   S.localReady = true;
   render();
   // 2. then sync

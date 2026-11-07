@@ -40,11 +40,11 @@ export function render() {
 function listHTML() {
   const { db, stale } = S;
   if (!S.localReady) return `<div class="state"><b>Loading your logs…</b></div>`;
-  if (!db && !metrics.size)
+  if (!S.local && !db && !metrics.size)
     return `<div class="state"><b>Sign in to see your logs</b>Your logs are synced through your claude.ai account. Open this page while signed in to claude.ai.</div>`;
   if (!S.remoteReady && db && !S.fullCopy)
     return `<div class="state"><b>${stale ? "Can't reach your logs yet" : "Loading your logs…"}</b>${stale ? "This device doesn't have a saved copy yet. Your logs appear as soon as it connects." : ""}</div>`;
-  if (!S.remoteReady && !metrics.size)
+  if (!S.local && !S.remoteReady && !metrics.size)
     return `<div class="state"><b>${stale ? "Can't reach your logs yet" : "Loading your logs…"}</b>${stale ? "Check your connection. The list fills in as soon as it connects." : ""}</div>`;
   let ms = [...metrics.entries()].map(([id, m]) => {
     const es = entriesOf(id);
@@ -55,7 +55,9 @@ function listHTML() {
   let h = `<button class="create" id="cCreate">Create Custom Metric</button>`;
   if (ui.filter)
     h += `<div class="filterbar"><span>Showing ${esc(ui.filter)}</span><button id="clrF">Show all</button></div>`;
-  if (!db)
+  if (S.local) {
+    if (metrics.size) h += `<div class="note">Saved on this device only. Back up from Preferences now and then.</div>`;
+  } else if (!db)
     h += `<div class="note">Not syncing: open this page signed in to claude.ai. Changes are saved on this device.</div>`;
   else if (outbox.size && (S.syncErr || stale || !navigator.onLine))
     h += `<div class="note">${outbox.size === 1 ? "1 change" : `${outbox.size} changes`} saved on this device, waiting to sync.</div>`;
