@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/*.min.js", "!dist"]
+    "includes": ["**", "!**/*.min.js", "!dist", "!src/ui/lucide.js"]
   },
   "formatter": {
     "enabled": true,

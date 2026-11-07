@@ -39,6 +39,7 @@ npm run serve                        # http://localhost:8080
 npm test                             # unit tests
 npx playwright install chromium      # once, for the end-to-end tests
 npm run test:e2e                     # builds the artifact, then runs the end-to-end tests
+npm run icons                        # regenerate src/ui/lucide.js after changing the icon list or Lucide version
 npm run build:site                   # dist/site, the site deployed to GitHub Pages
 npm run build:artifact               # dist/lokki-artifact.html, the single page published on claude.ai
 ```

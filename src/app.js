@@ -16,6 +16,7 @@ import { detailRender } from "./ui/detail.js";
 import { $ } from "./ui/dom.js";
 import { installEntryScroll } from "./ui/entries.js";
 import { importCSVFiles, openMetricCSV } from "./ui/files.js";
+import { ICON } from "./ui/icons.js";
 import { render } from "./ui/render.js";
 import { openDeleteMetric, openEntrySheet, toast } from "./ui/sheets.js";
 
@@ -29,6 +30,9 @@ $("#bakIn").onchange = restoreFromFile;
 $("#tbAdd").onclick = () => openEntrySheet(ui.mid, null);
 $("#tbEntries").onclick = openMetricCSV;
 $("#tbDelete").onclick = openDeleteMetric;
+$("#tbEntries").innerHTML = ICON.csv;
+$("#tbAdd").innerHTML = ICON.add;
+$("#tbDelete").innerHTML = ICON.trash;
 installEntryScroll();
 addEventListener("resize", () => {
   if (ui.view === "detail") detailRender();

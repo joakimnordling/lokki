@@ -81,7 +81,7 @@ function drawEntries() {
     h += `<div class="er${ui.armed === ekey(e) ? " armed" : ""}" data-i="${i}"><div class="in">
       ${ui.edit ? `<button class="minus" data-minus="${i}" aria-label="Delete entry from ${dayLabel(e.t)} ${clock(e.t)}"><i></i></button>` : ""}
       <button class="open" data-open="${i}"><span><span class="d">${dayLabel(e.t)}</span><span class="t">${clock(e.t)}</span>${e.n ? `<span class="n">${esc(e.n)}</span>` : ""}</span>
-      <span class="v">${fmt(e.v)}</span><svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div>
+      <span class="v">${fmt(e.v)}</span>${ICON.chev}</button></div>
       <button class="del" data-del="${i}" tabindex="${ui.armed === ekey(e) ? 0 : -1}">Delete</button></div>`;
   }
   if (es.length > ui.shown) h += `<div class="note">Scroll for older entries · ${es.length} in total</div>`;
