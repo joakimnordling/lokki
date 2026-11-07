@@ -130,11 +130,16 @@ select:focus-visible,
 .app {
   max-width: 560px;
   margin: 0 auto;
-  /* As an iPhone home screen app the page starts under the status bar: start the content below it */
-  padding-top: env(safe-area-inset-top, 0px);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+/* As an iPhone home screen app the page starts under the status bar: start the content below it.
+   Only there: inside claude.ai the app already places the page below its own toolbar. */
+@media (display-mode: standalone) {
+  .app {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
 }
 header {
   position: sticky;
