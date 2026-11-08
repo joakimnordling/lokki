@@ -53,7 +53,7 @@ describe("standalone site", () => {
     await home(P);
     await P.click("#hSet");
     backup = await download(P, () => P.click("#sBak"));
-    assert.match(backup.name, /^lokki-backup-\d{4}-\d{2}-\d{2}\.zip$/);
+    assert.match(backup.name, /^lokki-backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/);
     await home(P);
     await P.click("#hSet");
     const csv = await download(P, () => P.click("#sExp"));

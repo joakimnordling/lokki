@@ -91,7 +91,7 @@ describe("backup and restore", () => {
   let k1, lines;
   it("saves a .zip of JSON Lines: header first, bare footer last, a kind on every line", async () => {
     k1 = await backup(A, "1");
-    assert.match(k1.name, /^lokki-backup-\d{4}-\d{2}-\d{2}\.zip$/);
+    assert.match(k1.name, /^lokki-backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/);
     lines = unzip(k1.f)
       .trim()
       .split("\n")

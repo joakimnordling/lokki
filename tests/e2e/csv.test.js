@@ -56,7 +56,7 @@ describe("CSV and names", () => {
     await A.click("#hSet");
     await A.click("#sExp");
     const s = await saved(A);
-    assert.match(s.filename, /^lokki-export-\d{4}-\d{2}-\d{2}\.csv$/);
+    assert.match(s.filename, /^lokki-export-\d{4}-\d{2}-\d{2}-\d{4}\.csv$/);
     const lines = s.bytes.toString().split("\n");
     assert.equal(lines[0], "Metric,Date,Value,Note");
     assert.equal(lines.filter(Boolean).length, data.entries.length + 1);

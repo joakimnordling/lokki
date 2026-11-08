@@ -1,6 +1,6 @@
 // CSV export and import, and saving files through the downloads capability.
 import { csvq, decodeLoggrName, readCSV } from "../core/csv.js";
-import { esc, toLocalStr } from "../core/format.js";
+import { esc, fileStamp } from "../core/format.js";
 import { uuid4, uuid5 } from "../core/ids.js";
 import { safeFile } from "../core/names.js";
 import { commitRecs, fail, nextU, saveMetric } from "../data/records.js";
@@ -76,7 +76,7 @@ export function exportAll() {
   let out = "Metric,Date,Value,Note\n";
   for (const [id, m] of [...metrics.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name)))
     for (const e of entriesOf(id)) out += `${csvq(m.name)},${e.s.replace("T", " ")},${e.v},${csvq(e.n)}\n`;
-  return saveFile(`lokki-export-${toLocalStr(new Date()).slice(0, 10)}.csv`, out);
+  return saveFile(`lokki-export-${fileStamp()}.csv`, out);
 }
 // The ↓↑ button on a metric: import into or export that metric.
 export function openMetricCSV() {
