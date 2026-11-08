@@ -356,6 +356,13 @@ The app runs on another origin than the server, so the server answers CORS reque
 origins (for example `https://lokki.example.com` and `http://localhost:8080`): methods `GET, POST, PUT, DELETE`,
 request headers `Authorization, Content-Type`. No cookies are used, so credentials mode is off.
 
+### 5.5 Test mode
+
+So that one test suite can check any server implementation from the outside, a server started in test mode (and
+only then) accepts `POST /v1/test/accounts` without sign-in. It creates an empty account and returns a token of each
+scope: `201 {"write": "lk_…", "read": "lk_…"}`. The body may name the account: `{"name": "…"}`. Outside test mode the
+endpoint doesn't exist (`404`). A production server must never run in test mode.
+
 ## 6. Merging: which version wins
 
 Merging happens only on devices, and every device uses the same rules, so any two devices that have seen the same

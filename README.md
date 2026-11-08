@@ -26,11 +26,13 @@ src/ui/             rendering, sheets, chart, entry list, preferences, files
 scripts/            dev server, the site build (with its service worker) and the claude.ai artifact build
 tests/unit/         node:test unit tests
 tests/e2e/          Playwright tests: several simulated devices syncing through a fake database
+docs/               the sync protocol
+servers/python/     the sync server: FastAPI, SQLAlchemy (see its README)
 ```
 
 ## Sync
 
-The planned sync protocol (end-to-end encrypted, any number of servers) is described in
+The sync protocol (end-to-end encrypted, any number of servers) is described in
 [docs/sync-protocol.md](docs/sync-protocol.md).
 
 ## Development
