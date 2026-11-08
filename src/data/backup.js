@@ -2,9 +2,16 @@
    Restore merges by id and the newest u wins; things deleted here since the backup come back only if you choose so. */
 import { BACKUP_VERSION } from "../core/backup-format.js";
 import { normName } from "../core/names.js";
+import { hasView, setView, viewOf } from "../core/prefs.js";
+import { compareMetrics } from "../sync/merge.js";
 import { idb } from "./idb.js";
-import { commitRecs, deleteMetricOps, nextU } from "./records.js";
-import { hooks, metricAll, metrics, outbox, recs, refreshMetrics, S } from "./state.js";
+import { commitRecs, deleteMetricOps, nextU, queueMetric } from "./records.js";
+import { hooks, metricAll, metrics, recs, refreshMetrics } from "./state.js";
+
+// A metric's generation (protocol 6.2). Metrics from before generations existed have none: a deletion then counts
+// as its own generation, and a live metric as generation 0.
+const gen = (m) => m.g ?? (m.deleted ? m.u || 0 : 0);
+const asRecord = (m) => ({ ...m, g: gen(m), deleted: !!m.deleted, u: m.u || 0 });
 
 export function backupText(now = new Date()) {
   const L = [
@@ -24,6 +31,7 @@ export function backupText(now = new Date()) {
             gran: null,
             created: null,
             u: m.u || 0,
+            g: gen(m),
             deleted: true,
           }
         : {
@@ -31,10 +39,11 @@ export function backupText(now = new Date()) {
             id,
             name: m.name,
             type: m.type || null,
-            mode: m.mode || null,
-            gran: m.gran || null,
+            mode: viewOf(id, m).mode,
+            gran: viewOf(id, m).gran,
             created: m.created || null,
             u: m.u || 0,
+            g: gen(m),
             deleted: false,
           },
     );
@@ -64,8 +73,10 @@ export function backupText(now = new Date()) {
 
 export function planRestore(b) {
   const p = { addM: [], updM: [], delM: [], bringM: [], addE: [], updE: [], delE: [], bringE: [] };
-  const differs = (l, bm) =>
-    ["name", "type", "mode", "gran", "created"].some((k) => (l[k] || null) !== (bm[k] || null));
+  const differs = (l, bm) => ["name", "type", "created"].some((k) => (l[k] || null) !== (bm[k] || null));
+  // Which version wins: by generation (protocol 6.2), or by u alone while the local metric predates generations.
+  const wins = (bm, loc) =>
+    loc.g === undefined ? (bm.u || 0) > (loc.u || 0) : compareMetrics(asRecord(bm), asRecord(loc)) > 0;
   for (const [id, bm] of b.metrics) {
     const loc = metricAll.get(id),
       bu = bm.u || 0;
@@ -74,12 +85,14 @@ export function planRestore(b) {
       continue;
     }
     if (loc.deleted) {
-      // deleted here since: only if you ask
-      if (!bm.deleted) p.bringM.push(bm);
+      if (bm.deleted) continue;
+      // a restore of this deletion made elsewhere wins on its own; otherwise deleted here since: only if you ask
+      if (loc.g !== undefined && gen(bm) >= gen(loc) && wins(bm, loc)) p.updM.push(bm);
+      else p.bringM.push(bm);
       continue;
     }
     if (bm.deleted) {
-      if (bu > (loc.u || 0)) p.delM.push(bm);
+      if (wins(bm, loc)) p.delM.push(bm);
       continue;
     }
     if (bu > (loc.u || 0) && differs(loc, bm)) p.updM.push(bm);
@@ -121,27 +134,22 @@ export async function applyRestore(p, bring) {
   const ops = [],
     list = [],
     extra = [];
-  const putM = (id, d) => {
-    metricAll.set(id, d);
-    ops.push(["metrics", "put", { id, ...d }]);
-    const it = { k: `m:${id}`, kind: "m", id, p: d, seq: ++S.seq };
-    outbox.set(it.k, it);
-    ops.push(["outbox", "put", it]);
+  const putM = (id, d, bm) => {
+    metricAll.set(id, { ...d, sb: 0 });
+    ops.push(["metrics", "put", { id, ...d, sb: 0 }], ...queueMetric(id, d));
+    // the backup's view, only where this device has none of its own
+    if (!hasView(id) && (bm.mode || bm.gran)) setView(id, viewOf(id, bm));
   };
-  const mdata = (bm) => ({
-    name: normName(bm.name),
-    type: bm.type || "",
-    created: bm.created || "",
-    ...(bm.mode ? { mode: bm.mode } : {}),
-    ...(bm.gran ? { gran: bm.gran } : {}),
-  });
-  for (const bm of p.addM) putM(bm.id, { ...mdata(bm), u: bm.u || 0 });
-  for (const bm of p.updM) putM(bm.id, { ...mdata(bm), u: bm.u });
+  const mdata = (bm) => ({ name: normName(bm.name), type: bm.type || "", created: bm.created || "" });
+  for (const bm of p.addM) putM(bm.id, { ...mdata(bm), u: bm.u || 0, g: gen(bm) }, bm);
+  for (const bm of p.updM) putM(bm.id, { ...mdata(bm), u: bm.u, g: gen(bm) }, bm);
   for (const bm of p.delM) ops.push(...deleteMetricOps(bm.id, bm.u));
   const back = new Set();
   if (bring)
     for (const bm of p.bringM) {
-      putM(bm.id, { ...mdata(bm), u: nextU(metricAll.get(bm.id)?.u) });
+      // a restore joins the deletion's generation, so it wins over that deletion everywhere (protocol 6.2)
+      const gone = metricAll.get(bm.id);
+      putM(bm.id, { ...mdata(bm), u: nextU(gone?.u), g: gone ? gen(gone) : 0 }, bm);
       back.add(bm.id);
     }
   refreshMetrics();

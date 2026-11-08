@@ -1,4 +1,6 @@
-// Local changes: saved on this device first, then queued for sync.
+/* Local changes: saved on this device first, then synced.
+   Standalone (lokki.jocke.fi): every changed record gets sb = 0, "no server has this version yet", and the sync
+   engine sends it (src/sync). Inside claude.ai: changes are queued in the outbox for the claude.ai database. */
 import { uuid4 } from "../core/ids.js";
 import { idb } from "./idb.js";
 import { hooks, knownDocs, metricAll, outbox, rebuild, recs, refreshMetrics, S, ui } from "./state.js";
@@ -10,6 +12,7 @@ export const docOf = (r) => `${r.m}~${r.y}`;
 export const payload = (r) =>
   r.d ? { t: null, v: null, n: null, u: r.u, d: true } : { t: r.t, v: r.v, n: r.n || null, u: r.u, d: false };
 export function queueEntry(r) {
+  if (S.local) return null;
   const it = {
     k: `e:${docOf(r)}:${r.id}`,
     kind: "e",
@@ -27,13 +30,14 @@ export function queueEntry(r) {
 export async function commitRecs(list, extra = []) {
   const ops = [];
   for (const r of list) {
+    r.sb = 0;
     recs.set(r.id, r);
     ops.push(["recs", "put", r], queueEntry(r));
   }
-  for (const r of extra) ops.push(queueEntry(r));
+  for (const r of extra) ops.push(queueEntry(r)); // year documents exist only in the claude.ai database
   rebuild();
   hooks.render();
-  await idb.write(ops);
+  await idb.write(ops.filter(Boolean));
   hooks.flushSoon();
 }
 export function addEntry(mid, t, v, n) {
@@ -69,20 +73,24 @@ export function fail(e) {
       : "Couldn't save. Check your connection and try again.",
   );
 }
+// The metric as sent to the claude.ai database: without what only this device keeps.
+const shared = ({ sb: _, mode: _m, gran: _g, ...rest }) => rest;
+export function queueMetric(id, d) {
+  if (S.local) return [];
+  const it = { k: `m:${id}`, kind: "m", id, p: shared(d), seq: ++S.seq };
+  outbox.set(it.k, it);
+  return [["outbox", "put", it]];
+}
+// data keeps its generation g (editing never changes it); the chart view isn't part of a metric any more.
 export async function saveMetric(id, data) {
   const prev = metricAll.get(id);
-  const d = { ...data, u: nextU(prev?.u) };
-  delete d.id;
+  const { id: _id, mode: _m, gran: _g, ...rest } = data;
+  const d = { ...rest, u: nextU(prev?.u), sb: 0 };
   metricAll.set(id, d);
   refreshMetrics();
   rebuild();
-  const it = { k: `m:${id}`, kind: "m", id, p: d, seq: ++S.seq };
-  outbox.set(it.k, it);
   hooks.render();
-  await idb.write([
-    ["metrics", "put", { id, ...d }],
-    ["outbox", "put", it],
-  ]);
+  await idb.write([["metrics", "put", { id, ...d }], ...queueMetric(id, d)]);
   hooks.flushSoon();
 }
 export function purgeMetric(mid) {
@@ -103,15 +111,24 @@ export function dropQueued(mid) {
     }
   return ops;
 }
+// Deleting a metric starts a new generation (g = u), so the deletion beats edits made elsewhere before it was known.
 export function deleteMetricOps(mid, u) {
-  const d = { deleted: true, u };
+  const d = { deleted: true, u, g: u, sb: 0 };
   metricAll.set(mid, d);
+  if (S.local) {
+    // standalone: blank every entry too, so their contents leave the servers (protocol 6.3)
+    const ops = [["metrics", "put", { id: mid, ...d }]];
+    for (const r of [...recs.values()])
+      if (r.m === mid && !r.d) {
+        const t = { id: r.id, m: r.m, y: r.y, u: nextU(r.u), d: true, sb: 0 };
+        recs.set(r.id, t);
+        ops.push(["recs", "put", t]);
+      }
+    return ops;
+  }
   const drop = new Set([...knownDocs].filter((k) => k.startsWith(`${mid}~`)));
   for (const r of recs.values()) if (r.m === mid) drop.add(docOf(r));
-  const ops = [["metrics", "put", { id: mid, ...d }], ...purgeMetric(mid), ...dropQueued(mid)];
-  const mt = { k: `m:${mid}`, kind: "m", id: mid, p: d, seq: ++S.seq };
-  outbox.set(mt.k, mt);
-  ops.push(["outbox", "put", mt]);
+  const ops = [["metrics", "put", { id: mid, ...d }], ...purgeMetric(mid), ...dropQueued(mid), ...queueMetric(mid, d)];
   for (const doc of drop) {
     const it = { k: `x:${doc}`, kind: "x", doc, seq: ++S.seq };
     outbox.set(it.k, it);

@@ -1,8 +1,7 @@
 // A metric's detail view: chart, period value, statistics, correlation, rank, distribution and day of week.
 import { DOW, esc, fmt } from "../core/format.js";
-import { prefs, store } from "../core/prefs.js";
+import { prefs, setView, store, viewOf } from "../core/prefs.js";
 import { pearson, stats } from "../core/stats.js";
-import { saveMetric } from "../data/records.js";
 import { series } from "../data/series.js";
 import { entriesOf, metrics, ui } from "../data/state.js";
 import { chartScroll, drawChart } from "./chart.js";
@@ -182,18 +181,13 @@ function bindDetail() {
   if (nl) nl.onclick = goEntries;
 }
 
-/* Per-metric view (All Values/Averages/Totals + Daily/Weekly/Monthly), saved on the metric */
-const MODES = ["all", "avg", "totals"],
-  GRANS = ["daily", "weekly", "monthly"];
+/* Per-metric view (All Values/Averages/Totals + Daily/Weekly/Monthly), kept on this device (core/prefs.js) */
 export function loadView(mid) {
-  const m = metrics.get(mid) || {};
+  const view = viewOf(mid, metrics.get(mid));
   ui.rankStep = 0;
-  ui.mode = MODES.includes(m.mode) ? m.mode : store.get("mode") || "totals";
-  ui.gran = GRANS.includes(m.gran) ? m.gran : store.get("gran") || "monthly";
+  ui.mode = view.mode || store.get("mode") || "totals";
+  ui.gran = view.gran || store.get("gran") || "monthly";
 }
 function saveView() {
-  const mid = ui.mid,
-    m = metrics.get(mid);
-  if (!m || (m.mode === ui.mode && m.gran === ui.gran)) return;
-  saveMetric(mid, { ...m, mode: ui.mode, gran: ui.gran });
+  if (metrics.has(ui.mid)) setView(ui.mid, { mode: ui.mode, gran: ui.gran });
 }

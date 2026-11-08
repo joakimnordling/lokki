@@ -1,6 +1,6 @@
 /* Lokki backup format: JSON Lines. Every line has a "kind":
      {"kind":"header","format":"lokki","version":1,"exported":"<UTC ISO time>","app":"lokki-web"}   required first line
-     {"kind":"metric","id","name","type","mode","gran","created","u","deleted"}                     deleted metrics: name etc. null
+     {"kind":"metric","id","name","type","mode","gran","created","u","g","deleted"}                 deleted metrics: name etc. null
      {"kind":"entry","id","metric","t","v","n","u","d"}                                             deleted entries: t, v, n null
      {"kind":"footer"}                                                                                required last line
    Lines of unknown kinds are skipped. A file that doesn't end with the footer line is refused. */
@@ -37,6 +37,7 @@ export function parseBackup(text) {
     if (!o || typeof o !== "object") return bad("line");
     if (o.kind === "metric") {
       if (!okId(o.id) || !Number.isFinite(o.u) || (!o.deleted && !normName(o.name))) return bad("metric");
+      if (o.g !== undefined && !Number.isFinite(o.g)) return bad("metric");
       ms.set(o.id, o);
     } else if (o.kind === "entry") {
       if (!okId(o.id) || !okId(o.metric) || !Number.isFinite(o.u) || (!o.d && !(okT(o.t) && Number.isFinite(o.v))))

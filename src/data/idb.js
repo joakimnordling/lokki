@@ -4,13 +4,14 @@ export const idb = {
   async open() {
     try {
       this.db = await new Promise((res, rej) => {
-        const r = indexedDB.open("lokki", 1);
+        const r = indexedDB.open("lokki", 2);
         r.onupgradeneeded = () => {
           const d = r.result;
           for (const [n, k] of [
             ["recs", "id"],
             ["metrics", "id"],
-            ["outbox", "k"],
+            ["outbox", "k"], // changes waiting for the claude.ai database
+            ["sync", "k"], // standalone sync: the vault's keyring and keys, and each server's state (version 2)
           ])
             if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: k });
         };
