@@ -2,7 +2,7 @@
   <title>Lokki</title>
   <!-- the background overshoots the edges, so scaling never leaves a half-transparent rim -->
   <rect x="-1" y="-1" width="26" height="26" fill="#f96f45"/>
-  <g transform="translate(4.08 4.08) scale(0.66)">
+  <g transform="translate(1.44 1.44) scale(0.88)">
     <polyline points="2.5,16.2 8.4,8.4 10.5,12.6 14.6,7.8 21.5,13.6" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="miter" stroke-miterlimit="10" stroke-linecap="round"/>
   </g>
 </svg>
