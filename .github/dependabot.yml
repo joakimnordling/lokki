@@ -29,3 +29,12 @@ updates:
     groups:
       python:
         patterns: ["*"]
+  - package-ecosystem: uv
+    directory: /protocol
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        patterns: ["*"]

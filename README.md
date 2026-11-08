@@ -21,12 +21,13 @@ index.html          the page; loads src/app.js as an ES module (no build step ne
 public/             static files: styles, the Jost font, icons, web app manifest
 src/core/           pure functions: formatting, periods, statistics, ids, CSV, zip, backup format
 src/data/           this device's copy: state, IndexedDB, local changes, backups
-src/sync/           merging remote changes; the claude.ai database adapter
+src/sync/           syncing: encryption, merge rules and the sync engine for Lokki servers; the claude.ai adapter
 src/ui/             rendering, sheets, chart, entry list, preferences, files
 scripts/            dev server, the site build (with its service worker) and the claude.ai artifact build
 tests/unit/         node:test unit tests
 tests/e2e/          Playwright tests: several simulated devices syncing through a fake database
 docs/               the sync protocol
+protocol/           the protocol's test vectors, conformance tests and Python reference implementation
 servers/python/     the sync server: FastAPI, SQLAlchemy (see its README)
 ```
 
@@ -44,6 +45,7 @@ npm ci
 pre-commit install --install-hooks   # checks on every commit, unit tests before every push
 npm run serve                        # http://localhost:8080
 npm test                             # unit tests
+npm run test:sync                    # the sync engine against the Python server (needs uv)
 npx playwright install chromium      # once, for the end-to-end tests
 npm run test:e2e                     # builds the artifact, then runs the end-to-end tests
 npm run icons                        # regenerate src/ui/lucide.js after changing the icon list or Lucide version
