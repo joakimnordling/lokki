@@ -23,6 +23,19 @@ export function applyLook(l) {
   if (l === "light" || l === "dark") r.dataset.look = l;
   else delete r.dataset.look;
 }
+// Text size: the root font size, which every size in the stylesheet follows (rem), and a scale for the chart's labels.
+export const TEXT_SIZES = [
+  ["standard", "Standard", 17],
+  ["large", "Large", 19],
+  ["larger", "Larger", 21],
+];
+export const textScale = () => (TEXT_SIZES.find(([k]) => k === store.get("text")) ?? TEXT_SIZES[0])[2] / 17;
+export function applyTextSize(k) {
+  const size = TEXT_SIZES.find(([key]) => key === k);
+  const r = document.documentElement;
+  if (size && size[0] !== "standard") r.style.setProperty("--text", `${size[2]}px`);
+  else r.style.removeProperty("--text");
+}
 export const prefs = {
   weekStart: store.get("weekStart") === 0 ? 0 : 1, // 1 = Monday (default), 0 = Sunday
   h24: store.get("h24") !== false, // 24-hour clock by default

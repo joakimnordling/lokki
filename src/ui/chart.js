@@ -1,5 +1,6 @@
 // The chart: a canvas painted over a horizontal scroller, so only the visible bars are drawn.
 import { fmt, MON } from "../core/format.js";
+import { textScale } from "../core/prefs.js";
 import { ui } from "../data/state.js";
 import { detailRender } from "./detail.js";
 import { $ } from "./dom.js";
@@ -128,7 +129,7 @@ export function drawChart(ser) {
     g.fillStyle = col.dim;
     g.strokeStyle = col.line;
     g.lineWidth = 1;
-    g.font = `10px ${css.getPropertyValue("--font")}`;
+    g.font = `${Math.round(10 * textScale())}px ${css.getPropertyValue("--font")}`;
     g.textAlign = "center";
     for (const [i, txt] of labels) {
       const x = xOf(i) - off;
@@ -142,7 +143,7 @@ export function drawChart(ser) {
     g.restore();
     g.fillStyle = col.fg;
     g.textAlign = "right";
-    g.font = `11px ${css.getPropertyValue("--font")}`;
+    g.font = `${Math.round(11 * textScale())}px ${css.getPropertyValue("--font")}`;
     g.fillText(fmt(mx), W - 2, top + 4);
     g.fillText(fmt((mx + mn) / 2), W - 2, (top + bot) / 2 + 4);
     g.fillText(fmt(mn), W - 2, bot + 4);

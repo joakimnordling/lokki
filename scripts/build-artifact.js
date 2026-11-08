@@ -4,6 +4,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
+import { buildDefine } from "./build-info.js";
 
 const root = resolve(import.meta.dirname, "..");
 const out = join(root, "dist", "lokki-artifact.html");
@@ -27,6 +28,7 @@ export async function buildArtifact() {
     target: "es2022",
     minify: true,
     legalComments: "inline",
+    define: await buildDefine(),
     write: false,
   });
   const script = js.outputFiles[0].text;
