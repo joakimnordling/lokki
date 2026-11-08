@@ -32,6 +32,8 @@
 <input type="file" id="fileIn" accept=".csv,text/csv" multiple hidden>
 <input type="file" id="bakIn" accept=".zip,.jsonl,.gz,application/zip,application/gzip,application/x-gzip,application/json" hidden>
 <!-- app:end -->
+<!-- development only: the builds bundle hash-wasm into the script -->
+<script type="importmap">{"imports": {"hash-wasm": "./vendor/hash-wasm.js"}}</script>
 <script type="module" src="src/app.js"></script>
 </body>
 </html>

@@ -64,6 +64,10 @@ export async function startHarness() {
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, "http://x").pathname;
     if (path === "/" || path.startsWith("/nodb")) return res.writeHead(200, { "content-type": "text/html" }).end(page);
+    if (path === "/dev/vendor/hash-wasm.js")
+      return res
+        .writeHead(200, { "content-type": "text/javascript" })
+        .end(await readFile(join(root, "node_modules", "hash-wasm", "dist", "index.esm.min.js")));
     const site = path.startsWith("/site/");
     if (path.startsWith("/dev/") || site) {
       const rel = (site ? path.slice(6) : path.slice(5)) || "index.html";
@@ -81,7 +85,8 @@ export async function startHarness() {
   });
   await new Promise((ok) => server.listen(0, ok));
   const base = `http://localhost:${server.address().port}`;
-  const browser = await chromium.launch();
+  // CHROMIUM_PATH: run with a Chromium other than the one this Playwright version downloads (local runs only)
+  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
   const store = { metrics: new Map(), "entries-v2": new Map() };
   const writes = [];

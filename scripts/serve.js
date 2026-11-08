@@ -20,7 +20,11 @@ const types = {
   ".txt": "text/plain; charset=utf-8",
 };
 
+// Packages the unbundled modules import through the import map in index.html
+const vendor = { "/vendor/hash-wasm.js": join(root, "node_modules", "hash-wasm", "dist", "index.esm.min.js") };
+
 async function find(path) {
+  if (vendor[path]) return vendor[path];
   for (const dir of dirs) {
     const file = normalize(join(dir, path));
     if (!file.startsWith(dir)) return null;

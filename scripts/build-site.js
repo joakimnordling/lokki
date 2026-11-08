@@ -54,6 +54,7 @@ export async function buildSite() {
     html = html.replace(from, to);
   };
   swap('<link rel="stylesheet" href="styles/app.css">', `<link rel="stylesheet" href="${cssName}">`);
+  html = html.replace(/<!-- development only[^>]*-->\n<script type="importmap">[^<]*<\/script>\n/, "");
   swap(
     '<script type="module" src="src/app.js"></script>',
     `<script type="module" src="${jsName}"></script>
