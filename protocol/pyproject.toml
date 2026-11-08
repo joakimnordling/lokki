@@ -1,0 +1,70 @@
+[project]
+name = "lokki-protocol"
+version = "0.1.0"
+description = "Reference implementation of Lokki's sync protocol encryption, its test vectors and conformance tests"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Joakim Nordling", email = "joakim.nordling@gmail.com" }]
+requires-python = ">=3.15"
+dependencies = [
+    "cryptography>=50.0.2",  # AES-GCM, HKDF and HMAC
+    "argon2-cffi>=25.1",  # Argon2id (its low-level hash_secret_raw)
+]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2",
+    "httpx2>=2.16",  # the conformance tests talk HTTP to a server
+    "ruff==0.17.4",
+    "pyright==1.1.414",
+]
+
+[tool.uv]
+required-version = ">=0.13.6"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "conformance"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py315"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors: basic style problems
+    "W",      # pycodestyle warnings: whitespace
+    "F",      # Pyflakes: unused imports and variables, undefined names
+    "I",      # isort: import order
+    "UP",     # pyupgrade: newer syntax for the target Python version
+    "B",      # flake8-bugbear: likely bugs and design problems
+    "SIM",    # flake8-simplify: code that can be written more simply
+    "RUF",    # Ruff's own rules, e.g. unused noqa comments
+    "D213",   # a multi-line docstring starts its text on the line after the opening quotes
+    "S",      # flake8-bandit: security problems
+    "T10",    # flake8-debugger: leftover debugger calls
+    "PT",     # flake8-pytest-style: pytest conventions
+    "C4",     # flake8-comprehensions: simpler comprehensions
+    "PIE",    # flake8-pie: unnecessary code
+    "RET",    # flake8-return: simpler returns
+    "PERF",   # Perflint: slow patterns
+    "FURB",   # refurb: more modern idioms
+]
+
+[tool.ruff.lint.per-file-ignores]
+# tests use plain asserts and fixed test secrets on purpose
+"tests/*" = ["S"]
+"conformance/*" = ["S"]
+# the vector generator uses fixed "random" values on purpose
+"vectors/*" = ["S"]
+
+[tool.pyright]
+include = ["src", "tests", "conformance", "vectors"]
+pythonVersion = "3.15"
+typeCheckingMode = "strict"

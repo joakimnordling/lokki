@@ -1,0 +1,196 @@
+{
+  "about": "Lokki sync protocol v1 test vectors, written by vectors/generate.py",
+  "data_key": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "derived_keys": {
+    "encryption": "7afd9e9ea082506574093b142d4c0bd94df5f6ecadfc42c18e1625dcd3d238b8",
+    "row_names": "ebd11c2e2b66ed48d93b8bd1d812edaa376082d25436981c396cec747ccec3c9",
+    "keyring_mac": "eb7706e600053a94ff28024b081784551ab51b350bbf295de0b8d18d2b427ae6"
+  },
+  "row_keys": [
+    {
+      "kind": "entry",
+      "id": "6f1c2a90-3b7e-4d1a-9c55-0e8f4b2d7a11",
+      "key": "KKR3av5X2TnUyEIlg9Ogdg"
+    },
+    {
+      "kind": "metric",
+      "id": "running",
+      "key": "uYlE1Ztpnvnmwzu_ZXfThg"
+    },
+    {
+      "kind": "metric",
+      "id": "6f1c2a90-3b7e-4d1a-9c55-0e8f4b2d7a11",
+      "key": "SbhYHNqLp3ly9r96ihVhwA"
+    }
+  ],
+  "rows": [
+    {
+      "record": {
+        "kind": "entry",
+        "id": "6f1c2a90-3b7e-4d1a-9c55-0e8f4b2d7a11",
+        "metric": "running",
+        "t": "2026-11-08T07:30:00",
+        "v": 8.4,
+        "n": null,
+        "u": 1794120000000,
+        "d": false
+      },
+      "plaintext": "{\"kind\":\"entry\",\"id\":\"6f1c2a90-3b7e-4d1a-9c55-0e8f4b2d7a11\",\"metric\":\"running\",\"t\":\"2026-11-08T07:30:00\",\"v\":8.4,\"n\":null,\"u\":1794120000000,\"d\":false}",
+      "padded_length": 192,
+      "nonce": "6465666768696a6b6c6d6e6f",
+      "key": "KKR3av5X2TnUyEIlg9Ogdg",
+      "data": "v1.ZGVmZ2hpamtsbW5vHidk9wwCIWXS2QmBnkNxY3a5TUo1SshkmuaoSoO-tiLuU3V6Os5c5tWj9FEhhh-QjODuy3D7iY4neGvU_IKzF6p0um5IfuUFYXch-UjremcH0KPoe5XjHVngqf0zrZ5w_ActrvX6RIQy5w4FUs4cEkSXh_BQSmdzI9m6QEPD-_7TYR_NVkMmG9ovn_OfrgoO0f8_gfjbF4eMWxt8AbRAhJg83NWcvqHJoiEoYCQBVW_MPsi21MjGmLsRDnHrYOriIVxDWUcMVXi6KW0_6Lks5A"
+    },
+    {
+      "record": {
+        "kind": "entry",
+        "id": "6f1c2a90-3b7e-4d1a-9c55-0e8f4b2d7a11",
+        "metric": "running",
+        "t": null,
+        "v": null,
+        "n": null,
+        "u": 1794123456789,
+        "d": true
+      },
+      "plaintext": "{\"kind\":\"entry\",\"id\":\"6f1c2a90-3b7e-4d1a-9c55-0e8f4b2d7a11\",\"metric\":\"running\",\"t\":null,\"v\":null,\"n\":null,\"u\":1794123456789,\"d\":true}",
+      "padded_length": 192,
+      "nonce": "65666768696a6b6c6d6e6f70",
+      "key": "KKR3av5X2TnUyEIlg9Ogdg",
+      "data": "v1.ZWZnaGlqa2xtbm9wrwXyCiTuWWGSC9QyZ2-1KfFvI3BNf7rIOo58pDx5QAf6AVCt0XJuHA5WVf5z4-TMzB6_0nOSV-gpQrbZ9O56H6sFY-H9kOUx9tj5QLfPjdcMw0GJqdSmo32KWyIed6tOX5qJr_lf1a_Vcy2nw3zachCb1ZEtL94An3RXTUgDO6HaPgpnI6YCdpkABs-2nEgwOYKZS-aw-XYXH68Yk1IiYHKT0o_UlmtACR8Cirwn0mzMLpyFVj9yJX2U5RRuqDf2IKBFa_apts02wk6U-D3dcA"
+    },
+    {
+      "record": {
+        "kind": "entry",
+        "id": "b40e5589-5bc6-581c-8137-d78c1803269f",
+        "metric": "reading",
+        "t": "2026-01-15T07:30:00",
+        "v": 2.5,
+        "n": "Kalevala, ääkköset ja 🦉, and a note long enough to need more than one padding step",
+        "u": 1794000000001,
+        "d": false
+      },
+      "plaintext": "{\"kind\":\"entry\",\"id\":\"b40e5589-5bc6-581c-8137-d78c1803269f\",\"metric\":\"reading\",\"t\":\"2026-01-15T07:30:00\",\"v\":2.5,\"n\":\"Kalevala, ääkköset ja 🦉, and a note long enough to need more than one padding step\",\"u\":1794000000001,\"d\":false}",
+      "padded_length": 256,
+      "nonce": "666768696a6b6c6d6e6f7071",
+      "key": "s3skRoyLVl4qsm9RtFvRjA",
+      "data": "v1.ZmdoaWprbG1ub3BxiEtTWE123ma-Dc1hAvhAwwQZURfJZMw2tu--qc5fdjw09evq9huvmaQZYe4yz4ZMhzRWDbS40hqrMG0PKYJLeKpCvfCW0t-4DV9DmOd_QL2FnXKkPrJfa6GrCV_h8BK47Lc0noYzEDqRyzSgWRILZuHarGsduJF2l7e_un4GfOJXag7JXADfQcAzM_y7lbcFiPKT6d6IStiBUUxR_ytIpz6jHfab03Lti9nqax39eTsTWfVC521TCgU3TXkxvvapGA5CH4Q8ousEznpJO43CewxkR2k9d1k1Yz6gzi3e9e5ngXCAH78ihMP3ier3YK39GQSPxmc58OmX3HlHJSnQWQz0b_HVRE4mSWblFT9VDSY"
+    },
+    {
+      "record": {
+        "kind": "metric",
+        "id": "running",
+        "name": "Running",
+        "type": "Fitness",
+        "created": "2023-01-01T08:00:00",
+        "u": 1794000000000,
+        "g": 0,
+        "deleted": false
+      },
+      "plaintext": "{\"kind\":\"metric\",\"id\":\"running\",\"name\":\"Running\",\"type\":\"Fitness\",\"created\":\"2023-01-01T08:00:00\",\"u\":1794000000000,\"g\":0,\"deleted\":false}",
+      "padded_length": 192,
+      "nonce": "6768696a6b6c6d6e6f707172",
+      "key": "uYlE1Ztpnvnmwzu_ZXfThg",
+      "data": "v1.Z2hpamtsbW5vcHFyB-i5_5j7jjo8WIiWtSLHMMyDN8nhCIAfOJrsxxmaqEk43hJGOouS_lIXQjx3axMDPG8ggz1Zr4D16TE4Ee7RBerNyoXxwZSZ9aFKesZEfLUvwf09QKAz0K09Vy7j9leyIULdra1pkQ0UHZyh9zDYy-Kkb4pSck6IcGQvabU0FnKa2yK6BuPnyWM9rL_MxHH365P2Q1R8Z0sCPsvEh3jzpDx80awMFxElyhqWsxLzD0m-aDR9liD44MaEZw3gMZcn2XO4jQkJDgmYe8oPqpgFPg"
+    },
+    {
+      "record": {
+        "kind": "metric",
+        "id": "walking",
+        "name": null,
+        "type": null,
+        "created": null,
+        "u": 1794100000000,
+        "g": 1794100000000,
+        "deleted": true
+      },
+      "plaintext": "{\"kind\":\"metric\",\"id\":\"walking\",\"name\":null,\"type\":null,\"created\":null,\"u\":1794100000000,\"g\":1794100000000,\"deleted\":true}",
+      "padded_length": 192,
+      "nonce": "68696a6b6c6d6e6f70717273",
+      "key": "QaCi_ekVbE4T3rR32xnmdg",
+      "data": "v1.aGlqa2xtbm9wcXJzB4kZLOzHmdCIRqaXHQ1t9xvhhmvBeK4_SQtylKiqq0CPtpBhulQqc6KGOSKt0UYEXCZiJqVeb5JFmXNOaHzQit2D5BqOMRqc4jkIvpYgWtj6excVYer63dwFTNz_tezBpDPluajgLjetCdQVlEB3tZOCx6YH-7eDqa62OBeoOli6mVNuZzFqMnTDQiBTVAQYij9tgQIQwqdoE5e94ThcoCCym5L2BlEuMylYTQCxxfCtl7IrC7vj8QHQWwKGuKImJwVfCKonVFA5TdZyHIKzPg"
+    }
+  ],
+  "argon2id": [
+    {
+      "passphrase": "correct horse battery staple",
+      "kdf": {
+        "name": "argon2id",
+        "m": 64,
+        "t": 2,
+        "p": 1,
+        "salt": "c2FsdHNhbHRzYWx0c2FsdA"
+      },
+      "output": "d3c48619c0c93964ce1eb23da29235a316183d5c88dd76f3eaf4235b34a957bc"
+    },
+    {
+      "passphrase": "pääsana",
+      "kdf": {
+        "name": "argon2id",
+        "m": 64,
+        "t": 2,
+        "p": 1,
+        "salt": "c2FsdHNhbHRzYWx0c2FsdA"
+      },
+      "output": "74f76371d11b2adf71c037aab15cfb72a231c0541bace84bcd70d0f615293bc8"
+    },
+    {
+      "passphrase": "correct horse battery staple",
+      "kdf": {
+        "name": "argon2id",
+        "m": 65536,
+        "t": 3,
+        "p": 1,
+        "salt": "yMnKy8zNzs_Q0dLT1NXW1w"
+      },
+      "output": "621d86e011501b52d590832be494a89c336689e92e4f3fde6eb908ef534810b9"
+    }
+  ],
+  "canonical_json": [
+    {
+      "value": {
+        "b": [
+          2,
+          {
+            "z": 1,
+            "a": "ä"
+          }
+        ],
+        "a": null,
+        "c": true
+      },
+      "json": "{\"a\":null,\"b\":[2,{\"a\":\"ä\",\"z\":1}],\"c\":true}"
+    }
+  ],
+  "keyring": {
+    "passphrase": "correct horse battery staple",
+    "inputs": {
+      "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
+      "entry_id": "a7Kq2m",
+      "now": 1794130000000,
+      "salt": "c8c9cacbcccdcecfd0d1d2d3d4d5d6d7",
+      "nonce": "dcdddedfe0e1e2e3e4e5e6e7"
+    },
+    "keyring": {
+      "format": "lokki-keyring",
+      "version": 1,
+      "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
+      "keys": [
+        {
+          "id": "a7Kq2m",
+          "type": "passphrase",
+          "created": 1794130000000,
+          "kdf": {
+            "name": "argon2id",
+            "m": 65536,
+            "t": 3,
+            "p": 1,
+            "salt": "yMnKy8zNzs_Q0dLT1NXW1w"
+          },
+          "wrapped": "3N3e3-Dh4uPk5ebnQpwncX7bOOHswaHW1vtuV2i_wpuwxIpWJJza8zf2S5ewrFV2iDmoDkEmVKJ3Tlp2"
+        }
+      ],
+      "u": 1794130000000,
+      "mac": "GdzbxxQfTKVxbZuR2Yw1MwPC5KOlXIoowTveTL0BDOI"
+    }
+  }
+}
