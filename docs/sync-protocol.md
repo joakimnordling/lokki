@@ -123,12 +123,12 @@ passphrase ──Argon2id(salt)──▶ passphrase key ──unwraps──▶ d
                                        HKDF-SHA256 ────────────┤
                                                                ├─ "lokki/v1/encryption" ─▶ encryption key (AES-256-GCM)
                                                                ├─ "lokki/v1/row-names"  ─▶ row-name key (HMAC-SHA256)
-                                                               └─ "lokki/v1/header-mac" ─▶ header key (HMAC-SHA256)
+                                                               └─ "lokki/v1/keyring-mac" ─▶ keyring key (HMAC-SHA256)
 ```
 
 - The **data key** is random and never changes. Everything is protected with keys derived from it (HKDF-SHA256, no
   salt, the quoted string as info, 32-byte output).
-- A **passphrase** only unlocks the data key, which the vault header (4.4) stores _wrapped_ (encrypted with the
+- A **passphrase** only unlocks the data key, which the vault keyring (4.4) stores _wrapped_ (encrypted with the
   passphrase key). Changing the passphrase re-wraps the data key; no data is re-encrypted.
 - Devices keep the three derived keys as non-extractable WebCrypto keys in IndexedDB. They store neither the
   passphrase nor the data key.
@@ -163,14 +163,14 @@ data            = "v1." + base64url( nonce ‖ AES-256-GCM(encryption key, nonce
 - The additional data ties the contents to the row and to the format version: a server that swapped rows, or
   relabelled one as another version, makes decryption fail instead of changing your data.
 
-### 4.4 The vault header
+### 4.4 The vault keyring
 
-Each server holds an unencrypted header for the vault. It is the same on every server, and syncs between them with
-the newest `u` winning:
+Each server holds an unencrypted keyring for the vault: what a device needs to unlock the data key, and the vault's
+ID. It holds no data. It is the same on every server, and syncs between them with the newest `u` winning:
 
 ```json
 {
-  "format": "lokki-vault",
+  "format": "lokki-keyring",
   "version": 1,
   "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
   "keys": [
@@ -191,8 +191,8 @@ the newest `u` winning:
 | ------- | --------------------------------------------------------------------------------------------------------- |
 | `vault` | Random ID (16 bytes, base64url), made with the data key. A device refuses to mix two different vaults.    |
 | `keys`  | The ways to unlock the data key. Version 1 has one of type `passphrase`; a `recovery` key can come later. |
-| `u`     | When the header last changed                                                                              |
-| `mac`   | base64url( HMAC-SHA256(header key, canonical JSON of the header without `mac`) )                          |
+| `u`     | When the keyring last changed                                                                             |
+| `mac`   | base64url( HMAC-SHA256(keyring key, canonical JSON of the keyring without `mac`) )                        |
 
 Each entry in `keys`:
 
@@ -208,20 +208,20 @@ Each entry in `keys`:
   showing garbage. Argon2id makes guessing slow.
 - **Canonical JSON** for the `mac`: object keys sorted, no whitespace, numbers and strings as `JSON.stringify` writes
   them.
-- The `mac` stops a server from forging a header or reviving an old one (for example to make an old passphrase work
-  again): devices with keys check it before accepting a header or passing it on, and a new device checks it right after
-  unlocking.
+- The `mac` stops a server from forging a keyring or reviving an old one (for example to make an old passphrase work
+  again): devices with keys check it before accepting a keyring or passing it on, and a new device checks it right
+  after unlocking.
 
 ## 5. The server
 
 ### 5.1 What it stores
 
-| Table    | Contents                                                                                     |
-| -------- | -------------------------------------------------------------------------------------------- |
-| server   | its random server ID (UUID, made on first start)                                             |
-| accounts | one per vault: name, `head` (the vault's counter), the vault header and its `header_version` |
-| tokens   | SHA-256 of each API token, its account, its scope (`read` or `write`), when it was last used |
-| rows     | `account`, `key`, `seq`, `data`; one row per `key` per account                               |
+| Table    | Contents                                                                                       |
+| -------- | ---------------------------------------------------------------------------------------------- |
+| server   | its random server ID (UUID, made on first start)                                               |
+| accounts | one per vault: name, `head` (the vault's counter), the vault keyring and its `keyring_version` |
+| tokens   | SHA-256 of each API token, its account, its scope (`read` or `write`), when it was last used   |
+| rows     | `account`, `key`, `seq`, `data`; one row per `key` per account                                 |
 
 A push writes each row with the next `seq` and replaces any older row with the same `key`. Individual rows are never
 removed; deleting a record is a tombstone like any other change. `DELETE /v1/vault` removes a whole vault.
@@ -250,10 +250,9 @@ vault that the token belongs to.
 | Method and path                    | What it does                                                         |
 | ---------------------------------- | -------------------------------------------------------------------- |
 | `GET /v1/info`                     | The server's name, version, ID, API versions and limits (no sign-in) |
-| `GET /v1/vault`                    | A status summary of the vault                                        |
+| `GET /v1/vault`                    | The vault: its keyring and status                                    |
 | `DELETE /v1/vault`                 | Deletes the vault and its account, including all tokens              |
-| `GET /v1/vault/header`             | Reads the vault header                                               |
-| `PUT /v1/vault/header`             | Replaces the header, if up to date                                   |
+| `PUT /v1/vault/keyring`            | Replaces the keyring, if up to date                                  |
 | `GET /v1/vault/rows?since=&limit=` | Rows changed after a number                                          |
 | `POST /v1/vault/rows`              | Adds or replaces rows, if up to date                                 |
 
@@ -274,26 +273,40 @@ vault that the token belongs to.
 #### `GET /v1/vault`
 
 ```json
-{ "head": 1042, "rows": 16977, "header_version": 3, "changed": "2026-11-08T07:31:04Z" }
+{
+  "keyring": {
+    "format": "lokki-keyring",
+    "version": 1,
+    "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
+    "keys": ["…"],
+    "u": 1794130000000,
+    "mac": "Hq2v…"
+  },
+  "keyring_version": 3,
+  "head": 1042,
+  "rows": 16977,
+  "changed": "2026-11-08T07:31:04Z"
+}
 ```
+
+- `keyring` is the vault keyring (4.4) exactly as last written, or `null` for a new, empty vault. `keyring_version`
+  counts its writes (`0` while there is none).
+- `head` is the vault's counter, `rows` the number of rows, `changed` when a row or the keyring last changed.
 
 #### `DELETE /v1/vault`
 
-Deletes the rows, the header, the account and all its tokens: `204`. Afterwards every device gets `401` from this
+Deletes the rows, the keyring, the account and all its tokens: `204`. Afterwards every device gets `401` from this
 server and shows it as no longer accepting the device. Syncing with that server again needs a new account.
 
-#### `GET /v1/vault/header`
+#### `PUT /v1/vault/keyring`
 
-`200 {"header": {…}, "version": 3}`, or `404 {"error": "no_header"}` for a new, empty vault.
+Body `{"base": 3, "keyring": {…}}` (`base` is `0` when there is no keyring yet). The server stores the keyring as it
+is; it can't check the `mac`.
 
-#### `PUT /v1/vault/header`
-
-Body `{"base": 3, "header": {…}}` (`base` is `null` when there is no header yet).
-
-- Accepted only if `base` matches the current `version`: `200 {"version": 4}`.
-- Otherwise `409 {"error": "behind", "version": 4}`. The client fetches the header, keeps the one with the newer `u`,
-  and tries again if its own was newer.
-- A header whose `vault` differs from the stored one is refused: `409 {"error": "different_vault"}`.
+- Accepted only if `base` equals `keyring_version`: `200 {"keyring_version": 4}`.
+- Otherwise `409 {"error": "behind", "keyring_version": 4}`. The client reads the vault again, keeps the keyring with
+  the newer `u`, and tries again if its own was newer.
+- A keyring whose `vault` differs from the stored one is refused: `409 {"error": "different_vault"}`.
 
 #### `GET /v1/vault/rows?since=<n>&limit=<k>`
 
@@ -391,13 +404,13 @@ deleted.
 
 Per server:
 
-| Field            | Meaning                                        |
-| ---------------- | ---------------------------------------------- |
-| `url`, `token`   | Where and how to sign in                       |
-| `id`             | The server's ID from `/v1/info`                |
-| `bit`            | This server's bit number on this device (0–31) |
-| `cursor`         | Pulled up to this `seq`                        |
-| `header_version` | Last header version seen                       |
+| Field             | Meaning                                        |
+| ----------------- | ---------------------------------------------- |
+| `url`, `token`    | Where and how to sign in                       |
+| `id`              | The server's ID from `/v1/info`                |
+| `bit`             | This server's bit number on this device (0–31) |
+| `cursor`          | Pulled up to this `seq`                        |
+| `keyring_version` | Last keyring version seen                      |
 
 Per record: a number whose bits say which servers have the record's current version. Bit `b` is set when server
 `b` is known to have exactly this version.
@@ -417,7 +430,8 @@ This costs a few bytes per record however many servers there are.
 
 1. `GET /v1/info`. If `id` differs from the stored one, this is a different server: clear its bit everywhere and
    start from `cursor` 0.
-2. Sync the header (5.3, 4.4).
+2. `GET /v1/vault`. Sync the keyring: if the server's has a newer `u` (and a valid `mac`), take it; if this device's
+   is newer, or the server has none, write it with `PUT /v1/vault/keyring`.
 3. Pull: `GET /v1/vault/rows?since=cursor` until `more` is `false`. Decrypt each row, merge it (section 6) and update
    the bits.
 4. Push the records whose bit for this server is clear, in batches, with `base` = the `head` from the pull. On `409`,
@@ -450,19 +464,19 @@ clears that server's bit everywhere, starts from `cursor` 0, pulls everything an
 
 ## 8. Everyday tasks
 
-| Task                       | What happens                                                                                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| First device, first server | Choose a passphrase. The app makes the data key and the header, and pushes the header and all records.                                                             |
-| Adding another server      | Enter its URL and token. The app copies the header there and pushes all records.                                                                                   |
-| Setting up another device  | Enter a server's URL and token, then the passphrase. The app reads the header, unlocks the data key, derives the keys and pulls everything.                        |
-| Server moved to a new URL  | Edit the URL in the app. The server's `id` is unchanged, so syncing continues where it left off.                                                                   |
-| Changing the passphrase    | Enter the old and new passphrase on one device. It replaces the passphrase entry in the header and pushes the header to its servers; other devices are unaffected. |
-| Clearing a device          | Either everything (records, settings, servers and keys) or the records only, keeping servers and keys and downloading everything again.                            |
-| Deleting data on a server  | `DELETE /v1/vault` from that server's settings in the app. Other devices see the server as removed.                                                                |
-| Lost every device          | A server's URL and token and the passphrase are all it takes to get everything back.                                                                               |
-| Forgot the passphrase      | The server copies can't be decrypted by anyone. Devices that are still set up keep working; make a backup from one.                                                |
+| Task                       | What happens                                                                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First device, first server | Choose a passphrase. The app makes the data key and the keyring, and pushes the keyring and all records.                                                             |
+| Adding another server      | Enter its URL and token. The app copies the keyring there and pushes all records.                                                                                    |
+| Setting up another device  | Enter a server's URL and token, then the passphrase. The app reads the keyring, unlocks the data key, derives the keys and pulls everything.                         |
+| Server moved to a new URL  | Edit the URL in the app. The server's `id` is unchanged, so syncing continues where it left off.                                                                     |
+| Changing the passphrase    | Enter the old and new passphrase on one device. It replaces the passphrase entry in the keyring and pushes the keyring to its servers; other devices are unaffected. |
+| Clearing a device          | Either everything (records, settings, servers and keys) or the records only, keeping servers and keys and downloading everything again.                              |
+| Deleting data on a server  | `DELETE /v1/vault` from that server's settings in the app. Other devices see the server as removed.                                                                  |
+| Lost every device          | A server's URL and token and the passphrase are all it takes to get everything back.                                                                                 |
+| Forgot the passphrase      | The server copies can't be decrypted by anyone. Devices that are still set up keep working; make a backup from one.                                                  |
 
-**Replacing the data key** (if a passphrase and a copy of the header may have leaked) means re-encrypting every row on
+**Replacing the data key** (if a passphrase and a copy of the keyring may have leaked) means re-encrypting every row on
 every server. It is left for a later version.
 
 ## 9. Reading clients
@@ -470,8 +484,8 @@ every server. It is left for a later version.
 A client that only reads, such as a command-line tool that writes a backup or CSV file, needs a server's URL and
 token (a `read` token is enough) and the passphrase:
 
-1. `GET /v1/vault/header`, derive the passphrase key with Argon2id, unwrap the data key, derive the keys and check the
-   header's `mac`.
+1. `GET /v1/vault`, derive the passphrase key with Argon2id, unwrap the data key from the keyring, derive the keys and
+   check the keyring's `mac`.
 2. `GET /v1/vault/rows?since=0` until `more` is `false`, and decrypt each row.
 
 A server holds only the latest version of each row, so a reader with one server needs no merging. A server that
@@ -481,13 +495,13 @@ section 6.
 ## 10. Security
 
 **A server can see:** how many rows a vault has, their sizes (192 bytes, or more in steps of 64 for long notes and
-names), when they change, and the header. **It can't see:** names, values, notes, times, IDs, or which rows are
+names), when they change, and the keyring. **It can't see:** names, values, notes, times, IDs, or which rows are
 metrics and which are entries.
 
 - A server, or anyone who steals its database, can't read the data without the passphrase, and guessing it costs
   Argon2id with 64 MiB of memory per guess. A long passphrase matters.
 - A malicious server can withhold or delete rows, or serve old ones, but can't change contents undetected, mix rows
-  between records, or forge the header. Several servers protect against one losing data.
+  between records, or forge the keyring. Several servers protect against one losing data.
 - API tokens are random, sent only over HTTPS, and stored hashed. HTTPS ends at whatever runs in front of the server
   (a cloud platform, a tunnel or a proxy), so that service can see the token. With it, the service could damage rows
   on that server (7.5), but never read or forge your data.
@@ -497,20 +511,20 @@ metrics and which are entries.
 
 - **Per server:** reachable or not, time of the last successful round, and how many records it lacks (records whose
   bit for it is clear).
-- **Overall:** a small indicator in the header when some local change hasn't reached any server yet.
+- **Overall:** a small indicator in the app's top bar when some local change hasn't reached any server yet.
 
 ## 12. Versioning
 
 - The API version is in the path (`/v1/`); `GET /v1/info` lists the versions a server supports.
-- The encryption scheme is in each row's `data` prefix (`v1.`), bound into its additional data, and in the header's
+- The encryption scheme is in each row's `data` prefix (`v1.`), bound into its additional data, and in the keyring's
   `version`.
-- Unknown fields in records and headers are ignored and kept, so newer clients can add fields.
+- Unknown fields in records and keyrings are ignored and kept, so newer clients can add fields.
 
 ## 13. Later
 
 Not planned for version 1, but the design leaves room for:
 
-- **A recovery key:** a long random code as a second entry in the header's `keys` (type `recovery`), so a forgotten
+- **A recovery key:** a long random code as a second entry in the keyring's `keys` (type `recovery`), so a forgotten
   passphrase can be replaced.
 - **Several vaults on one device,** each with its own keys and servers, and each metric belonging to one vault.
   Servers already map one account to one vault.
