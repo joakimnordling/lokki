@@ -1,0 +1,44 @@
+name: Server (Python)
+
+on:
+  push:
+    branches: [main]
+    paths: ["servers/python/**", ".github/workflows/server-python.yml"]
+  pull_request:
+    paths: ["servers/python/**", ".github/workflows/server-python.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
+  # uv's own Python builds (latest patch releases), never the runner's system Python
+  UV_PYTHON_PREFERENCE: only-managed
+
+defaults:
+  run:
+    working-directory: servers/python
+
+jobs:
+  check:
+    name: Lint, types and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          working-directory: servers/python
+      - run: uv sync --locked
+      - name: ruff
+        run: uv run ruff check && uv run ruff format --check
+      - name: pyright
+        run: uv run pyright
+      - name: pytest
+        run: uv run pytest --cov --cov-report=term --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"

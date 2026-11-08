@@ -14,3 +14,15 @@ blob-report/
 *.jsonl.gz
 lokki-backup-*.zip
 lokki-export-*.csv
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.coverage
+.coverage.*
+.pytest_cache/
+.ruff_cache/
+*.db
+*.db-shm
+*.db-wal
+.env

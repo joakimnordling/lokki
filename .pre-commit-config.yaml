@@ -15,6 +15,7 @@ repos:
       - id: check-case-conflict
       - id: check-yaml
       - id: check-json
+      - id: check-toml
       - id: check-added-large-files
         args: [--maxkb=512]
       - id: detect-private-key
@@ -37,6 +38,35 @@ repos:
     rev: 2ca41cc1372d1e939a6a879f18cdc19fc1cac1ce # frozen: v8.30.0
     hooks:
       - id: gitleaks
+
+  # Python: the sync server
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: c0f278f1254ccc8fb09676bcdb8d847e7db493e5 # frozen: v0.17.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^servers/python/
+      - id: ruff-format
+        files: ^servers/python/
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: d1df990f871e616da38bb602a2671d5e840b9989 # frozen: 0.13.7
+    hooks:
+      - id: uv-lock
+        args: [--project, servers/python]
+        files: ^servers/python/(pyproject\.toml|uv\.lock)$
+
+  # GitHub Actions workflows: security problems, and mistakes (with shellcheck for run: scripts)
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: 06a39750ec31860bb44f2acf67182c40016cd1e7 # frozen: v1.32.0
+    hooks:
+      - id: zizmor
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+        additional_dependencies:
+          - github.com/wasilibs/go-shellcheck/cmd/shellcheck@v0.11.1
 
   # Unit tests before every push (needs Node.js 22+)
   - repo: local
