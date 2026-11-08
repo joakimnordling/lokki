@@ -2,6 +2,7 @@
 import { ago, esc, fmt } from "../core/format.js";
 import { store } from "../core/prefs.js";
 import { entriesOf, metrics, outbox, S, ui } from "../data/state.js";
+import { sync } from "../sync/manager.js";
 import { detailRender, loadView } from "./detail.js";
 import { $ } from "./dom.js";
 import { entriesRender } from "./entries.js";
@@ -16,7 +17,15 @@ export function render() {
   if (ui.view !== "list" && !metrics.has(ui.mid)) ui.view = "list";
   if (ui.view !== "entries") main.dataset.view = "";
   if (ui.view === "list") {
-    hdr.innerHTML = `<button class="hbtn" id="hType" aria-label="Filter by log type">${ICON.grid}</button><h1>My Logs</h1><button class="hbtn right" id="hSet" aria-label="Preferences">${ICON.gear}</button>`;
+    const state = S.local ? sync.headerState() : null;
+    const dot = state ? `<span class="dot${state === "bad" ? " bad" : ""}"></span>` : "";
+    const label =
+      state === "bad"
+        ? "Preferences (sync has a problem)"
+        : state
+          ? "Preferences (changes waiting to sync)"
+          : "Preferences";
+    hdr.innerHTML = `<button class="hbtn" id="hType" aria-label="Filter by log type">${ICON.grid}</button><h1>My Logs</h1><button class="hbtn right" id="hSet" aria-label="${label}">${ICON.gear}${dot}</button>`;
     $("#hType").onclick = openTypeFilter;
     $("#hSet").onclick = openSettings;
     tb.hidden = true;
@@ -56,7 +65,8 @@ function listHTML() {
   if (ui.filter)
     h += `<div class="filterbar"><span>Showing ${esc(ui.filter)}</span><button id="clrF">Show all</button></div>`;
   if (S.local) {
-    if (metrics.size) h += `<div class="note">Saved on this device only. Back up from Preferences now and then.</div>`;
+    if (metrics.size && !sync.vault)
+      h += `<div class="note">Saved on this device only. Back up from Preferences now and then, or set up sync.</div>`;
   } else if (!db)
     h += `<div class="note">Not syncing: open this page signed in to claude.ai. Changes are saved on this device.</div>`;
   else if (outbox.size && (S.syncErr || stale || !navigator.onLine))

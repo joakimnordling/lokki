@@ -16,6 +16,12 @@ export const NAMES = [
   "arrow-down-up",
   "plus",
   "trash-2",
+  // sync
+  "cloud-check",
+  "cloud-upload",
+  "cloud-off",
+  "cloud-alert",
+  "refresh-cw",
   // log types
   "trending-up",
   "utensils",

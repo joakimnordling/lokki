@@ -1,12 +1,14 @@
 // Preferences sheet.
-import { fmt } from "../core/format.js";
+import { esc, fmt } from "../core/format.js";
 import { applyLook, LOOKS, prefs, store } from "../core/prefs.js";
 import { metrics, outbox, S, ui } from "../data/state.js";
+import { sync } from "../sync/manager.js";
 import { backUp } from "./backup.js";
 import { $ } from "./dom.js";
 import { exportAll } from "./files.js";
 import { render } from "./render.js";
 import { sheet } from "./sheets.js";
+import { openSync, syncSummary } from "./sync.js";
 
 export function openSettings() {
   const total = [...S.entryCache.values()].reduce((a, b) => a + b.length, 0);
@@ -20,11 +22,12 @@ export function openSettings() {
     <div class="seg insheet" role="group" aria-label="Week starts on"><button data-ws="1" aria-pressed="${weekStart === 1}">Monday</button><button data-ws="0" aria-pressed="${weekStart === 0}">Sunday</button></div></div>
     <div class="setrow" style="display:block"><span>Time Format<small>How times are shown in the app. Saved on this device.</small></span>
     <div class="seg insheet" role="group" aria-label="Time format"><button data-h24="1" aria-pressed="${h24}">24-Hour</button><button data-h24="0" aria-pressed="${!h24}">AM/PM</button></div></div>
+    ${S.local ? `<button class="setrow" id="sSync"><span>Sync<small>${esc(syncSummary())}</small></span><span>›</span></button>` : ""}
     <button class="setrow" id="sBak"><span>Back Up<small>Saves everything, including log types, view settings and deletions, to a Lokki backup file (.zip).</small></span><span>›</span></button>
     <button class="setrow" id="sRes"><span>Restore from Backup<small>Merges a Lokki backup into the app. Shows what will change before anything does.</small></span><span>›</span></button>
     <button class="setrow" id="sExp"><span>Export CSV<small>Every entry as metric, date, value and note, for spreadsheets.</small></span><span>›</span></button>
     <button class="setrow" id="sImp"><span>Import CSV<small>Adds entries from CSV files, including the old Loggr app's. Entries you already have are skipped.</small></span><span>›</span></button>
-    <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. ${S.local ? "Saved on this device only." : `Saved on this device and synced privately through your claude.ai account${outbox.size ? ` (${outbox.size} waiting to sync)` : ""}.`}</div>`,
+    <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. ${S.local ? (sync.vault ? "Saved on this device and synced, end-to-end encrypted." : "Saved on this device only.") : `Saved on this device and synced privately through your claude.ai account${outbox.size ? ` (${outbox.size} waiting to sync)` : ""}.`}</div>`,
     { cancel: "Done" },
   );
   const group = (attr, fn) => {
@@ -59,6 +62,11 @@ export function openSettings() {
     $("#fileIn").value = "";
     $("#fileIn").click();
   };
+  if (S.local)
+    $("#sSync").onclick = () => {
+      close();
+      openSync();
+    };
   $("#sBak").onclick = () => {
     close();
     backUp();
