@@ -58,12 +58,25 @@ line-length = 100
 target-version = "py315"
 
 [tool.ruff.lint]
-# D213: a multi-line docstring starts its text on the line after the opening quotes
-# S: security checks (bandit's rules); T10: leftover debugger calls; PT: pytest style
-# C4, PIE, RET, PERF, FURB: simpler comprehensions, returns and idioms; ASYNC: async pitfalls
 select = [
-    "E", "F", "W", "I", "UP", "B", "SIM", "RUF", "D213", "S", "T10",
-    "PT", "C4", "PIE", "RET", "PERF", "FURB", "ASYNC",
+    "E",      # pycodestyle errors: basic style problems
+    "W",      # pycodestyle warnings: whitespace
+    "F",      # Pyflakes: unused imports and variables, undefined names
+    "I",      # isort: import order
+    "UP",     # pyupgrade: newer syntax for the target Python version
+    "B",      # flake8-bugbear: likely bugs and design problems
+    "SIM",    # flake8-simplify: code that can be written more simply
+    "RUF",    # Ruff's own rules, e.g. unused noqa comments
+    "D213",   # a multi-line docstring starts its text on the line after the opening quotes
+    "S",      # flake8-bandit: security problems
+    "T10",    # flake8-debugger: leftover debugger calls
+    "PT",     # flake8-pytest-style: pytest conventions
+    "C4",     # flake8-comprehensions: simpler comprehensions
+    "PIE",    # flake8-pie: unnecessary code
+    "RET",    # flake8-return: simpler returns
+    "PERF",   # Perflint: slow patterns
+    "FURB",   # refurb: more modern idioms
+    "ASYNC",  # flake8-async: blocking calls and other pitfalls in async code
 ]
 
 [tool.ruff.lint.per-file-ignores]
