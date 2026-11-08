@@ -28,6 +28,11 @@ tests/unit/         node:test unit tests
 tests/e2e/          Playwright tests: several simulated devices syncing through a fake database
 ```
 
+## Sync
+
+The planned sync protocol (end-to-end encrypted, any number of servers) is described in
+[docs/sync-protocol.md](docs/sync-protocol.md).
+
 ## Development
 
 Requirements: Node.js 22+ and [pre-commit](https://pre-commit.com).
