@@ -18,7 +18,8 @@ const freePort = () =>
     });
   });
 
-export async function startServer() {
+/** cors: origins allowed to call the server from a browser. */
+export async function startServer({ cors = [] } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "lokki-server-"));
   const port = await freePort();
   const child = spawn("uv", ["run", "--project", project, "lokki-server", "serve", "--port", String(port)], {
@@ -26,6 +27,7 @@ export async function startServer() {
       ...process.env,
       LOKKI_DATABASE_URL: `sqlite+aiosqlite:///${join(dir, "lokki.db")}`,
       LOKKI_TEST_MODE: "true",
+      LOKKI_CORS_ORIGINS: JSON.stringify(cors),
     },
     stdio: ["ignore", "ignore", "pipe"],
   });
