@@ -1,0 +1,76 @@
+[project]
+name = "lokki-server"
+version = "0.1.0"
+description = "Sync server for Lokki: stores end-to-end encrypted rows for any number of devices"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Joakim Nordling", email = "joakim.nordling@gmail.com" }]
+requires-python = ">=3.15"
+dependencies = [
+    "fastapi>=0.162",
+    "uvicorn[standard]>=0.54",
+    "pydantic>=2.14",
+    "pydantic-settings>=2.16",
+    "sqlalchemy[asyncio]>=2.1",
+    "aiosqlite>=0.22",
+    "alembic>=1.20",
+    "typer>=0.28",
+]
+
+[project.scripts]
+lokki-server = "lokki_server.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2",
+    "pytest-cov>=7.1",
+    "syrupy>=6.1",
+    "httpx2>=2.16",  # FastAPI's TestClient
+    "ruff==0.17.4",
+    "pyright==1.1.414",
+]
+
+[tool.uv]
+required-version = ">=0.13.6"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["lokki_server"]
+branch = true
+# Alembic runs the migrations; tests/test_storage.py checks they match the tables
+omit = ["*/lokki_server/migrations/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py315"
+
+[tool.ruff.lint]
+# D213: a multi-line docstring starts its text on the line after the opening quotes
+# S: security checks (bandit's rules); T10: leftover debugger calls; PT: pytest style
+# C4, PIE, RET, PERF, FURB: simpler comprehensions, returns and idioms; ASYNC: async pitfalls
+select = [
+    "E", "F", "W", "I", "UP", "B", "SIM", "RUF", "D213", "S", "T10",
+    "PT", "C4", "PIE", "RET", "PERF", "FURB", "ASYNC",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# tests use plain asserts and hard-coded test tokens on purpose
+"tests/*" = ["S"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.15"
+typeCheckingMode = "strict"
