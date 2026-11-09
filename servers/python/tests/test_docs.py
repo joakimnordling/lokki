@@ -58,10 +58,11 @@ def test_docs_pages_load_nothing_from_other_sites(client: TestClient) -> None:
 
 def test_test_mode_is_documented_only_in_test_mode(settings: Settings) -> None:
     with TestClient(create_app(settings.model_copy(update={"test_mode": False}))) as client:
-        paths = client.get("/openapi.json").json()["paths"]
+        schema = client.get("/openapi.json").json()
 
-    assert "/v1/test/vaults" not in paths
-    assert "/v1/vault/rows" in paths
+    assert "/v1/test/vaults" not in schema["paths"]
+    assert "/v1/vault/rows" in schema["paths"]
+    assert [t["name"] for t in schema["tags"]] == ["server", "vault"]
 
 
 def test_docs_can_be_turned_off(settings: Settings) -> None:

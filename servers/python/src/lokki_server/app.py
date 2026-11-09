@@ -27,8 +27,12 @@ valid (never `422`).
 _TAGS = [
     {"name": "server", "description": "About the server itself"},
     {"name": "vault", "description": "The vault the token belongs to: its keyring and rows"},
-    {"name": "test mode", "description": "Only when `LOKKI_TEST_MODE` is on, never in production"},
 ]
+# Listed, like its endpoint, only in test mode
+_TEST_TAG = {
+    "name": "test mode",
+    "description": "Only when `LOKKI_TEST_MODE` is on, never in production",
+}
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -54,7 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         summary="Stores end-to-end encrypted rows for Lokki's devices. It can't read any of them.",
         description=_DESCRIPTION,
-        openapi_tags=_TAGS,
+        openapi_tags=[*_TAGS, _TEST_TAG] if config.test_mode else _TAGS,
         lifespan=lifespan,
         docs_url="/docs" if config.docs else None,
         redoc_url="/redoc" if config.docs else None,
