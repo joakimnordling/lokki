@@ -8,7 +8,7 @@ docstring describes it there, so they're written for the API's readers.
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, field_validator
 
 from lokki_server.names import VAULT_NAME
 
@@ -139,16 +139,46 @@ class Info(BaseModel):
     limits: InfoLimits
 
 
+# Integers JavaScript holds exactly, so every device writes them the same (protocol 4.4)
+MAX_SAFE_INTEGER = 2**53 - 1
+SafeInt = Annotated[
+    int,
+    Field(
+        ge=0,
+        le=MAX_SAFE_INTEGER,
+    ),
+]
+
+
+def _check_canonical(value: JsonValue) -> None:
+    """ValueError unless the value has only what the keyring's canonical JSON allows (4.4)."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not key.isascii():
+                raise ValueError("a keyring's object keys must be ASCII")
+            _check_canonical(item)
+    elif isinstance(value, list):
+        for item in value:
+            _check_canonical(item)
+    elif isinstance(value, float):
+        raise ValueError("a keyring can't contain fractional numbers")
+    elif isinstance(value, int) and not isinstance(value, bool) and abs(value) > MAX_SAFE_INTEGER:
+        raise ValueError(f"a keyring's integers must be within ±{MAX_SAFE_INTEGER}")
+
+
 class Keyring(BaseModel):
     """
     The vault keyring (protocol 4.4): the vault's key, wrapped by keys made from passphrases.
 
-    Only these fields are accepted. The server checks the format and the vault ID, so it can refuse
-    another vault's keyring, and stores the rest as sent: it can't check `keys` or `mac`.
+    Only these fields are accepted, with their exact JSON types and nothing converted, and values
+    only of the kinds the `mac`'s canonical JSON allows. The server checks the format and the vault
+    ID, so it can refuse another vault's keyring, and stores the rest as sent: it can't check the
+    entries in `keys`, or the `mac`.
     """
 
     model_config = ConfigDict(
         extra="forbid",
+        strict=True,
         json_schema_extra={
             "examples": [
                 {
@@ -172,7 +202,7 @@ class Keyring(BaseModel):
     )
 
     format: Literal["lokki-keyring"] = Field(description="Always `lokki-keyring`")
-    version: int = Field(
+    version: SafeInt = Field(
         description="The keyring format's version",
         examples=[1],
     )
@@ -191,7 +221,7 @@ class Keyring(BaseModel):
         description="The ways to unlock the vault's key, each the key wrapped by a key made from a "
         "passphrase (protocol 4.4). Devices skip entries of a type they don't know.",
     )
-    u: int = Field(
+    u: SafeInt = Field(
         description="When the keyring was last changed, in milliseconds since 1970 (UTC)",
         examples=[_TIME],
     )
@@ -200,6 +230,13 @@ class Keyring(BaseModel):
         "(protocol 4.4). The server can't check it.",
         examples=["Hq2v…"],
     )
+
+    @field_validator("keys")
+    @classmethod
+    def _canonical(cls, keys: list[dict[str, JsonValue]]) -> list[dict[str, JsonValue]]:
+        for entry in keys:
+            _check_canonical(entry)
+        return keys
 
 
 class Vault(BaseModel):

@@ -207,7 +207,9 @@ Each entry in `keys`:
 - A wrong passphrase makes unwrapping fail its integrity check, so the app can say "wrong passphrase" instead of
   showing garbage. Argon2id makes guessing slow.
 - **Canonical JSON** for the `mac`: object keys sorted, no whitespace, numbers and strings as `JSON.stringify` writes
-  them.
+  them. So that this is the same in every language, a keyring may hold only objects with ASCII keys, arrays, strings,
+  `true`, `false`, `null` and integers within ±(2⁵³ − 1); no fractional numbers. Servers refuse anything else
+  (`400`), and never convert a value: a changed value would no longer match the `mac`.
 - The `mac` stops a server from forging a keyring or reviving an old one (for example to make an old passphrase work
   again): devices with keys check it before accepting a keyring or passing it on, and a new device checks it right
   after unlocking.

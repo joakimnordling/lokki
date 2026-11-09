@@ -173,7 +173,7 @@
       "JsonValue": {},
       "Keyring": {
         "additionalProperties": false,
-        "description": "The vault keyring (protocol 4.4): the vault's key, wrapped by keys made from passphrases.\n\nOnly these fields are accepted. The server checks the format and the vault ID, so it can refuse\nanother vault's keyring, and stores the rest as sent: it can't check `keys` or `mac`.",
+        "description": "The vault keyring (protocol 4.4): the vault's key, wrapped by keys made from passphrases.\n\nOnly these fields are accepted, with their exact JSON types and nothing converted, and values\nonly of the kinds the `mac`'s canonical JSON allows. The server checks the format and the vault\nID, so it can refuse another vault's keyring, and stores the rest as sent: it can't check the\nentries in `keys`, or the `mac`.",
         "examples": [
           {
             "format": "lokki-keyring",
@@ -231,6 +231,8 @@
             "examples": [
               1794130000000
             ],
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
             "title": "U",
             "type": "integer"
           },
@@ -249,6 +251,8 @@
             "examples": [
               1
             ],
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
             "title": "Version",
             "type": "integer"
           }
