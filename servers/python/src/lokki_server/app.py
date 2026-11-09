@@ -48,7 +48,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         storage = open_storage(config.database_url)
         app.state.storage = storage
         try:
-            await storage.server_id()  # made on first start
+            # made on first start and never changed, so read once: /v1/info needs no database
+            app.state.server_id = await storage.server_id()
             yield
         finally:
             await storage.close()

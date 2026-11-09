@@ -64,12 +64,12 @@ Config = Annotated[Settings, Depends(settings)]
     summary="What this server is",
     response_description="The server",
 )
-async def info(store: Store, config: Config) -> Info:
+async def info(request: Request, config: Config) -> Info:
     """The server's name, version, ID, API versions and limits. Needs no token (protocol 5.3)."""
     limits = config.limits
     return Info(
         version=__version__,
-        id=await store.server_id(),
+        id=request.app.state.server_id,
         api=[1],
         limits=InfoLimits(
             pull=limits.pull,
