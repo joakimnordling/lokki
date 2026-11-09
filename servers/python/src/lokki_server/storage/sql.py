@@ -15,7 +15,7 @@ from lokki_server.storage.base import (
     Outcome,
     PullResult,
     Row,
-    TokenInfo,
+    Token,
     TokenSummary,
     VaultStatus,
     VaultSummary,
@@ -117,7 +117,7 @@ class SqlStorage:
         except IntegrityError as e:
             raise NameTaken(label) from e
 
-    async def find_token(self, token_hash: str) -> TokenInfo | None:
+    async def find_token(self, token_hash: str) -> Token | None:
         async with self.engine.connect() as conn:
             found = (
                 await conn.execute(
@@ -131,7 +131,7 @@ class SqlStorage:
             ).first()
         if found is None:
             return None
-        return TokenInfo(
+        return Token(
             token_id=found.id,
             vault_id=found.vault_id,
             scope=found.scope,

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import JsonValue
 
 from lokki_server import __version__, errors
-from lokki_server.auth import Caller, caller, hash_token, new_token, storage, writer
+from lokki_server.auth import Token, WriteToken, hash_token, new_token, storage
 from lokki_server.clock import iso, now_ms
 from lokki_server.config import Settings
 from lokki_server.errors import DEFAULT, documented
@@ -47,8 +47,6 @@ _WRITING = documented(
 )
 
 Store = Annotated[Storage, Depends(storage)]
-Reader = Annotated[Caller, Depends(caller)]
-Writer = Annotated[Caller, Depends(writer)]
 
 
 def settings(request: Request) -> Settings:
@@ -88,12 +86,12 @@ async def info(store: Store, config: Config) -> Info:
     response_description="The vault",
     responses=_SIGNED_IN,
 )
-async def vault(who: Reader, store: Store) -> Vault:
+async def vault(token: Token, store: Store) -> Vault:
     """
     The keyring (null for a new vault) and the vault's counters. A device reads this first, to
     unlock the vault and to see whether there's anything new (protocol 5.3, 7.2).
     """
-    status = await store.vault(who.vault_id)
+    status = await store.vault(token.vault_id)
     keyring: dict[str, JsonValue] | None = (
         json.loads(status.keyring) if status.keyring is not None else None
     )
@@ -113,12 +111,12 @@ async def vault(who: Reader, store: Store) -> Vault:
     summary="Delete the vault and its tokens",
     responses={204: {"description": "Deleted"}, **_WRITING},
 )
-async def delete_vault(who: Writer, store: Store) -> Response:
+async def delete_vault(token: WriteToken, store: Store) -> Response:
     """
     Deletes every row, the keyring and all the vault's tokens, including the one used. This can't
     be undone; devices keep their own copies (protocol 5.3).
     """
-    await store.delete_vault(who.vault_id)
+    await store.delete_vault(token.vault_id)
     return Response(status_code=204)
 
 
@@ -138,7 +136,7 @@ async def delete_vault(who: Writer, store: Store) -> Response:
 )
 async def put_keyring(
     body: KeyringPut,
-    who: Writer,
+    token: WriteToken,
     store: Store,
     config: Config,
 ) -> KeyringVersion:
@@ -154,7 +152,7 @@ async def put_keyring(
     if len(text.encode()) > config.limits.keyring_bytes:
         raise errors.too_large(f"A keyring can be at most {config.limits.keyring_bytes} bytes.")
     result = await store.put_keyring(
-        who.vault_id,
+        token.vault_id,
         body.base,
         text,
         body.keyring.vault,
@@ -180,7 +178,7 @@ async def put_keyring(
     ),
 )
 async def pull(
-    who: Reader,
+    token: Token,
     store: Store,
     config: Config,
     since: Annotated[
@@ -205,7 +203,7 @@ async def pull(
     """
     most = config.limits.pull if limit is None else min(limit, config.limits.pull)
     result = await store.pull(
-        who.vault_id,
+        token.vault_id,
         since,
         most,
     )
@@ -239,7 +237,7 @@ async def pull(
 )
 async def push(
     body: Push,
-    who: Writer,
+    token: WriteToken,
     store: Store,
     config: Config,
 ) -> Head:
@@ -256,7 +254,7 @@ async def push(
     if len(set(keys)) != len(keys):
         raise errors.invalid_request("A push can't contain the same key twice.")
     result = await store.push(
-        who.vault_id,
+        token.vault_id,
         body.base,
         [(r.key, r.data) for r in body.rows],
         now_ms(),

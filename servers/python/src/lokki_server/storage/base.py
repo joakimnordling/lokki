@@ -11,8 +11,8 @@ from lokki_server.models import Scope
     frozen=True,
     slots=True,
 )
-class TokenInfo:
-    """Who a token belongs to and what it may do."""
+class Token:
+    """A token as stored: its vault and what it may do. The token itself is never stored."""
 
     token_id: int
     vault_id: int
@@ -151,7 +151,7 @@ class Storage(Protocol):
         """Store a token's hash for a vault. NameTaken if the vault has a token with this label."""
         ...
 
-    async def find_token(self, token_hash: str) -> TokenInfo | None:
+    async def find_token(self, token_hash: str) -> Token | None:
         """The token with this hash, if any."""
         ...
 

@@ -2,7 +2,6 @@
 
 import hashlib
 import secrets
-from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -10,8 +9,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from lokki_server import errors
 from lokki_server.clock import now_ms
-from lokki_server.models import Scope
 from lokki_server.storage import Storage
+from lokki_server.storage.base import Token as StoredToken
 
 # How often a token's "last used" time is written: not on every request
 _TOUCH_EVERY_MS = 60 * 60 * 1000
@@ -25,17 +24,6 @@ def new_token() -> str:
 def hash_token(token: str) -> str:
     """What the server stores: SHA-256 of the token, hex (random tokens need no salt)."""
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-@dataclass(
-    frozen=True,
-    slots=True,
-)
-class Caller:
-    """The vault a request acts on (its internal number), and what the token may do."""
-
-    vault_id: int
-    scope: Scope
 
 
 def storage(request: Request) -> Storage:
@@ -53,28 +41,31 @@ _bearer = HTTPBearer(
 )
 
 
-async def caller(
+async def token(
     store: Annotated[Storage, Depends(storage)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> Caller:
-    """The caller, from a valid token; 401 otherwise."""
-    token = credentials.credentials.strip() if credentials is not None else ""
-    if not token:
+) -> StoredToken:
+    """The request's token, if it's valid (of either scope); 401 otherwise."""
+    sent = credentials.credentials.strip() if credentials is not None else ""
+    if not sent:
         raise errors.unauthorized("Send an API token: Authorization: Bearer <token>.")
-    found = await store.find_token(hash_token(token))
+    found = await store.find_token(hash_token(sent))
     if found is None:
         raise errors.unauthorized()
     now = now_ms()
     if found.last_used is None or now - found.last_used >= _TOUCH_EVERY_MS:
         await store.touch_token(found.token_id, now)
-    return Caller(
-        vault_id=found.vault_id,
-        scope=found.scope,
-    )
+    # `last_used` stays as it was before this request; nothing after this check reads it
+    return found
 
 
-async def writer(found: Annotated[Caller, Depends(caller)]) -> Caller:
-    """The caller, if their token may write; 403 otherwise."""
+async def write_token(found: Annotated[StoredToken, Depends(token)]) -> StoredToken:
+    """The request's token, if it may write; 403 otherwise."""
     if found.scope != "write":
         raise errors.forbidden()
     return found
+
+
+# For endpoints: `token: Token` needs a valid token, `token: WriteToken` one that may write
+Token = Annotated[StoredToken, Depends(token)]
+WriteToken = Annotated[StoredToken, Depends(write_token)]
