@@ -91,13 +91,12 @@ class Keyring(BaseModel):
     """
     The vault keyring (protocol 4.4): the vault's key, wrapped by keys made from passphrases.
 
-    The server checks only the format and the vault ID, so it can refuse another vault's keyring.
-    Everything else, such as `keys` and `mac`, is stored exactly as sent, including fields it
-    doesn't know; the server can't check or read them.
+    Only these fields are accepted. The server checks the format and the vault ID, so it can refuse
+    another vault's keyring, and stores the rest as sent: it can't check `keys` or `mac`.
     """
 
     model_config = ConfigDict(
-        extra="allow",
+        extra="forbid",
         json_schema_extra={
             "examples": [
                 {
@@ -127,9 +126,18 @@ class Keyring(BaseModel):
         "vault's name on the server, which the API never shows.",
         examples=[_VAULT_ID],
     )
+    keys: Annotated[list[dict[str, JsonValue]], Field(min_length=1)] = Field(
+        description="The ways to unlock the vault's key, each the key wrapped by a key made from a "
+        "passphrase (protocol 4.4). Devices skip entries of a type they don't know.",
+    )
     u: int = Field(
         description="When the keyring was last changed, in milliseconds since 1970 (UTC)",
         examples=[_TIME],
+    )
+    mac: Annotated[str, StringConstraints(min_length=1)] = Field(
+        description="HMAC of the rest of the keyring, so devices can tell a forged or old keyring "
+        "(protocol 4.4). The server can't check it.",
+        examples=["Hq2v…"],
     )
 
 

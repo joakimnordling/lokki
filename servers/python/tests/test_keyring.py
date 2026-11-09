@@ -11,14 +11,14 @@ def put(client: TestClient, headers: dict[str, str], base: int, ring: dict[str, 
 
 
 def test_first_keyring_and_reading_it_back(client: TestClient, writer: dict[str, str]) -> None:
-    ring = keyring(future_field={"kept": True})
+    ring = keyring()
 
     response = put(client, writer, 0, ring)
 
     assert response.status_code == 200
     assert response.json() == {"keyring_version": 1}
     vault = client.get("/v1/vault", headers=writer).json()
-    assert vault["keyring"] == ring  # exactly as sent, including fields the server doesn't know
+    assert vault["keyring"] == ring  # exactly as sent
     assert vault["keyring_version"] == 1
 
 
@@ -59,6 +59,9 @@ def test_two_first_keyrings_of_different_vaults(client: TestClient, writer: dict
         {**keyring(), "format": "something-else"},
         {k: v for k, v in keyring().items() if k != "vault"},
         {**keyring(), "u": "soon"},
+        {k: v for k, v in keyring().items() if k != "mac"},
+        {**keyring(), "keys": []},
+        keyring(future_field=True),
         [],
     ],
 )
@@ -70,7 +73,8 @@ def test_invalid_keyrings(client: TestClient, writer: dict[str, str], ring: Any)
 
 
 def test_a_too_large_keyring(client: TestClient, writer: dict[str, str]) -> None:
-    response = put(client, writer, 0, keyring(padding="x" * 20000))
+    big = {**keyring()["keys"][0], "wrapped": "x" * 20000}
+    response = put(client, writer, 0, keyring(keys=[big]))
 
     assert response.status_code == 413
     assert response.json()["error"] == "too_large"

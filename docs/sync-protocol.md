@@ -304,8 +304,10 @@ and shows it as no longer accepting the device. Syncing with that server again n
 
 #### `PUT /v1/vault/keyring`
 
-Body `{"base": 3, "keyring": {…}}` (`base` is `0` when there is no keyring yet). The server stores the keyring as it
-is; it can't check the `mac`.
+Body `{"base": 3, "keyring": {…}}` (`base` is `0` when there is no keyring yet). The keyring must have exactly the
+fields of 4.4, with at least one entry in `keys`; anything else is refused with `400`. The server stores it as it is;
+it can't check the entries or the `mac`. A new keyring format with other fields will come with a new `version` and
+servers that accept it.
 
 - Accepted only if `base` equals `keyring_version`: `200 {"keyring_version": 4}`.
 - Otherwise `409 {"error": "behind", "keyring_version": 4}`. The client reads the vault again, keeps the keyring with
