@@ -7,7 +7,10 @@ from typing import Protocol
 from lokki_server.models import Scope
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class TokenInfo:
     """Who a token belongs to and what it may do."""
 
@@ -17,7 +20,10 @@ class TokenInfo:
     last_used: int | None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class VaultStatus:
     """A vault's keyring and counters. Times are milliseconds since 1970 (UTC)."""
 
@@ -28,7 +34,10 @@ class VaultStatus:
     changed: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class Row:
     """A stored row."""
 
@@ -37,7 +46,10 @@ class Row:
     data: str
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class PullResult:
     """Rows after a sequence number, and where to continue."""
 
@@ -55,7 +67,10 @@ class Outcome(Enum):
     DIFFERENT_VAULT = "different_vault"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class WriteResult:
     """The outcome of a conditional write, and the counter after it."""
 
@@ -67,7 +82,10 @@ class NameTaken(Exception):
     """A vault with this name, or a token with this label in the vault, exists already."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class VaultSummary:
     """A vault, for the command line. Its internal number is never shown."""
 
@@ -78,7 +96,10 @@ class VaultSummary:
     created: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class TokenSummary:
     """A token, for the command line. The token itself is never stored."""
 
@@ -120,7 +141,12 @@ class Storage(Protocol):
         ...
 
     async def add_token(
-        self, vault_id: int, label: str, token_hash: str, scope: Scope, now: int
+        self,
+        vault_id: int,
+        label: str,
+        token_hash: str,
+        scope: Scope,
+        now: int,
     ) -> None:
         """Store a token's hash for a vault. NameTaken if the vault has a token with this label."""
         ...
@@ -156,17 +182,31 @@ class Storage(Protocol):
         ...
 
     async def put_keyring(
-        self, vault_id: int, base: int, keyring: str, keyring_vault_id: str, now: int
+        self,
+        vault_id: int,
+        base: int,
+        keyring: str,
+        keyring_vault_id: str,
+        now: int,
     ) -> WriteResult:
         """Replace the keyring if `base` is the current keyring version and its vault ID matches."""
         ...
 
-    async def pull(self, vault_id: int, since: int, limit: int) -> PullResult:
+    async def pull(
+        self,
+        vault_id: int,
+        since: int,
+        limit: int,
+    ) -> PullResult:
         """Rows written after `since`, oldest first, at most `limit`."""
         ...
 
     async def push(
-        self, vault_id: int, base: int, new_rows: list[tuple[str, str]], now: int
+        self,
+        vault_id: int,
+        base: int,
+        new_rows: list[tuple[str, str]],
+        now: int,
     ) -> WriteResult:
         """Write `(key, data)` rows with the next sequence numbers if `base` is the current head."""
         ...

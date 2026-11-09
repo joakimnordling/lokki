@@ -27,7 +27,10 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class Caller:
     """The vault a request acts on (its internal number), and what the token may do."""
 
@@ -57,18 +60,33 @@ async def caller(
     """The caller, from a valid token; 401 otherwise."""
     token = credentials.credentials.strip() if credentials is not None else ""
     if not token:
-        raise ApiError(401, "unauthorized", "Send an API token: Authorization: Bearer <token>.")
+        raise ApiError(
+            401,
+            "unauthorized",
+            "Send an API token: Authorization: Bearer <token>.",
+        )
     found = await store.find_token(hash_token(token))
     if found is None:
-        raise ApiError(401, "unauthorized", "This token isn't valid on this server.")
+        raise ApiError(
+            401,
+            "unauthorized",
+            "This token isn't valid on this server.",
+        )
     now = now_ms()
     if found.last_used is None or now - found.last_used >= _TOUCH_EVERY_MS:
         await store.touch_token(found.token_id, now)
-    return Caller(vault_id=found.vault_id, scope=found.scope)
+    return Caller(
+        vault_id=found.vault_id,
+        scope=found.scope,
+    )
 
 
 async def writer(found: Annotated[Caller, Depends(caller)]) -> Caller:
     """The caller, if their token may write; 403 otherwise."""
     if found.scope != "write":
-        raise ApiError(403, "forbidden", "This token can only read.")
+        raise ApiError(
+            403,
+            "forbidden",
+            "This token can only read.",
+        )
     return found

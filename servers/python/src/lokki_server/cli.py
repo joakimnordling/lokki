@@ -38,16 +38,31 @@ async def _storage(settings: Settings) -> AsyncGenerator[Storage]:
 @app.command()
 def serve(
     host: Annotated[str, typer.Option(help="Address to listen on")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(envvar="PORT", help="Port (also from $PORT)")] = 8000,
+    port: Annotated[
+        int,
+        typer.Option(
+            envvar="PORT",
+            help="Port (also from $PORT)",
+        ),
+    ] = 8000,
     migrate_first: Annotated[
-        bool, typer.Option("--migrate/--no-migrate", help="Update the database's tables first")
+        bool,
+        typer.Option(
+            "--migrate/--no-migrate",
+            help="Update the database's tables first",
+        ),
     ] = True,
 ) -> None:
     """Run the server."""
     settings = Settings()
     if migrate_first:
         migrate(settings.database_url)
-    uvicorn.run(create_app(settings), host=host, port=port, proxy_headers=True)
+    uvicorn.run(
+        create_app(settings),
+        host=host,
+        port=port,
+        proxy_headers=True,
+    )
 
 
 @app.command("migrate")
@@ -57,12 +72,22 @@ def migrate_command() -> None:
     typer.echo("The database is up to date.")
 
 
-vault_app = typer.Typer(help="Vaults: one per person, holding their logs.", no_args_is_help=True)
-token_app = typer.Typer(
-    help="Tokens: what devices sign in with, e.g. one per device.", no_args_is_help=True
+vault_app = typer.Typer(
+    help="Vaults: one per person, holding their logs.",
+    no_args_is_help=True,
 )
-app.add_typer(vault_app, name="vault")
-app.add_typer(token_app, name="token")
+token_app = typer.Typer(
+    help="Tokens: what devices sign in with, e.g. one per device.",
+    no_args_is_help=True,
+)
+app.add_typer(
+    vault_app,
+    name="vault",
+)
+app.add_typer(
+    token_app,
+    name="token",
+)
 
 
 def _vault_name(value: str) -> str:
@@ -79,12 +104,21 @@ def _label(value: str) -> str:
         raise typer.BadParameter(str(e)) from None
 
 
-VaultName = Annotated[str, typer.Argument(help="The vault's name", callback=_vault_name)]
+VaultName = Annotated[
+    str,
+    typer.Argument(
+        help="The vault's name",
+        callback=_vault_name,
+    ),
+]
 Label = Annotated[str, typer.Argument(help="The token's label, e.g. the device's name")]
 
 
 def _fail(message: str) -> NoReturn:
-    typer.echo(message, err=True)
+    typer.echo(
+        message,
+        err=True,
+    )
     raise typer.Exit(1)
 
 
@@ -116,7 +150,10 @@ async def vault_list() -> None:
         found = await storage.list_vaults()
     if not found:
         typer.echo("No vaults yet. Create one with: lokki-server vault add NAME")
-    width = max((len(v.name) for v in found), default=0)
+    width = max(
+        (len(v.name) for v in found),
+        default=0,
+    )
     for v in found:
         typer.echo(
             f"{v.name:<{width}}  rows: {v.rows}  head: {v.head}  tokens: {v.tokens}"
@@ -128,13 +165,22 @@ async def vault_list() -> None:
 @async_to_sync
 async def vault_delete(
     name: VaultName,
-    yes: Annotated[bool, typer.Option("--yes", help="Don't ask for confirmation")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help="Don't ask for confirmation",
+        ),
+    ] = False,
 ) -> None:
     """Delete a vault with everything in it and all its tokens. This can't be undone."""
     async with _storage(Settings()) as storage:
         vault_id = await _find(storage, name)
         if not yes:
-            typer.confirm(f"Delete the vault {name}, everything in it and its tokens?", abort=True)
+            typer.confirm(
+                f"Delete the vault {name}, everything in it and its tokens?",
+                abort=True,
+            )
         await storage.delete_vault(vault_id)
     typer.echo(f"Vault {name} deleted.")
 
@@ -143,7 +189,13 @@ async def vault_delete(
 @async_to_sync
 async def token_add(
     vault: VaultName,
-    label: Annotated[str, typer.Argument(help="A label, e.g. the device's name", callback=_label)],
+    label: Annotated[
+        str,
+        typer.Argument(
+            help="A label, e.g. the device's name",
+            callback=_label,
+        ),
+    ],
     scope: ScopeOption = "write",
 ) -> None:
     """Add a token to a vault and print the URL and token to enter in the app."""
@@ -152,7 +204,13 @@ async def token_add(
         vault_id = await _find(storage, vault)
         token = new_token()
         try:
-            await storage.add_token(vault_id, label, hash_token(token), scope, now_ms())
+            await storage.add_token(
+                vault_id,
+                label,
+                hash_token(token),
+                scope,
+                now_ms(),
+            )
         except NameTaken:
             _fail(f"The vault {vault} has a token called {label} already.")
     typer.echo(f"Token {label} ({scope}) for the vault {vault}. Enter these in the app:")
@@ -168,7 +226,10 @@ async def token_list(vault: VaultName) -> None:
         found = await storage.list_tokens(await _find(storage, vault))
     if not found:
         typer.echo(f"The vault {vault} has no tokens.")
-    width = max((len(t.label) for t in found), default=0)
+    width = max(
+        (len(t.label) for t in found),
+        default=0,
+    )
     for t in found:
         used = iso(t.last_used) if t.last_used is not None else "never"
         typer.echo(

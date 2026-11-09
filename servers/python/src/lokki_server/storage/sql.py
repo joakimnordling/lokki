@@ -37,9 +37,16 @@ class SqlStorage:
     """The storage interface on an SQLAlchemy async engine."""
 
     def __init__(self, url: str, **engine_options: Any) -> None:
-        self.engine: AsyncEngine = create_async_engine(url, **engine_options)
+        self.engine: AsyncEngine = create_async_engine(
+            url,
+            **engine_options,
+        )
         if self.engine.dialect.name == "sqlite":
-            event.listen(self.engine.sync_engine, "connect", _sqlite_pragmas)
+            event.listen(
+                self.engine.sync_engine,
+                "connect",
+                _sqlite_pragmas,
+            )
 
     async def close(self) -> None:
         await self.engine.dispose()
@@ -51,7 +58,12 @@ class SqlStorage:
                 return found
         try:
             async with self.engine.begin() as conn:
-                await conn.execute(insert(server).values(name="id", value=str(uuid.uuid4())))
+                await conn.execute(
+                    insert(server).values(
+                        name="id",
+                        value=str(uuid.uuid4()),
+                    )
+                )
         except IntegrityError:
             pass  # another process made it first
         async with self.engine.begin() as conn:
@@ -66,7 +78,13 @@ class SqlStorage:
             async with self.engine.begin() as conn:
                 result = await conn.execute(
                     insert(vaults)
-                    .values(name=name, head=0, keyring_version=0, created=now, changed=now)
+                    .values(
+                        name=name,
+                        head=0,
+                        keyring_version=0,
+                        created=now,
+                        changed=now,
+                    )
                     .returning(vaults.c.id)
                 )
                 return result.scalar_one()
@@ -78,13 +96,22 @@ class SqlStorage:
             return await conn.scalar(select(vaults.c.id).where(vaults.c.name == name))
 
     async def add_token(
-        self, vault_id: int, label: str, token_hash: str, scope: Scope, now: int
+        self,
+        vault_id: int,
+        label: str,
+        token_hash: str,
+        scope: Scope,
+        now: int,
     ) -> None:
         try:
             async with self.engine.begin() as conn:
                 await conn.execute(
                     insert(tokens).values(
-                        vault_id=vault_id, label=label, hash=token_hash, scope=scope, created=now
+                        vault_id=vault_id,
+                        label=label,
+                        hash=token_hash,
+                        scope=scope,
+                        created=now,
                     )
                 )
         except IntegrityError as e:
@@ -95,7 +122,10 @@ class SqlStorage:
             found = (
                 await conn.execute(
                     select(
-                        tokens.c.id, tokens.c.vault_id, tokens.c.scope, tokens.c.last_used
+                        tokens.c.id,
+                        tokens.c.vault_id,
+                        tokens.c.scope,
+                        tokens.c.last_used,
                     ).where(tokens.c.hash == token_hash)
                 )
             ).first()
@@ -134,7 +164,11 @@ class SqlStorage:
             )
             return [
                 VaultSummary(
-                    name=r.name, head=r.head, rows=r.rows, tokens=r.tokens, created=r.created
+                    name=r.name,
+                    head=r.head,
+                    rows=r.rows,
+                    tokens=r.tokens,
+                    created=r.created,
                 )
                 for r in found
             ]
@@ -145,7 +179,12 @@ class SqlStorage:
                 select(tokens).where(tokens.c.vault_id == vault_id).order_by(tokens.c.id)
             )
             return [
-                TokenSummary(label=r.label, scope=r.scope, created=r.created, last_used=r.last_used)
+                TokenSummary(
+                    label=r.label,
+                    scope=r.scope,
+                    created=r.created,
+                    last_used=r.last_used,
+                )
                 for r in found
             ]
 
@@ -182,7 +221,12 @@ class SqlStorage:
         )
 
     async def put_keyring(
-        self, vault_id: int, base: int, keyring: str, keyring_vault_id: str, now: int
+        self,
+        vault_id: int,
+        base: int,
+        keyring: str,
+        keyring_vault_id: str,
+        now: int,
     ) -> WriteResult:
         async with self.engine.begin() as conn:
             # One conditional update: only from the expected version, and only for the same vault
@@ -217,32 +261,64 @@ class SqlStorage:
             return WriteResult(Outcome.DIFFERENT_VAULT, current.keyring_version)
         return WriteResult(Outcome.BEHIND, current.keyring_version)
 
-    async def pull(self, vault_id: int, since: int, limit: int) -> PullResult:
+    async def pull(
+        self,
+        vault_id: int,
+        since: int,
+        limit: int,
+    ) -> PullResult:
         async with self.engine.connect() as conn:
             # Read the head first and only rows up to it: a push committing meanwhile only adds
             # rows above it, which the next pull fetches.
             head = await self._head(conn, vault_id)
             found = (
                 await conn.execute(
-                    select(rows.c.key, rows.c.seq, rows.c.data)
-                    .where(rows.c.vault_id == vault_id, rows.c.seq > since, rows.c.seq <= head)
+                    select(
+                        rows.c.key,
+                        rows.c.seq,
+                        rows.c.data,
+                    )
+                    .where(
+                        rows.c.vault_id == vault_id,
+                        rows.c.seq > since,
+                        rows.c.seq <= head,
+                    )
                     .order_by(rows.c.seq)
                     .limit(limit + 1)
                 )
             ).all()
         more = len(found) > limit
-        page = [Row(key=r.key, seq=r.seq, data=r.data) for r in found[:limit]]
-        return PullResult(rows=page, cursor=page[-1].seq if more else head, more=more, head=head)
+        page = [
+            Row(
+                key=r.key,
+                seq=r.seq,
+                data=r.data,
+            )
+            for r in found[:limit]
+        ]
+        return PullResult(
+            rows=page,
+            cursor=page[-1].seq if more else head,
+            more=more,
+            head=head,
+        )
 
     async def push(
-        self, vault_id: int, base: int, new_rows: list[tuple[str, str]], now: int
+        self,
+        vault_id: int,
+        base: int,
+        new_rows: list[tuple[str, str]],
+        now: int,
     ) -> WriteResult:
         async with self.engine.begin() as conn:
             # Claim the numbers base+1 .. base+n, only if nobody has pushed since `base`.
             claimed = await conn.execute(
                 update(vaults)
                 .where(vaults.c.id == vault_id, vaults.c.head == base)
-                .values(head=vaults.c.head + len(new_rows), changed=now)
+                .values(
+                    head=vaults.c.head + len(new_rows),
+                    changed=now,
+                )
             )
             if claimed.rowcount != 1:
                 return WriteResult(Outcome.BEHIND, await self._head(conn, vault_id))
@@ -254,7 +330,10 @@ class SqlStorage:
                 insert(rows),
                 [
                     {"vault_id": vault_id, "key": key, "seq": base + i, "data": data}
-                    for i, (key, data) in enumerate(new_rows, start=1)
+                    for i, (key, data) in enumerate(
+                        new_rows,
+                        start=1,
+                    )
                 ],
             )
             return WriteResult(Outcome.OK, base + len(new_rows))

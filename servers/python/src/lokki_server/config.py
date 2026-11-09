@@ -55,11 +55,25 @@ DatabaseUrl = Annotated[str, AfterValidator(_check_database_url)]
 class Limits(BaseModel):
     """Limits the server announces in ``GET /v1/info`` and enforces."""
 
-    pull: int = Field(default=1000, ge=1, description="Most rows returned by one pull")
-    push: int = Field(default=500, ge=1, description="Most rows accepted in one push")
-    row_bytes: int = Field(default=4096, ge=64, description="Largest accepted row `data`, in bytes")
+    pull: int = Field(
+        default=1000,
+        ge=1,
+        description="Most rows returned by one pull",
+    )
+    push: int = Field(
+        default=500,
+        ge=1,
+        description="Most rows accepted in one push",
+    )
+    row_bytes: int = Field(
+        default=4096,
+        ge=64,
+        description="Largest accepted row `data`, in bytes",
+    )
     keyring_bytes: int = Field(
-        default=16384, ge=1024, description="Largest accepted keyring, in bytes"
+        default=16384,
+        ge=1024,
+        description="Largest accepted keyring, in bytes",
     )
 
 
@@ -67,7 +81,10 @@ class Settings(BaseSettings):
     """Server settings."""
 
     model_config = SettingsConfigDict(
-        env_prefix="LOKKI_", env_file=".env", env_nested_delimiter="__", extra="ignore"
+        env_prefix="LOKKI_",
+        env_file=".env",
+        env_nested_delimiter="__",
+        extra="ignore",
     )
 
     database_url: DatabaseUrl = Field(

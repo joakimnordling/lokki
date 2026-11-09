@@ -28,8 +28,15 @@ from lokki_server.models import (
 from lokki_server.storage import Storage
 from lokki_server.storage.base import NameTaken, Outcome
 
-router = APIRouter(prefix="/v1", responses=OTHER_ERRORS)
-test_router = APIRouter(prefix="/v1/test", tags=["test mode"], responses=OTHER_ERRORS)
+router = APIRouter(
+    prefix="/v1",
+    responses=OTHER_ERRORS,
+)
+test_router = APIRouter(
+    prefix="/v1/test",
+    tags=["test mode"],
+    responses=OTHER_ERRORS,
+)
 
 # What every endpoint that needs a token can answer
 _SIGNED_IN = documented("unauthorized")
@@ -50,7 +57,10 @@ Config = Annotated[Settings, Depends(settings)]
 
 
 @router.get(
-    "/info", tags=["server"], summary="What this server is", response_description="The server"
+    "/info",
+    tags=["server"],
+    summary="What this server is",
+    response_description="The server",
 )
 async def info(store: Store, config: Config) -> Info:
     """The server's name, version, ID, API versions and limits. Needs no token (protocol 5.3)."""
@@ -59,7 +69,11 @@ async def info(store: Store, config: Config) -> Info:
         version=__version__,
         id=await store.server_id(),
         api=[1],
-        limits=InfoLimits(pull=limits.pull, push=limits.push, row_bytes=limits.row_bytes),
+        limits=InfoLimits(
+            pull=limits.pull,
+            push=limits.push,
+            row_bytes=limits.row_bytes,
+        ),
     )
 
 
@@ -119,20 +133,33 @@ async def delete_vault(who: Writer, store: Store) -> Response:
     ),
 )
 async def put_keyring(
-    body: KeyringPut, who: Writer, store: Store, config: Config
+    body: KeyringPut,
+    who: Writer,
+    store: Store,
+    config: Config,
 ) -> KeyringVersion:
     """
     Written only if `base` is the current `keyring_version`, and only for the same vault:
     otherwise `409`, and the device reads the vault again (protocol 4.4, 5.3).
     """
     text = json.dumps(
-        body.keyring.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")
+        body.keyring.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
     if len(text.encode()) > config.limits.keyring_bytes:
         raise ApiError(
-            413, "too_large", f"A keyring can be at most {config.limits.keyring_bytes} bytes."
+            413,
+            "too_large",
+            f"A keyring can be at most {config.limits.keyring_bytes} bytes.",
         )
-    result = await store.put_keyring(who.vault_id, body.base, text, body.keyring.vault, now_ms())
+    result = await store.put_keyring(
+        who.vault_id,
+        body.base,
+        text,
+        body.keyring.vault,
+        now_ms(),
+    )
     match result.outcome:
         case Outcome.OK:
             return KeyringVersion(keyring_version=result.version)
@@ -166,12 +193,17 @@ async def pull(
     since: Annotated[
         int,
         Query(
-            ge=0, description="The `cursor` from the last pull; 0 for everything", examples=[1040]
+            ge=0,
+            description="The `cursor` from the last pull; 0 for everything",
+            examples=[1040],
         ),
     ] = 0,
     limit: Annotated[
         int | None,
-        Query(ge=1, description="Most rows to return; at most, and by default, `limits.pull`"),
+        Query(
+            ge=1,
+            description="Most rows to return; at most, and by default, `limits.pull`",
+        ),
     ] = None,
 ) -> Pull:
     """
@@ -179,9 +211,20 @@ async def pull(
     `since` (protocol 5.3, 7.2).
     """
     most = config.limits.pull if limit is None else min(limit, config.limits.pull)
-    result = await store.pull(who.vault_id, since, most)
+    result = await store.pull(
+        who.vault_id,
+        since,
+        most,
+    )
     return Pull(
-        rows=[RowOut(key=r.key, seq=r.seq, data=r.data) for r in result.rows],
+        rows=[
+            RowOut(
+                key=r.key,
+                seq=r.seq,
+                data=r.data,
+            )
+            for r in result.rows
+        ],
         cursor=result.cursor,
         more=result.more,
         head=result.head,
@@ -193,26 +236,57 @@ async def pull(
     tags=["vault"],
     summary="Push rows",
     response_description="Written",
-    responses=documented("invalid_request", "unauthorized", "forbidden", "behind", "too_large"),
+    responses=documented(
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "behind",
+        "too_large",
+    ),
 )
-async def push(body: Push, who: Writer, store: Store, config: Config) -> Head:
+async def push(
+    body: Push,
+    who: Writer,
+    store: Store,
+    config: Config,
+) -> Head:
     """
     Adds the rows, replacing any with the same key, all or none, and only if `base` is still the
     vault's `head`. Otherwise nothing is written: `409 behind`, so pull first (protocol 5.3, 7.3).
     """
     limits = config.limits
     if len(body.rows) > limits.push:
-        raise ApiError(413, "too_large", f"A push can have at most {limits.push} rows.")
+        raise ApiError(
+            413,
+            "too_large",
+            f"A push can have at most {limits.push} rows.",
+        )
     if any(len(r.data.encode()) > limits.row_bytes for r in body.rows):
-        raise ApiError(413, "too_large", f"A row's data can be at most {limits.row_bytes} bytes.")
+        raise ApiError(
+            413,
+            "too_large",
+            f"A row's data can be at most {limits.row_bytes} bytes.",
+        )
     keys = [r.key for r in body.rows]
     if len(set(keys)) != len(keys):
-        raise ApiError(400, "invalid_request", "A push can't contain the same key twice.")
+        raise ApiError(
+            400,
+            "invalid_request",
+            "A push can't contain the same key twice.",
+        )
     result = await store.push(
-        who.vault_id, body.base, [(r.key, r.data) for r in body.rows], now_ms()
+        who.vault_id,
+        body.base,
+        [(r.key, r.data) for r in body.rows],
+        now_ms(),
     )
     if result.outcome is Outcome.BEHIND:
-        raise ApiError(409, "behind", "Pull first: the vault has changed.", head=result.version)
+        raise ApiError(
+            409,
+            "behind",
+            "Pull first: the vault has changed.",
+            head=result.version,
+        )
     return Head(head=result.version)
 
 
@@ -233,10 +307,21 @@ async def create_test_vault(body: TestVaultRequest, store: Store) -> TestVaultTo
     try:
         vault_id = await store.create_vault(name, now)
     except NameTaken:
-        raise ApiError(409, "name_taken", f"There's a vault called {name} already.") from None
+        raise ApiError(
+            409,
+            "name_taken",
+            f"There's a vault called {name} already.",
+        ) from None
     tokens = {"write": new_token(), "read": new_token()}
     for scope, token in tokens.items():
         await store.add_token(
-            vault_id, scope, hash_token(token), "write" if scope == "write" else "read", now
+            vault_id,
+            scope,
+            hash_token(token),
+            "write" if scope == "write" else "read",
+            now,
         )
-    return TestVaultTokens(name=name, **tokens)
+    return TestVaultTokens(
+        name=name,
+        **tokens,
+    )

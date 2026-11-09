@@ -53,10 +53,13 @@ class ErrorBody(BaseModel):
         examples=["behind"],
     )
     message: str = Field(
-        description="What went wrong, in English", examples=["Pull first: the vault has changed."]
+        description="What went wrong, in English",
+        examples=["Pull first: the vault has changed."],
     )
     head: int | None = Field(
-        default=None, description="With `behind` from a push: the vault's head now", examples=[1050]
+        default=None,
+        description="With `behind` from a push: the vault's head now",
+        examples=[1050],
     )
     keyring_version: int | None = Field(
         default=None,
@@ -68,22 +71,40 @@ class ErrorBody(BaseModel):
 class InfoLimits(BaseModel):
     """Limits a client must respect, and the server enforces."""
 
-    pull: int = Field(description="Most rows one pull returns", examples=[1000])
-    push: int = Field(description="Most rows one push may contain", examples=[500])
-    row_bytes: int = Field(description="Largest `data` of a row, in bytes", examples=[4096])
+    pull: int = Field(
+        description="Most rows one pull returns",
+        examples=[1000],
+    )
+    push: int = Field(
+        description="Most rows one push may contain",
+        examples=[500],
+    )
+    row_bytes: int = Field(
+        description="Largest `data` of a row, in bytes",
+        examples=[4096],
+    )
 
 
 class Info(BaseModel):
     """What this server is. Needs no token."""
 
-    server: Literal["lokki"] = Field(default="lokki", description="Always `lokki`")
-    version: str = Field(description="The server software's version", examples=["0.1.0"])
+    server: Literal["lokki"] = Field(
+        default="lokki",
+        description="Always `lokki`",
+    )
+    version: str = Field(
+        description="The server software's version",
+        examples=["0.1.0"],
+    )
     id: str = Field(
         description="The server's random ID, made on its first start and never changed. Devices "
         "recognise a server by it, even after its URL changes.",
         examples=["2c0d4c0e-5b1e-4f35-9b7a-3c86f0e1a2d4"],
     )
-    api: list[int] = Field(description="API versions this server speaks", examples=[[1]])
+    api: list[int] = Field(
+        description="API versions this server speaks",
+        examples=[[1]],
+    )
     limits: InfoLimits
 
 
@@ -120,8 +141,17 @@ class Keyring(BaseModel):
     )
 
     format: Literal["lokki-keyring"] = Field(description="Always `lokki-keyring`")
-    version: int = Field(description="The keyring format's version", examples=[1])
-    vault: Annotated[str, StringConstraints(min_length=1, max_length=64)] = Field(
+    version: int = Field(
+        description="The keyring format's version",
+        examples=[1],
+    )
+    vault: Annotated[
+        str,
+        StringConstraints(
+            min_length=1,
+            max_length=64,
+        ),
+    ] = Field(
         description="The vault's ID, made by the device that created the vault. Unrelated to the "
         "vault's name on the server, which the API never shows.",
         examples=[_VAULT_ID],
@@ -148,12 +178,17 @@ class Vault(BaseModel):
         description="The keyring exactly as last written, or null for a new, empty vault"
     )
     keyring_version: int = Field(
-        description="How many times the keyring was written; 0 while there is none", examples=[3]
+        description="How many times the keyring was written; 0 while there is none",
+        examples=[3],
     )
     head: int = Field(
-        description="The vault's counter: the number of the latest row written", examples=[1042]
+        description="The vault's counter: the number of the latest row written",
+        examples=[1042],
     )
-    rows: int = Field(description="How many rows the vault holds", examples=[16977])
+    rows: int = Field(
+        description="How many rows the vault holds",
+        examples=[16977],
+    )
     changed: str = Field(
         description="When a row or the keyring last changed (ISO 8601, UTC)",
         examples=["2026-11-08T07:31:04Z"],
@@ -173,18 +208,27 @@ class KeyringPut(BaseModel):
 class KeyringVersion(BaseModel):
     """The keyring was written."""
 
-    keyring_version: int = Field(description="The keyring's version now", examples=[4])
+    keyring_version: int = Field(
+        description="The keyring's version now",
+        examples=[4],
+    )
 
 
 class RowOut(BaseModel):
     """A row as stored."""
 
-    key: str = Field(description="The row's name (protocol 4.2)", examples=[_KEY])
+    key: str = Field(
+        description="The row's name (protocol 4.2)",
+        examples=[_KEY],
+    )
     seq: int = Field(
         description="The row's number: the vault's counter when it was last written",
         examples=[1041],
     )
-    data: str = Field(description="The encrypted record (protocol 4.3)", examples=["v1.mF3k…"])
+    data: str = Field(
+        description="The encrypted record (protocol 4.3)",
+        examples=["v1.mF3k…"],
+    )
 
 
 class Pull(BaseModel):
@@ -196,7 +240,10 @@ class Pull(BaseModel):
         "false, remember it for the next sync",
         examples=[1042],
     )
-    more: bool = Field(description="Whether there are more rows to fetch now", examples=[False])
+    more: bool = Field(
+        description="Whether there are more rows to fetch now",
+        examples=[False],
+    )
     head: int = Field(
         description="The vault's counter. A `since` above it means the server lost changes "
         "(protocol 7.4).",
@@ -246,6 +293,15 @@ class TestVaultRequest(BaseModel):
 class TestVaultTokens(BaseModel):
     """The test vault, and a token of each scope for it."""
 
-    name: str = Field(description="The vault's name", examples=["test-3f9a1c2b7d4e"])
-    write: str = Field(description="A token that can read and write", examples=["lk_6Yq3kM0p…"])
-    read: str = Field(description="A token that can only read", examples=["lk_Pw81dQe2…"])
+    name: str = Field(
+        description="The vault's name",
+        examples=["test-3f9a1c2b7d4e"],
+    )
+    write: str = Field(
+        description="A token that can read and write",
+        examples=["lk_6Yq3kM0p…"],
+    )
+    read: str = Field(
+        description="A token that can only read",
+        examples=["lk_Pw81dQe2…"],
+    )

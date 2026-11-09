@@ -18,6 +18,11 @@ def async_to_sync[**P, R](func: Callable[P, Coroutine[Any, Any, R]]) -> Callable
 
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        return asyncio.run(func(*args, **kwargs))
+        return asyncio.run(
+            func(
+                *args,
+                **kwargs,
+            )
+        )
 
     return wrapper
