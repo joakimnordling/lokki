@@ -27,8 +27,9 @@ ScopeOption = Annotated[Scope, typer.Option(help="What the token may do")]
 
 
 @asynccontextmanager
-async def _storage(settings: Settings) -> AsyncGenerator[Storage]:
-    storage = open_storage(settings.database_url)
+async def _storage() -> AsyncGenerator[Storage]:
+    """The database from the settings, closed again afterwards."""
+    storage = open_storage(Settings().database_url)
     try:
         yield storage
     finally:
@@ -133,7 +134,7 @@ async def _find(storage: Storage, name: str) -> int:
 @async_to_sync
 async def vault_add(name: VaultName) -> None:
     """Create an empty vault. Then add a token for each device."""
-    async with _storage(Settings()) as storage:
+    async with _storage() as storage:
         try:
             await storage.create_vault(name, now_ms())
         except NameTaken:
@@ -146,7 +147,7 @@ async def vault_add(name: VaultName) -> None:
 @async_to_sync
 async def vault_list() -> None:
     """List the vaults."""
-    async with _storage(Settings()) as storage:
+    async with _storage() as storage:
         found = await storage.list_vaults()
     if not found:
         typer.echo("No vaults yet. Create one with: lokki-server vault add NAME")
@@ -174,7 +175,7 @@ async def vault_delete(
     ] = False,
 ) -> None:
     """Delete a vault with everything in it and all its tokens. This can't be undone."""
-    async with _storage(Settings()) as storage:
+    async with _storage() as storage:
         vault_id = await _find(storage, name)
         if not yes:
             typer.confirm(
@@ -199,8 +200,7 @@ async def token_add(
     scope: ScopeOption = Scope.WRITE,
 ) -> None:
     """Add a token to a vault and print the URL and token to enter in the app."""
-    settings = Settings()
-    async with _storage(settings) as storage:
+    async with _storage() as storage:
         vault_id = await _find(storage, vault)
         token = new_token()
         try:
@@ -214,7 +214,7 @@ async def token_add(
         except NameTaken:
             _fail(f"The vault {vault} has a token called {label} already.")
     typer.echo(f"Token {label} ({scope}) for the vault {vault}. Enter these in the app:")
-    typer.echo(f"URL:    {settings.public_url}")
+    typer.echo(f"URL:    {Settings().public_url}")
     typer.echo(f"Token:  {token}    (shown only now)")
 
 
@@ -222,7 +222,7 @@ async def token_add(
 @async_to_sync
 async def token_list(vault: VaultName) -> None:
     """List a vault's tokens. The tokens themselves can't be shown: only hashes are kept."""
-    async with _storage(Settings()) as storage:
+    async with _storage() as storage:
         found = await storage.list_tokens(await _find(storage, vault))
     if not found:
         typer.echo(f"The vault {vault} has no tokens.")
@@ -241,7 +241,7 @@ async def token_list(vault: VaultName) -> None:
 @async_to_sync
 async def token_revoke(vault: VaultName, label: Label) -> None:
     """Revoke a token: the device using it can no longer sync."""
-    async with _storage(Settings()) as storage:
+    async with _storage() as storage:
         if not await storage.revoke_token(await _find(storage, vault), label.strip()):
             _fail(f"The vault {vault} has no token called {label}.")
     typer.echo(f"Token {label} revoked.")
