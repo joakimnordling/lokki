@@ -16,7 +16,8 @@ uv run lokki-server token add jocke browser            # one token per device
 uv run lokki-server serve                              # http://127.0.0.1:8000, data in ./lokki.db
 ```
 
-`serve` updates the database's tables first. The other commands:
+`serve` updates the database's tables first; `serve --reload` also restarts it when the code changes, for
+development. The other commands:
 
 | Command                             | What it does                                              |
 | ----------------------------------- | --------------------------------------------------------- |

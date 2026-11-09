@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, NoReturn
 
 import typer
@@ -53,17 +54,35 @@ def serve(
             help="Update the database's tables first",
         ),
     ] = True,
+    reload: Annotated[
+        bool,
+        typer.Option(
+            "--reload", help="Restart when the server's code changes; for development only"
+        ),
+    ] = False,
 ) -> None:
     """Run the server."""
     settings = Settings()
     if migrate_first:
         migrate(settings.database_url)
-    uvicorn.run(
-        create_app(settings),
-        host=host,
-        port=port,
-        proxy_headers=True,
-    )
+    if reload:
+        # Reloading needs the app as an import path: each restart makes it anew from the settings
+        uvicorn.run(
+            "lokki_server.app:create_app",
+            factory=True,
+            reload=True,
+            reload_dirs=[str(Path(__file__).parent)],
+            host=host,
+            port=port,
+            proxy_headers=True,
+        )
+    else:
+        uvicorn.run(
+            create_app(settings),
+            host=host,
+            port=port,
+            proxy_headers=True,
+        )
 
 
 @app.command("migrate")

@@ -1,8 +1,10 @@
 import re
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
+import lokki_server
 from lokki_server.auth import hash_token
 from lokki_server.cli import app
 
@@ -130,3 +132,20 @@ def test_serve_migrates_then_runs(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert calls == [("0.0.0.0", 9000)]
     assert "No vaults yet" in run("vault", "list")  # the tables exist
+
+
+def test_serve_with_reload(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    def fake_run(app: object, **options: object) -> None:
+        calls.append((app, options))
+
+    monkeypatch.setattr("lokki_server.cli.uvicorn.run", fake_run)
+
+    run("serve", "--reload")
+
+    [(app_path, options)] = calls
+    assert app_path == "lokki_server.app:create_app"
+    assert options["factory"] is True
+    assert options["reload"] is True
+    assert options["reload_dirs"] == [str(Path(lokki_server.__file__).parent)]
