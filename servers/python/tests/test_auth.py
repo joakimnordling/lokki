@@ -24,16 +24,16 @@ def test_without_a_valid_token(client: TestClient, headers: dict[str, str]) -> N
     assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
-def test_scheme_is_case_insensitive(client: TestClient, account: Tokens) -> None:
-    response = client.get("/v1/vault", headers={"Authorization": f"bearer {account['read']}"})
+def test_scheme_is_case_insensitive(client: TestClient, vault: Tokens) -> None:
+    response = client.get("/v1/vault", headers={"Authorization": f"bearer {vault['read']}"})
 
     assert response.status_code == 200
 
 
 def test_a_token_only_reaches_its_own_vault(
-    client: TestClient, new_account: Callable[[], Tokens]
+    client: TestClient, new_vault: Callable[[], Tokens]
 ) -> None:
-    alice, bob = new_account(), new_account()
+    alice, bob = new_vault(), new_vault()
     row = {"key": "AAAAAAAAAAAAAAAAAAAAAA", "data": "v1.alice"}
     assert (
         client.post(

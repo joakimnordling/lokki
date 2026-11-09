@@ -11,16 +11,17 @@ from sqlalchemy.pool import ConnectionPoolEntry
 
 from lokki_server.models import Scope
 from lokki_server.storage.base import (
-    AccountSummary,
+    NameTaken,
     Outcome,
     PullResult,
     Row,
     TokenInfo,
     TokenSummary,
     VaultStatus,
+    VaultSummary,
     WriteResult,
 )
-from lokki_server.storage.schema import accounts, rows, server, tokens
+from lokki_server.storage.schema import rows, server, tokens, vaults
 
 
 def _sqlite_pragmas(dbapi_connection: DBAPIConnection, _record: ConnectionPoolEntry) -> None:
@@ -58,32 +59,43 @@ class SqlStorage:
                 await conn.execute(select(server.c.value).where(server.c.name == "id"))
             ).scalar_one()
 
-    # accounts and tokens
+    # vaults and tokens
 
-    async def create_account(self, name: str, now: int) -> int:
-        async with self.engine.begin() as conn:
-            result = await conn.execute(
-                insert(accounts)
-                .values(name=name, head=0, keyring_version=0, created=now, changed=now)
-                .returning(accounts.c.id)
-            )
-            return result.scalar_one()
+    async def create_vault(self, name: str, now: int) -> int:
+        try:
+            async with self.engine.begin() as conn:
+                result = await conn.execute(
+                    insert(vaults)
+                    .values(name=name, head=0, keyring_version=0, created=now, changed=now)
+                    .returning(vaults.c.id)
+                )
+                return result.scalar_one()
+        except IntegrityError as e:
+            raise NameTaken(name) from e
 
-    async def add_token(self, account_id: int, token_hash: str, scope: Scope, now: int) -> int:
-        async with self.engine.begin() as conn:
-            result = await conn.execute(
-                insert(tokens)
-                .values(account_id=account_id, hash=token_hash, scope=scope, created=now)
-                .returning(tokens.c.id)
-            )
-            return result.scalar_one()
+    async def find_vault(self, name: str) -> int | None:
+        async with self.engine.connect() as conn:
+            return await conn.scalar(select(vaults.c.id).where(vaults.c.name == name))
+
+    async def add_token(
+        self, vault_id: int, label: str, token_hash: str, scope: Scope, now: int
+    ) -> None:
+        try:
+            async with self.engine.begin() as conn:
+                await conn.execute(
+                    insert(tokens).values(
+                        vault_id=vault_id, label=label, hash=token_hash, scope=scope, created=now
+                    )
+                )
+        except IntegrityError as e:
+            raise NameTaken(label) from e
 
     async def find_token(self, token_hash: str) -> TokenInfo | None:
         async with self.engine.connect() as conn:
             found = (
                 await conn.execute(
                     select(
-                        tokens.c.id, tokens.c.account_id, tokens.c.scope, tokens.c.last_used
+                        tokens.c.id, tokens.c.vault_id, tokens.c.scope, tokens.c.last_used
                     ).where(tokens.c.hash == token_hash)
                 )
             ).first()
@@ -91,7 +103,7 @@ class SqlStorage:
             return None
         return TokenInfo(
             token_id=found.id,
-            account_id=found.account_id,
+            vault_id=found.vault_id,
             scope=found.scope,
             last_used=found.last_used,
         )
@@ -100,129 +112,120 @@ class SqlStorage:
         async with self.engine.begin() as conn:
             await conn.execute(update(tokens).where(tokens.c.id == token_id).values(last_used=now))
 
-    async def revoke_token(self, token_id: int) -> bool:
+    async def revoke_token(self, vault_id: int, label: str) -> bool:
         async with self.engine.begin() as conn:
-            result = await conn.execute(delete(tokens).where(tokens.c.id == token_id))
+            result = await conn.execute(
+                delete(tokens).where(tokens.c.vault_id == vault_id, tokens.c.label == label)
+            )
             return result.rowcount == 1
 
-    async def list_accounts(self) -> list[AccountSummary]:
-        row_count = select(func.count()).where(rows.c.account_id == accounts.c.id).scalar_subquery()
-        token_count = (
-            select(func.count()).where(tokens.c.account_id == accounts.c.id).scalar_subquery()
-        )
+    async def list_vaults(self) -> list[VaultSummary]:
+        row_count = select(func.count()).where(rows.c.vault_id == vaults.c.id).scalar_subquery()
+        token_count = select(func.count()).where(tokens.c.vault_id == vaults.c.id).scalar_subquery()
         async with self.engine.connect() as conn:
             found = await conn.execute(
                 select(
-                    accounts.c.id,
-                    accounts.c.name,
-                    accounts.c.head,
-                    accounts.c.created,
+                    vaults.c.name,
+                    vaults.c.head,
+                    vaults.c.created,
                     row_count.label("rows"),
                     token_count.label("tokens"),
-                ).order_by(accounts.c.id)
+                ).order_by(vaults.c.name)
             )
             return [
-                AccountSummary(
-                    account_id=r.id,
-                    name=r.name,
-                    head=r.head,
-                    rows=r.rows,
-                    tokens=r.tokens,
-                    created=r.created,
+                VaultSummary(
+                    name=r.name, head=r.head, rows=r.rows, tokens=r.tokens, created=r.created
                 )
                 for r in found
             ]
 
-    async def list_tokens(self, account_id: int) -> list[TokenSummary]:
+    async def list_tokens(self, vault_id: int) -> list[TokenSummary]:
         async with self.engine.connect() as conn:
             found = await conn.execute(
-                select(tokens).where(tokens.c.account_id == account_id).order_by(tokens.c.id)
+                select(tokens).where(tokens.c.vault_id == vault_id).order_by(tokens.c.id)
             )
             return [
-                TokenSummary(
-                    token_id=r.id,
-                    account_id=r.account_id,
-                    scope=r.scope,
-                    created=r.created,
-                    last_used=r.last_used,
-                )
+                TokenSummary(label=r.label, scope=r.scope, created=r.created, last_used=r.last_used)
                 for r in found
             ]
 
-    async def delete_account(self, account_id: int) -> bool:
+    async def delete_vault(self, vault_id: int) -> bool:
         async with self.engine.begin() as conn:
-            await conn.execute(delete(rows).where(rows.c.account_id == account_id))
-            await conn.execute(delete(tokens).where(tokens.c.account_id == account_id))
-            result = await conn.execute(delete(accounts).where(accounts.c.id == account_id))
+            await conn.execute(delete(rows).where(rows.c.vault_id == vault_id))
+            await conn.execute(delete(tokens).where(tokens.c.vault_id == vault_id))
+            result = await conn.execute(delete(vaults).where(vaults.c.id == vault_id))
             return result.rowcount == 1
 
     # the vault
 
-    async def vault(self, account_id: int) -> VaultStatus:
+    async def vault(self, vault_id: int) -> VaultStatus:
         async with self.engine.connect() as conn:
-            account = (
+            found = (
                 await conn.execute(
                     select(
-                        accounts.c.keyring,
-                        accounts.c.keyring_version,
-                        accounts.c.head,
-                        accounts.c.changed,
-                    ).where(accounts.c.id == account_id)
+                        vaults.c.keyring,
+                        vaults.c.keyring_version,
+                        vaults.c.head,
+                        vaults.c.changed,
+                    ).where(vaults.c.id == vault_id)
                 )
             ).one()
             count = await conn.scalar(
-                select(func.count()).select_from(rows).where(rows.c.account_id == account_id)
+                select(func.count()).select_from(rows).where(rows.c.vault_id == vault_id)
             )
         return VaultStatus(
-            keyring=account.keyring,
-            keyring_version=account.keyring_version,
-            head=account.head,
+            keyring=found.keyring,
+            keyring_version=found.keyring_version,
+            head=found.head,
             rows=count or 0,
-            changed=account.changed,
+            changed=found.changed,
         )
 
     async def put_keyring(
-        self, account_id: int, base: int, keyring: str, vault: str, now: int
+        self, vault_id: int, base: int, keyring: str, keyring_vault_id: str, now: int
     ) -> WriteResult:
         async with self.engine.begin() as conn:
             # One conditional update: only from the expected version, and only for the same vault
             # (or the first keyring). Two devices can't both succeed from the same base.
             result = await conn.execute(
-                update(accounts)
+                update(vaults)
                 .where(
-                    accounts.c.id == account_id,
-                    accounts.c.keyring_version == base,
-                    or_(accounts.c.vault.is_(None), accounts.c.vault == vault),
+                    vaults.c.id == vault_id,
+                    vaults.c.keyring_version == base,
+                    or_(
+                        vaults.c.keyring_vault_id.is_(None),
+                        vaults.c.keyring_vault_id == keyring_vault_id,
+                    ),
                 )
                 .values(
                     keyring=keyring,
-                    vault=vault,
-                    keyring_version=accounts.c.keyring_version + 1,
+                    keyring_vault_id=keyring_vault_id,
+                    keyring_version=vaults.c.keyring_version + 1,
                     changed=now,
                 )
             )
             current = (
                 await conn.execute(
-                    select(accounts.c.keyring_version, accounts.c.vault).where(
-                        accounts.c.id == account_id
+                    select(vaults.c.keyring_version, vaults.c.keyring_vault_id).where(
+                        vaults.c.id == vault_id
                     )
                 )
             ).one()
         if result.rowcount == 1:
             return WriteResult(Outcome.OK, current.keyring_version)
-        if current.vault is not None and current.vault != vault:
+        if current.keyring_vault_id is not None and current.keyring_vault_id != keyring_vault_id:
             return WriteResult(Outcome.DIFFERENT_VAULT, current.keyring_version)
         return WriteResult(Outcome.BEHIND, current.keyring_version)
 
-    async def pull(self, account_id: int, since: int, limit: int) -> PullResult:
+    async def pull(self, vault_id: int, since: int, limit: int) -> PullResult:
         async with self.engine.connect() as conn:
             # Read the head first and only rows up to it: a push committing meanwhile only adds
             # rows above it, which the next pull fetches.
-            head = await self._head(conn, account_id)
+            head = await self._head(conn, vault_id)
             found = (
                 await conn.execute(
                     select(rows.c.key, rows.c.seq, rows.c.data)
-                    .where(rows.c.account_id == account_id, rows.c.seq > since, rows.c.seq <= head)
+                    .where(rows.c.vault_id == vault_id, rows.c.seq > since, rows.c.seq <= head)
                     .order_by(rows.c.seq)
                     .limit(limit + 1)
                 )
@@ -232,32 +235,32 @@ class SqlStorage:
         return PullResult(rows=page, cursor=page[-1].seq if more else head, more=more, head=head)
 
     async def push(
-        self, account_id: int, base: int, new_rows: list[tuple[str, str]], now: int
+        self, vault_id: int, base: int, new_rows: list[tuple[str, str]], now: int
     ) -> WriteResult:
         async with self.engine.begin() as conn:
             # Claim the numbers base+1 .. base+n, only if nobody has pushed since `base`.
             claimed = await conn.execute(
-                update(accounts)
-                .where(accounts.c.id == account_id, accounts.c.head == base)
-                .values(head=accounts.c.head + len(new_rows), changed=now)
+                update(vaults)
+                .where(vaults.c.id == vault_id, vaults.c.head == base)
+                .values(head=vaults.c.head + len(new_rows), changed=now)
             )
             if claimed.rowcount != 1:
-                return WriteResult(Outcome.BEHIND, await self._head(conn, account_id))
+                return WriteResult(Outcome.BEHIND, await self._head(conn, vault_id))
             keys = [key for key, _ in new_rows]
             await conn.execute(
-                delete(rows).where(rows.c.account_id == account_id, rows.c.key.in_(keys))
+                delete(rows).where(rows.c.vault_id == vault_id, rows.c.key.in_(keys))
             )
             await conn.execute(
                 insert(rows),
                 [
-                    {"account_id": account_id, "key": key, "seq": base + i, "data": data}
+                    {"vault_id": vault_id, "key": key, "seq": base + i, "data": data}
                     for i, (key, data) in enumerate(new_rows, start=1)
                 ],
             )
             return WriteResult(Outcome.OK, base + len(new_rows))
 
     @staticmethod
-    async def _head(conn: AsyncConnection, account_id: int) -> int:
+    async def _head(conn: AsyncConnection, vault_id: int) -> int:
         return (
-            await conn.execute(select(accounts.c.head).where(accounts.c.id == account_id))
+            await conn.execute(select(vaults.c.head).where(vaults.c.id == vault_id))
         ).scalar_one()

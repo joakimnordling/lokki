@@ -216,29 +216,33 @@ Each entry in `keys`:
 
 ### 5.1 What it stores
 
-| Table    | Contents                                                                                       |
-| -------- | ---------------------------------------------------------------------------------------------- |
-| server   | its random server ID (UUID, made on first start)                                               |
-| accounts | one per vault: name, `head` (the vault's counter), the vault keyring and its `keyring_version` |
-| tokens   | SHA-256 of each API token, its account, its scope (`read` or `write`), when it was last used   |
-| rows     | `account`, `key`, `seq`, `data`; one row per `key` per account                                 |
+| Table  | Contents                                                                                                  |
+| ------ | --------------------------------------------------------------------------------------------------------- |
+| server | its random server ID (UUID, made on first start)                                                          |
+| vaults | a unique name, `head` (the vault's counter), the vault keyring, the vault ID in it, and `keyring_version` |
+| tokens | SHA-256 of each API token, its vault, a label, its scope (`read` or `write`), when it was last used       |
+| rows   | the vault, `key`, `seq`, `data`; one row per `key` per vault                                              |
+
+A vault's name and its tokens' labels are for the server's operator: the API never shows them. They're unrelated to
+the vault ID in the keyring, which devices make (4.4).
 
 A push writes each row with the next `seq` and replaces any older row with the same `key`. Individual rows are never
 removed; deleting a record is a tombstone like any other change. `DELETE /v1/vault` removes a whole vault.
 
-### 5.2 Accounts and sign-in
+### 5.2 Vaults and sign-in
 
-The server, not the client, issues credentials. Its operator creates an account and gets an API token to enter in
-the app together with the server's URL:
+The server, not the client, issues credentials. Its operator creates a vault, then a token for each device, to enter
+in the app together with the server's URL:
 
 ```
-$ lokki-server add-account "Home"
-URL:   https://sync.example.com
-Token: lk_6Yq3kM0p…        (shown once)
+$ lokki-server vault add jocke
+$ lokki-server token add jocke "iPhone 17 Pro"
+URL:    https://sync.example.com
+Token:  lk_6Yq3kM0p…        (shown only now)
 ```
 
 - Requests carry `Authorization: Bearer <token>`. The server stores only a hash of the token, so it can't be read
-  back. The operator can add tokens to an account (for example one per device, or a read-only one) and revoke them.
+  back. The operator can add tokens to a vault (for example one per device, or a read-only one) and revoke them.
 - Tokens have a scope: `write` (the default) or `read`. A `read` token gets `403` for anything but `GET`.
 - There is no sign-up through the API.
 
@@ -251,7 +255,7 @@ vault that the token belongs to.
 | ---------------------------------- | -------------------------------------------------------------------- |
 | `GET /v1/info`                     | The server's name, version, ID, API versions and limits (no sign-in) |
 | `GET /v1/vault`                    | The vault: its keyring and status                                    |
-| `DELETE /v1/vault`                 | Deletes the vault and its account, including all tokens              |
+| `DELETE /v1/vault`                 | Deletes the vault, including all its tokens                          |
 | `PUT /v1/vault/keyring`            | Replaces the keyring, if up to date                                  |
 | `GET /v1/vault/rows?since=&limit=` | Rows changed after a number                                          |
 | `POST /v1/vault/rows`              | Adds or replaces rows, if up to date                                 |
@@ -295,8 +299,8 @@ vault that the token belongs to.
 
 #### `DELETE /v1/vault`
 
-Deletes the rows, the keyring, the account and all its tokens: `204`. Afterwards every device gets `401` from this
-server and shows it as no longer accepting the device. Syncing with that server again needs a new account.
+Deletes the vault: its rows, keyring and all its tokens: `204`. Afterwards every device gets `401` from this server
+and shows it as no longer accepting the device. Syncing with that server again needs a new vault and token.
 
 #### `PUT /v1/vault/keyring`
 
@@ -359,9 +363,10 @@ request headers `Authorization, Content-Type`. No cookies are used, so credentia
 ### 5.5 Test mode
 
 So that one test suite can check any server implementation from the outside, a server started in test mode (and
-only then) accepts `POST /v1/test/accounts` without sign-in. It creates an empty account and returns a token of each
-scope: `201 {"write": "lk_…", "read": "lk_…"}`. The body may name the account: `{"name": "…"}`. Outside test mode the
-endpoint doesn't exist (`404`). A production server must never run in test mode.
+only then) accepts `POST /v1/test/vaults` without sign-in. It creates an empty vault and returns its name and a token
+of each scope: `201 {"name": "test-…", "write": "lk_…", "read": "lk_…"}`. The body may name the vault,
+`{"name": "…"}`, or be `{}` for a made-up name; a name in use gives `409 name_taken`. Outside test mode the endpoint
+doesn't exist (`404`). A production server must never run in test mode.
 
 ## 6. Merging: which version wins
 
@@ -534,7 +539,7 @@ Not planned for version 1, but the design leaves room for:
 - **A recovery key:** a long random code as a second entry in the keyring's `keys` (type `recovery`), so a forgotten
   passphrase can be replaced.
 - **Several vaults on one device,** each with its own keys and servers, and each metric belonging to one vault.
-  Servers already map one account to one vault.
+  Servers already keep each vault separately, with its own tokens.
 - **Read-only sharing:** a separate vault for what you want to share, plus a `read` token and that vault's passphrase
   for the other person.
 - **Signed requests** instead of bearer tokens, so services in front of a server never see a usable credential.

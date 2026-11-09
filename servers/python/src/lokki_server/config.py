@@ -36,6 +36,6 @@ class Settings(BaseSettings):
     )
     test_mode: bool = Field(
         default=False,
-        description="Enables POST /v1/test/accounts for the conformance tests; never in production",
+        description="Enables POST /v1/test/vaults for the conformance tests; never in production",
     )
     limits: Limits = Field(default_factory=Limits)

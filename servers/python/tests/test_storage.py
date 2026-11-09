@@ -17,11 +17,11 @@ def test_concurrent_pushes_from_the_same_base(database_url: str) -> None:
     async def scenario() -> list[Outcome]:
         storage = SqlStorage(database_url)
         try:
-            account = await storage.create_account("race", 0)
+            vault = await storage.create_vault("race", 0)
             results = await asyncio.gather(
-                *(storage.push(account, 0, [(key(n), f"v1.{n}")], 0) for n in range(8))
+                *(storage.push(vault, 0, [(key(n), f"v1.{n}")], 0) for n in range(8))
             )
-            pulled = await storage.pull(account, 0, 100)
+            pulled = await storage.pull(vault, 0, 100)
             assert len(pulled.rows) == 1
             assert pulled.head == 1
             return [r.outcome for r in results]
@@ -38,9 +38,9 @@ def test_concurrent_first_keyrings(database_url: str) -> None:
     async def scenario() -> list[Outcome]:
         storage = SqlStorage(database_url)
         try:
-            account = await storage.create_account("race", 0)
+            vault = await storage.create_vault("race", 0)
             results = await asyncio.gather(
-                *(storage.put_keyring(account, 0, "{}", f"vault-{n}", 0) for n in range(4))
+                *(storage.put_keyring(vault, 0, "{}", f"vault-{n}", 0) for n in range(4))
             )
             return [r.outcome for r in results]
         finally:

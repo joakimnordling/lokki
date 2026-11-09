@@ -28,9 +28,9 @@ def hash_token(token: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Caller:
-    """The account a request acts on, and what the token may do."""
+    """The vault a request acts on (its internal number), and what the token may do."""
 
-    account_id: int
+    vault_id: int
     scope: Scope
 
 
@@ -51,7 +51,7 @@ async def caller(request: Request, store: Annotated[Storage, Depends(storage)]) 
     now = now_ms()
     if found.last_used is None or now - found.last_used >= _TOUCH_EVERY_MS:
         await store.touch_token(found.token_id, now)
-    return Caller(account_id=found.account_id, scope=found.scope)
+    return Caller(vault_id=found.vault_id, scope=found.scope)
 
 
 async def writer(found: Annotated[Caller, Depends(caller)]) -> Caller:

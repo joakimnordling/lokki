@@ -1,6 +1,7 @@
 """The HTTP API, version 1 (docs/sync-protocol.md, section 5.3)."""
 
 import json
+import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -12,8 +13,6 @@ from lokki_server.clock import iso, now_ms
 from lokki_server.config import Settings
 from lokki_server.errors import ApiError
 from lokki_server.models import (
-    AccountRequest,
-    AccountTokens,
     Head,
     Info,
     InfoLimits,
@@ -22,10 +21,12 @@ from lokki_server.models import (
     Pull,
     Push,
     RowOut,
+    TestVaultRequest,
+    TestVaultTokens,
     Vault,
 )
 from lokki_server.storage import Storage
-from lokki_server.storage.base import Outcome
+from lokki_server.storage.base import NameTaken, Outcome
 
 router = APIRouter(prefix="/v1")
 test_router = APIRouter(prefix="/v1/test")
@@ -59,7 +60,7 @@ async def info(store: Store, config: Config) -> Info:
 @router.get("/vault")
 async def vault(who: Reader, store: Store) -> Vault:
     """The vault: its keyring (or null) and status."""
-    status = await store.vault(who.account_id)
+    status = await store.vault(who.vault_id)
     keyring: dict[str, JsonValue] | None = (
         json.loads(status.keyring) if status.keyring is not None else None
     )
@@ -74,8 +75,8 @@ async def vault(who: Reader, store: Store) -> Vault:
 
 @router.delete("/vault", status_code=204)
 async def delete_vault(who: Writer, store: Store) -> Response:
-    """Delete the vault and its account, including every token."""
-    await store.delete_account(who.account_id)
+    """Delete the vault, including every token."""
+    await store.delete_vault(who.vault_id)
     return Response(status_code=204)
 
 
@@ -91,7 +92,7 @@ async def put_keyring(
         raise ApiError(
             413, "too_large", f"A keyring can be at most {config.limits.keyring_bytes} bytes."
         )
-    result = await store.put_keyring(who.account_id, body.base, text, body.keyring.vault, now_ms())
+    result = await store.put_keyring(who.vault_id, body.base, text, body.keyring.vault, now_ms())
     match result.outcome:
         case Outcome.OK:
             return KeyringVersion(keyring_version=result.version)
@@ -121,7 +122,7 @@ async def pull(
 ) -> Pull:
     """Rows written after `since`, oldest first. Continue from `cursor` while `more` is true."""
     most = config.limits.pull if limit is None else min(limit, config.limits.pull)
-    result = await store.pull(who.account_id, since, most)
+    result = await store.pull(who.vault_id, since, most)
     return Pull(
         rows=[RowOut(key=r.key, seq=r.seq, data=r.data) for r in result.rows],
         cursor=result.cursor,
@@ -142,21 +143,25 @@ async def push(body: Push, who: Writer, store: Store, config: Config) -> Head:
     if len(set(keys)) != len(keys):
         raise ApiError(400, "invalid_request", "A push can't contain the same key twice.")
     result = await store.push(
-        who.account_id, body.base, [(r.key, r.data) for r in body.rows], now_ms()
+        who.vault_id, body.base, [(r.key, r.data) for r in body.rows], now_ms()
     )
     if result.outcome is Outcome.BEHIND:
         raise ApiError(409, "behind", "Pull first: the vault has changed.", head=result.version)
     return Head(head=result.version)
 
 
-@test_router.post("/accounts", status_code=201)
-async def create_test_account(body: AccountRequest, store: Store) -> AccountTokens:
-    """Test mode only: a new, empty account with a write and a read token."""
+@test_router.post("/vaults", status_code=201)
+async def create_test_vault(body: TestVaultRequest, store: Store) -> TestVaultTokens:
+    """Test mode only: a new, empty vault with a write and a read token."""
     now = now_ms()
-    account_id = await store.create_account(body.name, now)
+    name = body.name or f"test-{secrets.token_hex(6)}"
+    try:
+        vault_id = await store.create_vault(name, now)
+    except NameTaken:
+        raise ApiError(409, "name_taken", f"There's a vault called {name} already.") from None
     tokens = {"write": new_token(), "read": new_token()}
     for scope, token in tokens.items():
         await store.add_token(
-            account_id, hash_token(token), "write" if scope == "write" else "read", now
+            vault_id, scope, hash_token(token), "write" if scope == "write" else "read", now
         )
-    return AccountTokens(**tokens)
+    return TestVaultTokens(name=name, **tokens)

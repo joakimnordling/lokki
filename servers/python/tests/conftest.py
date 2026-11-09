@@ -1,4 +1,4 @@
-"""Fixtures: a migrated SQLite database per test, the app on it, and accounts made in test mode."""
+"""Fixtures: a migrated SQLite database per test, the app on it, and vaults made in test mode."""
 
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -50,11 +50,11 @@ Tokens = dict[str, str]
 
 
 @pytest.fixture
-def new_account(client: TestClient) -> Callable[[], Tokens]:
-    """Make an empty account; returns its write and read tokens."""
+def new_vault(client: TestClient) -> Callable[[], Tokens]:
+    """Make an empty vault; returns its name and its write and read tokens."""
 
     def make() -> Tokens:
-        response = client.post("/v1/test/accounts", json={"name": "test"})
+        response = client.post("/v1/test/vaults", json={})
         assert response.status_code == 201
         tokens: Tokens = response.json()
         return tokens
@@ -63,8 +63,8 @@ def new_account(client: TestClient) -> Callable[[], Tokens]:
 
 
 @pytest.fixture
-def account(new_account: Callable[[], Tokens]) -> Tokens:
-    return new_account()
+def vault(new_vault: Callable[[], Tokens]) -> Tokens:
+    return new_vault()
 
 
 def bearer(token: str) -> dict[str, str]:
@@ -72,15 +72,15 @@ def bearer(token: str) -> dict[str, str]:
 
 
 @pytest.fixture
-def writer(account: Tokens) -> dict[str, str]:
-    """Headers for the account's write token."""
-    return bearer(account["write"])
+def writer(vault: Tokens) -> dict[str, str]:
+    """Headers for the vault's write token."""
+    return bearer(vault["write"])
 
 
 @pytest.fixture
-def reader(account: Tokens) -> dict[str, str]:
-    """Headers for the account's read token."""
-    return bearer(account["read"])
+def reader(vault: Tokens) -> dict[str, str]:
+    """Headers for the vault's read token."""
+    return bearer(vault["read"])
 
 
 @pytest.fixture

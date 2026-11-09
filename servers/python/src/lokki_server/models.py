@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints
 
+from lokki_server.names import VAULT_NAME
+
 # base64url of 16 bytes, without padding: the row's name (protocol 4.2)
 RowKey = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{22}$")]
 Scope = Literal["read", "write"]
@@ -110,14 +112,16 @@ class Head(BaseModel):
     head: int
 
 
-class AccountRequest(BaseModel):
-    """``POST /v1/test/accounts`` (test mode only)."""
+class TestVaultRequest(BaseModel):
+    """``POST /v1/test/vaults`` (test mode only). Without a name, the server makes one up."""
 
-    name: str = "test"
+    name: Annotated[str, StringConstraints(pattern=f"^{VAULT_NAME.pattern}$")] | None = None
 
 
-class AccountTokens(BaseModel):
-    """A new test account and its tokens."""
+class TestVaultTokens(BaseModel):
+    """A new test vault: its name and tokens."""
+
+    name: str
 
     write: str
     read: str

@@ -27,6 +27,20 @@ def test_invalid_json(client: TestClient, writer: dict[str, str]) -> None:
     assert response.json()["error"] == "invalid_request"
 
 
-def test_test_accounts_exist_only_in_test_mode(settings: Settings) -> None:
+def test_test_vaults_exist_only_in_test_mode(settings: Settings) -> None:
     with TestClient(create_app(settings.model_copy(update={"test_mode": False}))) as client:
-        assert client.post("/v1/test/accounts", json={}).status_code == 404
+        assert client.post("/v1/test/vaults", json={}).status_code == 404
+
+
+def test_test_vaults_get_a_name(client: TestClient) -> None:
+    made = client.post("/v1/test/vaults", json={})
+    named = client.post("/v1/test/vaults", json={"name": "jocke"})
+    again = client.post("/v1/test/vaults", json={"name": "jocke"})
+    invalid = client.post("/v1/test/vaults", json={"name": "two words"})
+
+    assert made.status_code == 201
+    assert made.json()["name"].startswith("test-")
+    assert named.json()["name"] == "jocke"
+    assert again.status_code == 409
+    assert again.json()["error"] == "name_taken"
+    assert invalid.status_code == 400
