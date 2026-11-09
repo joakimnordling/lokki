@@ -1,7 +1,55 @@
 """Settings, read from ``LOKKI_*`` environment variables (and an optional ``.env`` file)."""
 
-from pydantic import BaseModel, Field
+from typing import Annotated
+from urllib.parse import SplitResult, urlsplit
+
+from pydantic import AfterValidator, BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
+
+
+def _web_address(value: str) -> SplitResult:
+    """The URL's parts; ValueError unless it's http(s) with a host."""
+    try:
+        parts = urlsplit(value)
+        parts.port  # noqa: B018 (raises ValueError for an invalid port)
+    except ValueError:
+        raise ValueError(f"{value!r} isn't a valid URL.") from None
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError(f"{value!r} needs to start with https:// (or http://) and a host name.")
+    return parts
+
+
+def _check_public_url(value: str) -> str:
+    _web_address(value)
+    return value.rstrip("/")
+
+
+def _check_origin(value: str) -> str:
+    # Browsers send the origin exactly like this, and CORS compares the text: no path, no slash
+    parts = _web_address(value)
+    if parts.path or parts.query or parts.fragment or parts.username or parts.password:
+        raise ValueError(
+            f"{value!r} isn't an origin: give only the scheme, host and port, without a path or "
+            "a trailing slash, e.g. https://lokki.example.com."
+        )
+    return value
+
+
+def _check_database_url(value: str) -> str:
+    try:
+        make_url(value)
+    except ArgumentError:
+        raise ValueError(
+            f"{value!r} isn't a database URL, e.g. sqlite+aiosqlite:///lokki.db."
+        ) from None
+    return value
+
+
+PublicUrl = Annotated[str, AfterValidator(_check_public_url)]
+Origin = Annotated[str, AfterValidator(_check_origin)]
+DatabaseUrl = Annotated[str, AfterValidator(_check_database_url)]
 
 
 class Limits(BaseModel):
@@ -22,15 +70,15 @@ class Settings(BaseSettings):
         env_prefix="LOKKI_", env_file=".env", env_nested_delimiter="__", extra="ignore"
     )
 
-    database_url: str = Field(
+    database_url: DatabaseUrl = Field(
         default="sqlite+aiosqlite:///lokki.db",
         description="SQLAlchemy URL of the database, with an async driver",
     )
-    public_url: str = Field(
+    public_url: PublicUrl = Field(
         default="http://localhost:8000",
         description="The URL devices use to reach this server; printed with new tokens",
     )
-    cors_origins: list[str] = Field(
+    cors_origins: list[Origin] = Field(
         default_factory=list,
         description="Origins the web app is served from, e.g. https://lokki.example.com",
     )
