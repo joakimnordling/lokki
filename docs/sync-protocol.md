@@ -521,6 +521,9 @@ metrics and which are entries.
 - API tokens are random, sent only over HTTPS, and stored hashed. HTTPS ends at whatever runs in front of the server
   (a cloud platform, a tunnel or a proxy), so that service can see the token. With it, the service could damage rows
   on that server (7.5), but never read or forge your data.
+- Token scopes are enforced by the server alone, so they protect against a leaked `read` token, not against the
+  server's operator, who can change a scope or issue tokens. Without the passphrase, writing can only damage or
+  delete rows, as above; devices keep their own copies.
 - Anyone with an unlocked device can read its data; that is outside what sync can protect.
 
 ## 11. Client status indicators
@@ -545,7 +548,8 @@ Not planned for version 1, but the design leaves room for:
 - **Several vaults on one device,** each with its own keys and servers, and each metric belonging to one vault.
   Servers already keep each vault separately, with its own tokens.
 - **Read-only sharing:** a separate vault for what you want to share, plus a `read` token and that vault's passphrase
-  for the other person.
+  for the other person. Anyone with the passphrase can also make valid rows, so this stops them writing only while
+  the server enforces the scope; read-only in the cryptography itself would need devices to sign rows.
 - **Signed requests** instead of bearer tokens, so services in front of a server never see a usable credential.
   `/v1/info` would list the sign-in methods a server supports.
 - **Replacing the data key,** re-encrypting every row.
