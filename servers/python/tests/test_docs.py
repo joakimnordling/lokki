@@ -25,6 +25,7 @@ def test_every_operation_is_described(client: TestClient) -> None:
             assert operation.get("description"), f"{method} {path}"
             assert operation.get("tags"), f"{method} {path}"
             assert "422" not in operation["responses"], f"{method} {path}"
+            assert "default" in operation["responses"], f"{method} {path}"
 
 
 def test_every_field_is_described(client: TestClient) -> None:
@@ -70,3 +71,15 @@ def test_docs_can_be_turned_off(settings: Settings) -> None:
         for page in ("/docs", "/redoc", "/openapi.json"):
             assert client.get(page).status_code == 404
         assert client.get("/v1/info").status_code == 200
+
+
+def test_error_examples_are_what_the_server_sends(client: TestClient) -> None:
+    keyring = client.get("/openapi.json").json()["paths"]["/v1/vault/keyring"]["put"]
+    conflict = keyring["responses"]["409"]["content"]["application/json"]
+
+    assert conflict["schema"] == {"$ref": "#/components/schemas/KeyringConflict"}
+    assert conflict["examples"]["different_vault"]["value"] == {
+        "error": "different_vault",
+        "message": "This server holds a different vault.",
+        "keyring_version": 4,
+    }

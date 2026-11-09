@@ -1,52 +1,57 @@
 {
   "components": {
     "schemas": {
-      "ErrorBody": {
-        "additionalProperties": true,
-        "description": "Every error. `error` is a code to act on; `message` is for people. A conflict also says where\nthe vault is now (`head` or `keyring_version`), so the device knows what to fetch.",
+      "Behind": {
+        "additionalProperties": false,
+        "description": "A push that wasn't written, because the vault changed since `base`: pull first.",
         "properties": {
           "error": {
-            "description": "What went wrong, as a code: `invalid_request`, `unauthorized`, `forbidden`, `not_found`, `behind`, `different_vault`, `too_large`, `name_taken`, …",
-            "examples": [
-              "behind"
-            ],
+            "const": "behind",
+            "description": "Always `behind`",
             "title": "Error",
             "type": "string"
           },
           "head": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "With `behind` from a push: the vault's head now",
+            "description": "The vault's head now",
             "examples": [
               1050
             ],
-            "title": "Head"
-          },
-          "keyring_version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "With `behind` or `different_vault` from a keyring write: its version now",
-            "examples": [
-              4
-            ],
-            "title": "Keyring Version"
+            "title": "Head",
+            "type": "integer"
           },
           "message": {
             "description": "What went wrong, in English",
             "examples": [
-              "Pull first: the vault has changed."
+              "This token isn't valid on this server."
+            ],
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "head"
+        ],
+        "title": "Behind",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "additionalProperties": false,
+        "description": "An error: `error` is a code to act on, `message` is for people.",
+        "properties": {
+          "error": {
+            "description": "What went wrong, as a code, e.g. `invalid_request`, `unauthorized`, `forbidden`, `too_large`, `not_found` or `internal`",
+            "examples": [
+              "unauthorized"
+            ],
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "description": "What went wrong, in English",
+            "examples": [
+              "This token isn't valid on this server."
             ],
             "title": "Message",
             "type": "string"
@@ -257,6 +262,44 @@
           "mac"
         ],
         "title": "Keyring",
+        "type": "object"
+      },
+      "KeyringConflict": {
+        "additionalProperties": false,
+        "description": "A keyring that wasn't written: `behind` if it changed since `base` (read the vault again), or\n`different_vault` if the server holds another vault.",
+        "properties": {
+          "error": {
+            "description": "`behind` or `different_vault`",
+            "enum": [
+              "behind",
+              "different_vault"
+            ],
+            "title": "Error",
+            "type": "string"
+          },
+          "keyring_version": {
+            "description": "The keyring's version now",
+            "examples": [
+              4
+            ],
+            "title": "Keyring Version",
+            "type": "integer"
+          },
+          "message": {
+            "description": "What went wrong, in English",
+            "examples": [
+              "This token isn't valid on this server."
+            ],
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "keyring_version"
+        ],
+        "title": "KeyringConflict",
         "type": "object"
       },
       "KeyringPut": {
@@ -590,15 +633,19 @@
             },
             "description": "The server"
           },
-          "4XX": {
+          "default": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             },
-            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
           }
         },
         "summary": "What this server is",
@@ -637,10 +684,9 @@
               "application/json": {
                 "examples": {
                   "invalid_request": {
-                    "summary": "invalid_request",
                     "value": {
                       "error": "invalid_request",
-                      "message": "rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'"
+                      "message": "name: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._+@-]{0,63}$'"
                     }
                   }
                 },
@@ -649,14 +695,13 @@
                 }
               }
             },
-            "description": "The request isn't valid"
+            "description": "Bad Request"
           },
           "409": {
             "content": {
               "application/json": {
                 "examples": {
                   "name_taken": {
-                    "summary": "name_taken",
                     "value": {
                       "error": "name_taken",
                       "message": "There's a vault called conformance already."
@@ -668,17 +713,21 @@
                 }
               }
             },
-            "description": "Conflict: someone else wrote first, or this isn't the same vault"
+            "description": "Conflict"
           },
-          "4XX": {
+          "default": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             },
-            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
           }
         },
         "summary": "Create a test vault",
@@ -700,7 +749,6 @@
               "application/json": {
                 "examples": {
                   "unauthorized": {
-                    "summary": "unauthorized",
                     "value": {
                       "error": "unauthorized",
                       "message": "This token isn't valid on this server."
@@ -712,14 +760,13 @@
                 }
               }
             },
-            "description": "No token, or one this server doesn't know"
+            "description": "Unauthorized"
           },
           "403": {
             "content": {
               "application/json": {
                 "examples": {
                   "forbidden": {
-                    "summary": "forbidden",
                     "value": {
                       "error": "forbidden",
                       "message": "This token can only read."
@@ -731,17 +778,21 @@
                 }
               }
             },
-            "description": "The token can only read"
+            "description": "Forbidden"
           },
-          "4XX": {
+          "default": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             },
-            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
           }
         },
         "security": [
@@ -773,7 +824,6 @@
               "application/json": {
                 "examples": {
                   "unauthorized": {
-                    "summary": "unauthorized",
                     "value": {
                       "error": "unauthorized",
                       "message": "This token isn't valid on this server."
@@ -785,17 +835,21 @@
                 }
               }
             },
-            "description": "No token, or one this server doesn't know"
+            "description": "Unauthorized"
           },
-          "4XX": {
+          "default": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             },
-            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
           }
         },
         "security": [
@@ -839,7 +893,6 @@
               "application/json": {
                 "examples": {
                   "invalid_request": {
-                    "summary": "invalid_request",
                     "value": {
                       "error": "invalid_request",
                       "message": "rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'"
@@ -851,14 +904,13 @@
                 }
               }
             },
-            "description": "The request isn't valid"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
               "application/json": {
                 "examples": {
                   "unauthorized": {
-                    "summary": "unauthorized",
                     "value": {
                       "error": "unauthorized",
                       "message": "This token isn't valid on this server."
@@ -870,14 +922,13 @@
                 }
               }
             },
-            "description": "No token, or one this server doesn't know"
+            "description": "Unauthorized"
           },
           "403": {
             "content": {
               "application/json": {
                 "examples": {
                   "forbidden": {
-                    "summary": "forbidden",
                     "value": {
                       "error": "forbidden",
                       "message": "This token can only read."
@@ -889,45 +940,42 @@
                 }
               }
             },
-            "description": "The token can only read"
+            "description": "Forbidden"
           },
           "409": {
             "content": {
               "application/json": {
                 "examples": {
-                  "different_vault": {
-                    "summary": "different_vault",
-                    "value": {
-                      "error": "different_vault",
-                      "keyring_version": 4,
-                      "message": "This server holds a different vault."
-                    }
-                  },
-                  "keyring_behind": {
-                    "summary": "behind",
+                  "behind": {
                     "value": {
                       "error": "behind",
                       "keyring_version": 4,
                       "message": "The keyring has changed; read the vault again."
                     }
+                  },
+                  "different_vault": {
+                    "value": {
+                      "error": "different_vault",
+                      "keyring_version": 4,
+                      "message": "This server holds a different vault."
+                    }
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/KeyringConflict"
                 }
               }
             },
-            "description": "Conflict: someone else wrote first, or this isn't the same vault"
+            "description": "Conflict"
           },
           "413": {
             "content": {
               "application/json": {
                 "examples": {
                   "too_large": {
-                    "summary": "too_large",
                     "value": {
                       "error": "too_large",
-                      "message": "A push can have at most 500 rows."
+                      "message": "A keyring can be at most 16384 bytes."
                     }
                   }
                 },
@@ -936,17 +984,21 @@
                 }
               }
             },
-            "description": "Too many rows, or a row or keyring too large"
+            "description": "Content Too Large"
           },
-          "4XX": {
+          "default": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             },
-            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
           }
         },
         "security": [
@@ -1017,10 +1069,9 @@
               "application/json": {
                 "examples": {
                   "invalid_request": {
-                    "summary": "invalid_request",
                     "value": {
                       "error": "invalid_request",
-                      "message": "rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'"
+                      "message": "since: Input should be greater than or equal to 0"
                     }
                   }
                 },
@@ -1029,14 +1080,13 @@
                 }
               }
             },
-            "description": "The request isn't valid"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
               "application/json": {
                 "examples": {
                   "unauthorized": {
-                    "summary": "unauthorized",
                     "value": {
                       "error": "unauthorized",
                       "message": "This token isn't valid on this server."
@@ -1048,17 +1098,21 @@
                 }
               }
             },
-            "description": "No token, or one this server doesn't know"
+            "description": "Unauthorized"
           },
-          "4XX": {
+          "default": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             },
-            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
           }
         },
         "security": [
@@ -1100,7 +1154,6 @@
               "application/json": {
                 "examples": {
                   "invalid_request": {
-                    "summary": "invalid_request",
                     "value": {
                       "error": "invalid_request",
                       "message": "rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'"
@@ -1112,14 +1165,13 @@
                 }
               }
             },
-            "description": "The request isn't valid"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
               "application/json": {
                 "examples": {
                   "unauthorized": {
-                    "summary": "unauthorized",
                     "value": {
                       "error": "unauthorized",
                       "message": "This token isn't valid on this server."
@@ -1131,14 +1183,13 @@
                 }
               }
             },
-            "description": "No token, or one this server doesn't know"
+            "description": "Unauthorized"
           },
           "403": {
             "content": {
               "application/json": {
                 "examples": {
                   "forbidden": {
-                    "summary": "forbidden",
                     "value": {
                       "error": "forbidden",
                       "message": "This token can only read."
@@ -1150,14 +1201,13 @@
                 }
               }
             },
-            "description": "The token can only read"
+            "description": "Forbidden"
           },
           "409": {
             "content": {
               "application/json": {
                 "examples": {
                   "behind": {
-                    "summary": "behind",
                     "value": {
                       "error": "behind",
                       "head": 1050,
@@ -1166,18 +1216,17 @@
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/Behind"
                 }
               }
             },
-            "description": "Conflict: someone else wrote first, or this isn't the same vault"
+            "description": "Conflict"
           },
           "413": {
             "content": {
               "application/json": {
                 "examples": {
                   "too_large": {
-                    "summary": "too_large",
                     "value": {
                       "error": "too_large",
                       "message": "A push can have at most 500 rows."
@@ -1189,17 +1238,21 @@
                 }
               }
             },
-            "description": "Too many rows, or a row or keyring too large"
+            "description": "Content Too Large"
           },
-          "4XX": {
+          "default": {
             "content": {
               "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             },
-            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
           }
         },
         "security": [

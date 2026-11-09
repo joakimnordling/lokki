@@ -1,5 +1,11 @@
-"""Errors as the protocol describes them: ``{"error": "<code>", "message": "…"}``."""
+"""
+Errors as the protocol describes them: ``{"error": "<code>", "message": "…"}``.
 
+Each error the API gives is made by one function below. The API raises what it returns, and the
+API docs show what it returns as examples, so the two can't differ.
+"""
+
+from http import HTTPStatus
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -7,68 +13,144 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from lokki_server.models import ErrorBody
+from lokki_server.models import Behind, ErrorBody, KeyringConflict
 
-_CODES = {
-    400: "invalid_request",
-    401: "unauthorized",
-    403: "forbidden",
-    404: "not_found",
-    405: "method_not_allowed",
-    409: "conflict",
-    413: "too_large",
-}
+Body = ErrorBody | Behind | KeyringConflict
 
 
 class ApiError(Exception):
-    """An error response, with extra fields (e.g. the current ``head`` on a conflict)."""
+    """An error response: its status and body."""
 
     def __init__(
         self,
         status: int,
-        error: str,
-        message: str,
-        **extra: Any,
+        body: Body,
     ) -> None:
-        super().__init__(message)
+        super().__init__(body.message)
         self.status = status
-        self.error = error
-        self.message = message
-        self.extra = extra
+        self.body = body
 
 
-def _response(
-    status: int,
-    error: str,
-    message: str,
-    **extra: Any,
-) -> JSONResponse:
-    headers = {"WWW-Authenticate": "Bearer"} if status == 401 else None
+def invalid_request(message: str) -> ApiError:
+    return ApiError(
+        400,
+        ErrorBody(
+            error="invalid_request",
+            message=message,
+        ),
+    )
+
+
+def unauthorized(message: str = "This token isn't valid on this server.") -> ApiError:
+    return ApiError(
+        401,
+        ErrorBody(
+            error="unauthorized",
+            message=message,
+        ),
+    )
+
+
+def forbidden() -> ApiError:
+    return ApiError(
+        403,
+        ErrorBody(
+            error="forbidden",
+            message="This token can only read.",
+        ),
+    )
+
+
+def behind(head: int) -> ApiError:
+    return ApiError(
+        409,
+        Behind(
+            error="behind",
+            message="Pull first: the vault has changed.",
+            head=head,
+        ),
+    )
+
+
+def keyring_behind(keyring_version: int) -> ApiError:
+    return ApiError(
+        409,
+        KeyringConflict(
+            error="behind",
+            message="The keyring has changed; read the vault again.",
+            keyring_version=keyring_version,
+        ),
+    )
+
+
+def different_vault(keyring_version: int) -> ApiError:
+    return ApiError(
+        409,
+        KeyringConflict(
+            error="different_vault",
+            message="This server holds a different vault.",
+            keyring_version=keyring_version,
+        ),
+    )
+
+
+def name_taken(name: str) -> ApiError:
+    return ApiError(
+        409,
+        ErrorBody(
+            error="name_taken",
+            message=f"There's a vault called {name} already.",
+        ),
+    )
+
+
+def too_large(message: str) -> ApiError:
+    return ApiError(
+        413,
+        ErrorBody(
+            error="too_large",
+            message=message,
+        ),
+    )
+
+
+def internal() -> ApiError:
+    return ApiError(
+        500,
+        ErrorBody(
+            error="internal",
+            message="Something went wrong on the server. Try again later.",
+        ),
+    )
+
+
+def _respond(error: ApiError) -> JSONResponse:
     return JSONResponse(
-        {"error": error, "message": message, **extra},
-        status_code=status,
-        headers=headers,
+        error.body.model_dump(),
+        status_code=error.status,
+        headers={"WWW-Authenticate": "Bearer"} if error.status == 401 else None,
     )
 
 
 def install(app: FastAPI) -> None:
-    """Make every error, including FastAPI's own, use the protocol's format."""
+    """Make every error, including FastAPI's own and unexpected ones, use the protocol's format."""
 
     @app.exception_handler(ApiError)
     async def api_error(_request: Request, exc: ApiError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        return _response(
-            exc.status,
-            exc.error,
-            exc.message,
-            **exc.extra,
-        )
+        return _respond(exc)
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        return _response(
-            exc.status_code,
-            _CODES.get(exc.status_code, "error"),
-            str(exc.detail),
+        # Starlette's own, e.g. 404 and 405: the code is the status's name, e.g. not_found
+        code = HTTPStatus(exc.status_code).phrase.lower().replace(" ", "_")
+        return _respond(
+            ApiError(
+                exc.status_code,
+                ErrorBody(
+                    error=code,
+                    message=str(exc.detail),
+                ),
+            )
         )
 
     @app.exception_handler(RequestValidationError)
@@ -76,64 +158,44 @@ def install(app: FastAPI) -> None:
         problems = "; ".join(
             f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()
         )
-        return _response(
-            400,
-            "invalid_request",
-            problems,
-        )
+        return _respond(invalid_request(problems))
+
+    @app.exception_handler(Exception)
+    async def unexpected(_request: Request, _exc: Exception) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        # Starlette still raises the exception afterwards, so the server logs its traceback;
+        # the client gets no details.
+        return _respond(internal())
 
 
-# Errors as the API docs show them: (status, code, message, extra fields)
-_KNOWN: dict[str, tuple[int, str, dict[str, Any]]] = {
-    "invalid_request": (400, "rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'", {}),
-    "unauthorized": (401, "This token isn't valid on this server.", {}),
-    "forbidden": (403, "This token can only read.", {}),
-    "behind": (409, "Pull first: the vault has changed.", {"head": 1050}),
-    "keyring_behind": (
-        409,
-        "The keyring has changed; read the vault again.",
-        {"keyring_version": 4},
-    ),
-    "different_vault": (409, "This server holds a different vault.", {"keyring_version": 4}),
-    "name_taken": (409, "There's a vault called conformance already.", {}),
-    "too_large": (413, "A push can have at most 500 rows.", {}),
-}
-_STATUS_TEXT = {
-    400: "The request isn't valid",
-    401: "No token, or one this server doesn't know",
-    403: "The token can only read",
-    409: "Conflict: someone else wrote first, or this isn't the same vault",
-    413: "Too many rows, or a row or keyring too large",
-}
+# For the API docs
 
+Responses = dict[int | str, dict[str, Any]]
 
-# On every endpoint: documenting a 4XX response also keeps FastAPI from adding its own 422, which
-# this server never sends (validation errors are 400, in the format above).
-OTHER_ERRORS: dict[int | str, dict[str, Any]] = {
-    "4XX": {
+# On every endpoint. Documenting `default` also keeps FastAPI from adding its own 422, which this
+# server never sends (invalid requests get 400).
+DEFAULT: Responses = {
+    "default": {
         "model": ErrorBody,
-        "description": "Any other error from the client's side, in the same format, e.g. 404, "
-        "or 429 too many requests with Retry-After",
+        "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong "
+        "method, 429 too many requests (with Retry-After), or 500 a fault in the server",
+        "content": {"application/json": {"example": internal().body.model_dump()}},
     }
 }
 
 
-def documented(*codes: str) -> dict[int | str, dict[str, Any]]:
-    """The `responses` of an endpoint that can give these errors, for the API docs."""
-    responses: dict[int | str, dict[str, Any]] = {}
-    for code in codes:
-        status, message, extra = _KNOWN[code]
-        error = "behind" if code == "keyring_behind" else code
+def documented(*errors: ApiError) -> Responses:
+    """An endpoint's `responses`: these errors, as examples under their status."""
+    responses: Responses = {}
+    for error in errors:
         entry = responses.setdefault(
-            status,
+            error.status,
             {
-                "model": ErrorBody,
-                "description": _STATUS_TEXT[status],
+                "model": type(error.body),
+                "description": HTTPStatus(error.status).phrase,
                 "content": {"application/json": {"examples": {}}},
             },
         )
-        entry["content"]["application/json"]["examples"][code] = {
-            "summary": error,
-            "value": {"error": error, "message": message, **extra},
+        entry["content"]["application/json"]["examples"][error.body.error] = {
+            "value": error.body.model_dump(),
         }
     return responses

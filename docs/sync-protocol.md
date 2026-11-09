@@ -354,7 +354,9 @@ Rows written after number `n`, oldest first.
 #### Other status codes
 
 `401` missing or unknown token, `403` a `read` token trying to write, `429` too many requests (with `Retry-After`),
-`5xx` try again later with backoff.
+`5xx` try again later with backoff. A Lokki server's own errors, `5xx` included, are all `{"error", "message"}`; a
+`500` is `{"error": "internal", …}` and gives no details. A proxy in front of it may answer `502` or `503` in its own
+format, so clients go by the status code.
 
 ### 5.4 CORS
 

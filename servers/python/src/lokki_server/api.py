@@ -7,11 +7,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import JsonValue
 
-from lokki_server import __version__
+from lokki_server import __version__, errors
 from lokki_server.auth import Caller, caller, hash_token, new_token, storage, writer
 from lokki_server.clock import iso, now_ms
 from lokki_server.config import Settings
-from lokki_server.errors import OTHER_ERRORS, ApiError, documented
+from lokki_server.errors import DEFAULT, documented
 from lokki_server.models import (
     Head,
     Info,
@@ -30,17 +30,21 @@ from lokki_server.storage.base import NameTaken, Outcome
 
 router = APIRouter(
     prefix="/v1",
-    responses=OTHER_ERRORS,
+    responses=DEFAULT,
 )
 test_router = APIRouter(
     prefix="/v1/test",
     tags=["test mode"],
-    responses=OTHER_ERRORS,
+    responses=DEFAULT,
 )
 
-# What every endpoint that needs a token can answer
-_SIGNED_IN = documented("unauthorized")
-_WRITING = documented("unauthorized", "forbidden")
+# Examples of the errors each endpoint can give, for the API docs
+_INVALID = errors.invalid_request("rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'")
+_SIGNED_IN = documented(errors.unauthorized())
+_WRITING = documented(
+    errors.unauthorized(),
+    errors.forbidden(),
+)
 
 Store = Annotated[Storage, Depends(storage)]
 Reader = Annotated[Caller, Depends(caller)]
@@ -124,12 +128,12 @@ async def delete_vault(who: Writer, store: Store) -> Response:
     summary="Replace the keyring",
     response_description="Written",
     responses=documented(
-        "invalid_request",
-        "unauthorized",
-        "forbidden",
-        "keyring_behind",
-        "different_vault",
-        "too_large",
+        _INVALID,
+        errors.unauthorized(),
+        errors.forbidden(),
+        errors.keyring_behind(4),
+        errors.different_vault(4),
+        errors.too_large("A keyring can be at most 16384 bytes."),
     ),
 )
 async def put_keyring(
@@ -148,11 +152,7 @@ async def put_keyring(
         separators=(",", ":"),
     )
     if len(text.encode()) > config.limits.keyring_bytes:
-        raise ApiError(
-            413,
-            "too_large",
-            f"A keyring can be at most {config.limits.keyring_bytes} bytes.",
-        )
+        raise errors.too_large(f"A keyring can be at most {config.limits.keyring_bytes} bytes.")
     result = await store.put_keyring(
         who.vault_id,
         body.base,
@@ -164,19 +164,9 @@ async def put_keyring(
         case Outcome.OK:
             return KeyringVersion(keyring_version=result.version)
         case Outcome.DIFFERENT_VAULT:
-            raise ApiError(
-                409,
-                "different_vault",
-                "This server holds a different vault.",
-                keyring_version=result.version,
-            )
+            raise errors.different_vault(result.version)
         case Outcome.BEHIND:
-            raise ApiError(
-                409,
-                "behind",
-                "The keyring has changed; read the vault again.",
-                keyring_version=result.version,
-            )
+            raise errors.keyring_behind(result.version)
 
 
 @router.get(
@@ -184,7 +174,10 @@ async def put_keyring(
     tags=["vault"],
     summary="Pull rows",
     response_description="The rows, and where to continue",
-    responses=documented("invalid_request", "unauthorized"),
+    responses=documented(
+        errors.invalid_request("since: Input should be greater than or equal to 0"),
+        errors.unauthorized(),
+    ),
 )
 async def pull(
     who: Reader,
@@ -237,11 +230,11 @@ async def pull(
     summary="Push rows",
     response_description="Written",
     responses=documented(
-        "invalid_request",
-        "unauthorized",
-        "forbidden",
-        "behind",
-        "too_large",
+        _INVALID,
+        errors.unauthorized(),
+        errors.forbidden(),
+        errors.behind(1050),
+        errors.too_large("A push can have at most 500 rows."),
     ),
 )
 async def push(
@@ -256,24 +249,12 @@ async def push(
     """
     limits = config.limits
     if len(body.rows) > limits.push:
-        raise ApiError(
-            413,
-            "too_large",
-            f"A push can have at most {limits.push} rows.",
-        )
+        raise errors.too_large(f"A push can have at most {limits.push} rows.")
     if any(len(r.data.encode()) > limits.row_bytes for r in body.rows):
-        raise ApiError(
-            413,
-            "too_large",
-            f"A row's data can be at most {limits.row_bytes} bytes.",
-        )
+        raise errors.too_large(f"A row's data can be at most {limits.row_bytes} bytes.")
     keys = [r.key for r in body.rows]
     if len(set(keys)) != len(keys):
-        raise ApiError(
-            400,
-            "invalid_request",
-            "A push can't contain the same key twice.",
-        )
+        raise errors.invalid_request("A push can't contain the same key twice.")
     result = await store.push(
         who.vault_id,
         body.base,
@@ -281,12 +262,7 @@ async def push(
         now_ms(),
     )
     if result.outcome is Outcome.BEHIND:
-        raise ApiError(
-            409,
-            "behind",
-            "Pull first: the vault has changed.",
-            head=result.version,
-        )
+        raise errors.behind(result.version)
     return Head(head=result.version)
 
 
@@ -295,7 +271,12 @@ async def push(
     status_code=201,
     summary="Create a test vault",
     response_description="Created",
-    responses=documented("invalid_request", "name_taken"),
+    responses=documented(
+        errors.invalid_request(
+            "name: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._+@-]{0,63}$'"
+        ),
+        errors.name_taken("conformance"),
+    ),
 )
 async def create_test_vault(body: TestVaultRequest, store: Store) -> TestVaultTokens:
     """
@@ -307,11 +288,7 @@ async def create_test_vault(body: TestVaultRequest, store: Store) -> TestVaultTo
     try:
         vault_id = await store.create_vault(name, now)
     except NameTaken:
-        raise ApiError(
-            409,
-            "name_taken",
-            f"There's a vault called {name} already.",
-        ) from None
+        raise errors.name_taken(name) from None
     tokens = {"write": new_token(), "read": new_token()}
     for scope, token in tokens.items():
         await store.add_token(

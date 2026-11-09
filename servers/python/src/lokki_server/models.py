@@ -39,31 +39,55 @@ RowData = Annotated[
 Counter = Annotated[int, Field(ge=0)]
 
 
-class ErrorBody(BaseModel):
-    """
-    Every error. `error` is a code to act on; `message` is for people. A conflict also says where
-    the vault is now (`head` or `keyring_version`), so the device knows what to fetch.
-    """
+# What every error has: `error` is a code to act on, `message` is for people
+_ERRORS = ConfigDict(extra="forbid")
+Message = Annotated[
+    str,
+    Field(
+        description="What went wrong, in English",
+        examples=["This token isn't valid on this server."],
+    ),
+]
 
-    model_config = ConfigDict(extra="allow")
+
+class ErrorBody(BaseModel):
+    """An error: `error` is a code to act on, `message` is for people."""
+
+    model_config = _ERRORS
 
     error: str = Field(
-        description="What went wrong, as a code: `invalid_request`, `unauthorized`, `forbidden`, "
-        "`not_found`, `behind`, `different_vault`, `too_large`, `name_taken`, …",
-        examples=["behind"],
+        description="What went wrong, as a code, e.g. `invalid_request`, `unauthorized`, "
+        "`forbidden`, `too_large`, `not_found` or `internal`",
+        examples=["unauthorized"],
     )
-    message: str = Field(
-        description="What went wrong, in English",
-        examples=["Pull first: the vault has changed."],
-    )
-    head: int | None = Field(
-        default=None,
-        description="With `behind` from a push: the vault's head now",
+    message: Message
+
+
+class Behind(BaseModel):
+    """A push that wasn't written, because the vault changed since `base`: pull first."""
+
+    model_config = _ERRORS
+
+    error: Literal["behind"] = Field(description="Always `behind`")
+    message: Message
+    head: int = Field(
+        description="The vault's head now",
         examples=[1050],
     )
-    keyring_version: int | None = Field(
-        default=None,
-        description="With `behind` or `different_vault` from a keyring write: its version now",
+
+
+class KeyringConflict(BaseModel):
+    """
+    A keyring that wasn't written: `behind` if it changed since `base` (read the vault again), or
+    `different_vault` if the server holds another vault.
+    """
+
+    model_config = _ERRORS
+
+    error: Literal["behind", "different_vault"] = Field(description="`behind` or `different_vault`")
+    message: Message
+    keyring_version: int = Field(
+        description="The keyring's version now",
         examples=[4],
     )
 

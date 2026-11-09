@@ -8,8 +8,8 @@ from typing import Annotated
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from lokki_server import errors
 from lokki_server.clock import now_ms
-from lokki_server.errors import ApiError
 from lokki_server.models import Scope
 from lokki_server.storage import Storage
 
@@ -60,18 +60,10 @@ async def caller(
     """The caller, from a valid token; 401 otherwise."""
     token = credentials.credentials.strip() if credentials is not None else ""
     if not token:
-        raise ApiError(
-            401,
-            "unauthorized",
-            "Send an API token: Authorization: Bearer <token>.",
-        )
+        raise errors.unauthorized("Send an API token: Authorization: Bearer <token>.")
     found = await store.find_token(hash_token(token))
     if found is None:
-        raise ApiError(
-            401,
-            "unauthorized",
-            "This token isn't valid on this server.",
-        )
+        raise errors.unauthorized()
     now = now_ms()
     if found.last_used is None or now - found.last_used >= _TOUCH_EVERY_MS:
         await store.touch_token(found.token_id, now)
@@ -84,9 +76,5 @@ async def caller(
 async def writer(found: Annotated[Caller, Depends(caller)]) -> Caller:
     """The caller, if their token may write; 403 otherwise."""
     if found.scope != "write":
-        raise ApiError(
-            403,
-            "forbidden",
-            "This token can only read.",
-        )
+        raise errors.forbidden()
     return found
