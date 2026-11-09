@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from lokki_server.clock import now_ms
 from lokki_server.errors import ApiError
@@ -40,12 +41,24 @@ def storage(request: Request) -> Storage:
     return found
 
 
-async def caller(request: Request, store: Annotated[Storage, Depends(storage)]) -> Caller:
+# Reads `Authorization: Bearer <token>`, and tells the API docs that endpoints need a token (their
+# "Authorize" button). Missing tokens get the protocol's error below, not FastAPI's.
+_bearer = HTTPBearer(
+    auto_error=False,
+    scheme_name="Token",
+    description="An API token from `lokki-server token add`, e.g. `lk_6Yq3kM0p…`",
+)
+
+
+async def caller(
+    store: Annotated[Storage, Depends(storage)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Caller:
     """The caller, from a valid token; 401 otherwise."""
-    scheme, _, token = request.headers.get("authorization", "").partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
+    token = credentials.credentials.strip() if credentials is not None else ""
+    if not token:
         raise ApiError(401, "unauthorized", "Send an API token: Authorization: Bearer <token>.")
-    found = await store.find_token(hash_token(token.strip()))
+    found = await store.find_token(hash_token(token))
     if found is None:
         raise ApiError(401, "unauthorized", "This token isn't valid on this server.")
     now = now_ms()

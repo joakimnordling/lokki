@@ -2,14 +2,54 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 from lokki_server import __version__, errors
 from lokki_server.api import router, test_router
 from lokki_server.config import Settings
 from lokki_server.storage import open_storage
+
+_PROTOCOL = "https://github.com/joakimnordling/lokki/blob/main/docs/sync-protocol.md"
+_DESCRIPTION = f"""
+The server side of Lokki's sync, as described in [the sync protocol]({_PROTOCOL}). Devices
+encrypt everything before sending it, so the server only keeps rows it can't read, and a
+counter that tells devices what's new.
+
+Every endpoint except `/v1/info` needs an API token, from `lokki-server token add`, and acts on
+the vault that token belongs to. To try them here, choose **Authorize** and paste a token.
+
+Errors are always `{{"error": "<code>", "message": "…"}}`, with `400` for a request that isn't
+valid (never `422`).
+"""
+_TAGS = [
+    {"name": "server", "description": "About the server itself"},
+    {"name": "vault", "description": "The vault the token belongs to: its keyring and rows"},
+    {"name": "test mode", "description": "Only when `LOKKI_TEST_MODE` is on, never in production"},
+]
+
+
+def _openapi(app: FastAPI) -> dict[str, Any]:
+    """The OpenAPI schema, without FastAPI's 422 responses: this server answers 400 instead."""
+    if app.openapi_schema is None:
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            summary=app.summary,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+        )
+        for path in schema["paths"].values():
+            for operation in path.values():
+                operation.get("responses", {}).pop("422", None)
+        for name in ("HTTPValidationError", "ValidationError"):
+            schema.get("components", {}).get("schemas", {}).pop(name, None)
+        app.openapi_schema = schema
+    return app.openapi_schema
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -33,9 +73,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Lokki sync server",
         version=__version__,
+        summary="Stores end-to-end encrypted rows for Lokki's devices. It can't read any of them.",
+        description=_DESCRIPTION,
+        openapi_tags=_TAGS,
         lifespan=lifespan,
-        redoc_url=None,
+        docs_url="/docs" if config.docs else None,
+        redoc_url="/redoc" if config.docs else None,
+        openapi_url="/openapi.json" if config.docs else None,
     )
+    app.openapi = lambda: _openapi(app)
     app.state.settings = config
     errors.install(app)
     app.include_router(router)

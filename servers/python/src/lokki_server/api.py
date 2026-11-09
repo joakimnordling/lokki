@@ -11,7 +11,7 @@ from lokki_server import __version__
 from lokki_server.auth import Caller, caller, hash_token, new_token, storage, writer
 from lokki_server.clock import iso, now_ms
 from lokki_server.config import Settings
-from lokki_server.errors import ApiError
+from lokki_server.errors import ApiError, documented
 from lokki_server.models import (
     Head,
     Info,
@@ -29,7 +29,11 @@ from lokki_server.storage import Storage
 from lokki_server.storage.base import NameTaken, Outcome
 
 router = APIRouter(prefix="/v1")
-test_router = APIRouter(prefix="/v1/test")
+test_router = APIRouter(prefix="/v1/test", tags=["test mode"])
+
+# What every endpoint that needs a token can answer
+_SIGNED_IN = documented("unauthorized")
+_WRITING = documented("unauthorized", "forbidden")
 
 Store = Annotated[Storage, Depends(storage)]
 Reader = Annotated[Caller, Depends(caller)]
@@ -45,9 +49,11 @@ def settings(request: Request) -> Settings:
 Config = Annotated[Settings, Depends(settings)]
 
 
-@router.get("/info")
+@router.get(
+    "/info", tags=["server"], summary="What this server is", response_description="The server"
+)
 async def info(store: Store, config: Config) -> Info:
-    """The server's name, version, ID, API versions and limits. No sign-in needed."""
+    """The server's name, version, ID, API versions and limits. Needs no token (protocol 5.3)."""
     limits = config.limits
     return Info(
         version=__version__,
@@ -57,9 +63,18 @@ async def info(store: Store, config: Config) -> Info:
     )
 
 
-@router.get("/vault")
+@router.get(
+    "/vault",
+    tags=["vault"],
+    summary="Read the vault's keyring and status",
+    response_description="The vault",
+    responses=_SIGNED_IN,
+)
 async def vault(who: Reader, store: Store) -> Vault:
-    """The vault: its keyring (or null) and status."""
+    """
+    The keyring (null for a new vault) and the vault's counters. A device reads this first, to
+    unlock the vault and to see whether there's anything new (protocol 5.3, 7.2).
+    """
     status = await store.vault(who.vault_id)
     keyring: dict[str, JsonValue] | None = (
         json.loads(status.keyring) if status.keyring is not None else None
@@ -73,18 +88,43 @@ async def vault(who: Reader, store: Store) -> Vault:
     )
 
 
-@router.delete("/vault", status_code=204)
+@router.delete(
+    "/vault",
+    status_code=204,
+    tags=["vault"],
+    summary="Delete the vault and its tokens",
+    responses={204: {"description": "Deleted"}, **_WRITING},
+)
 async def delete_vault(who: Writer, store: Store) -> Response:
-    """Delete the vault, including every token."""
+    """
+    Deletes every row, the keyring and all the vault's tokens, including the one used. This can't
+    be undone; devices keep their own copies (protocol 5.3).
+    """
     await store.delete_vault(who.vault_id)
     return Response(status_code=204)
 
 
-@router.put("/vault/keyring")
+@router.put(
+    "/vault/keyring",
+    tags=["vault"],
+    summary="Replace the keyring",
+    response_description="Written",
+    responses=documented(
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "keyring_behind",
+        "different_vault",
+        "too_large",
+    ),
+)
 async def put_keyring(
     body: KeyringPut, who: Writer, store: Store, config: Config
 ) -> KeyringVersion:
-    """Replace the keyring, if `base` is the current keyring version."""
+    """
+    Written only if `base` is the current `keyring_version`, and only for the same vault:
+    otherwise `409`, and the device reads the vault again (protocol 4.4, 5.3).
+    """
     text = json.dumps(
         body.keyring.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")
     )
@@ -112,15 +152,32 @@ async def put_keyring(
             )
 
 
-@router.get("/vault/rows")
+@router.get(
+    "/vault/rows",
+    tags=["vault"],
+    summary="Pull rows",
+    response_description="The rows, and where to continue",
+    responses=documented("invalid_request", "unauthorized"),
+)
 async def pull(
     who: Reader,
     store: Store,
     config: Config,
-    since: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int | None, Query(ge=1)] = None,
+    since: Annotated[
+        int,
+        Query(
+            ge=0, description="The `cursor` from the last pull; 0 for everything", examples=[1040]
+        ),
+    ] = 0,
+    limit: Annotated[
+        int | None,
+        Query(ge=1, description="Most rows to return; at most, and by default, `limits.pull`"),
+    ] = None,
 ) -> Pull:
-    """Rows written after `since`, oldest first. Continue from `cursor` while `more` is true."""
+    """
+    Rows written after `since`, oldest first. While `more` is true, continue with `cursor` as
+    `since` (protocol 5.3, 7.2).
+    """
     most = config.limits.pull if limit is None else min(limit, config.limits.pull)
     result = await store.pull(who.vault_id, since, most)
     return Pull(
@@ -131,9 +188,18 @@ async def pull(
     )
 
 
-@router.post("/vault/rows")
+@router.post(
+    "/vault/rows",
+    tags=["vault"],
+    summary="Push rows",
+    response_description="Written",
+    responses=documented("invalid_request", "unauthorized", "forbidden", "behind", "too_large"),
+)
 async def push(body: Push, who: Writer, store: Store, config: Config) -> Head:
-    """Add or replace rows, all or none, if `base` is the current head."""
+    """
+    Adds the rows, replacing any with the same key, all or none, and only if `base` is still the
+    vault's `head`. Otherwise nothing is written: `409 behind`, so pull first (protocol 5.3, 7.3).
+    """
     limits = config.limits
     if len(body.rows) > limits.push:
         raise ApiError(413, "too_large", f"A push can have at most {limits.push} rows.")
@@ -150,9 +216,18 @@ async def push(body: Push, who: Writer, store: Store, config: Config) -> Head:
     return Head(head=result.version)
 
 
-@test_router.post("/vaults", status_code=201)
+@test_router.post(
+    "/vaults",
+    status_code=201,
+    summary="Create a test vault",
+    response_description="Created",
+    responses=documented("invalid_request", "name_taken"),
+)
 async def create_test_vault(body: TestVaultRequest, store: Store) -> TestVaultTokens:
-    """Test mode only: a new, empty vault with a write and a read token."""
+    """
+    Only in test mode, never in production: a new, empty vault with a token of each scope, so a
+    test suite can check any server from the outside (protocol 5.5).
+    """
     now = now_ms()
     name = body.name or f"test-{secrets.token_hex(6)}"
     try:

@@ -43,8 +43,16 @@ Environment variables, or a `.env` file in the working directory:
 | `LOKKI_LIMITS__PULL`      | `1000`                         | Most rows in one pull                                                          |
 | `LOKKI_LIMITS__PUSH`      | `500`                          | Most rows in one push                                                          |
 | `LOKKI_LIMITS__ROW_BYTES` | `4096`                         | Largest row                                                                    |
+| `LOKKI_DOCS`              | `true`                         | API docs: Swagger UI at `/docs`, ReDoc at `/redoc`                             |
 | `LOKKI_TEST_MODE`         | `false`                        | Enables `POST /v1/test/vaults` for the conformance tests. Never in production. |
 | `PORT`                    | `8000`                         | Port for `serve`                                                               |
+
+## API docs
+
+The running server documents its API: Swagger UI at `/docs` (choose **Authorize** and paste a token to try the
+endpoints) and ReDoc at `/redoc`, both from `/openapi.json`. The protocol itself is in
+[docs/sync-protocol.md](../../docs/sync-protocol.md). The docs pages load their scripts from a CDN; set
+`LOKKI_DOCS=false` to turn them off.
 
 ## Development
 

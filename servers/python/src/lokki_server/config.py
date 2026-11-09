@@ -82,6 +82,10 @@ class Settings(BaseSettings):
         default_factory=list,
         description="Origins the web app is served from, e.g. https://lokki.example.com",
     )
+    docs: bool = Field(
+        default=True,
+        description="Serves the API docs: Swagger UI at /docs, ReDoc at /redoc, /openapi.json",
+    )
     test_mode: bool = Field(
         default=False,
         description="Enables POST /v1/test/vaults for the conformance tests; never in production",
