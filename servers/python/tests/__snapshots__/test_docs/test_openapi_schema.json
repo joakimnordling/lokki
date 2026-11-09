@@ -589,6 +589,16 @@
               }
             },
             "description": "The server"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
           }
         },
         "summary": "What this server is",
@@ -659,6 +669,16 @@
               }
             },
             "description": "Conflict: someone else wrote first, or this isn't the same vault"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
           }
         },
         "summary": "Create a test vault",
@@ -712,6 +732,16 @@
               }
             },
             "description": "The token can only read"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
           }
         },
         "security": [
@@ -756,6 +786,16 @@
               }
             },
             "description": "No token, or one this server doesn't know"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
           }
         },
         "security": [
@@ -897,6 +937,16 @@
               }
             },
             "description": "Too many rows, or a row or keyring too large"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
           }
         },
         "security": [
@@ -999,6 +1049,16 @@
               }
             },
             "description": "No token, or one this server doesn't know"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
           }
         },
         "security": [
@@ -1130,6 +1190,16 @@
               }
             },
             "description": "Too many rows, or a row or keyring too large"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error from the client's side, in the same format, e.g. 404, or 429 too many requests with Retry-After"
           }
         },
         "security": [

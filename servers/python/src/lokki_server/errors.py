@@ -81,6 +81,17 @@ _STATUS_TEXT = {
 }
 
 
+# On every endpoint: documenting a 4XX response also keeps FastAPI from adding its own 422, which
+# this server never sends (validation errors are 400, in the format above).
+OTHER_ERRORS: dict[int | str, dict[str, Any]] = {
+    "4XX": {
+        "model": ErrorBody,
+        "description": "Any other error from the client's side, in the same format, e.g. 404, "
+        "or 429 too many requests with Retry-After",
+    }
+}
+
+
 def documented(*codes: str) -> dict[int | str, dict[str, Any]]:
     """The `responses` of an endpoint that can give these errors, for the API docs."""
     responses: dict[int | str, dict[str, Any]] = {}

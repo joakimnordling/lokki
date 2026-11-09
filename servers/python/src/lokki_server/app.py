@@ -2,11 +2,9 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.utils import get_openapi
 from fastapi_standalone_docs import StandaloneDocs  # pyright: ignore[reportMissingTypeStubs] (no py.typed)
 
 from lokki_server import __version__, errors
@@ -31,26 +29,6 @@ _TAGS = [
     {"name": "vault", "description": "The vault the token belongs to: its keyring and rows"},
     {"name": "test mode", "description": "Only when `LOKKI_TEST_MODE` is on, never in production"},
 ]
-
-
-def _openapi(app: FastAPI) -> dict[str, Any]:
-    """The OpenAPI schema, without FastAPI's 422 responses: this server answers 400 instead."""
-    if app.openapi_schema is None:
-        schema = get_openapi(
-            title=app.title,
-            version=app.version,
-            summary=app.summary,
-            description=app.description,
-            routes=app.routes,
-            tags=app.openapi_tags,
-        )
-        for path in schema["paths"].values():
-            for operation in path.values():
-                operation.get("responses", {}).pop("422", None)
-        for name in ("HTTPValidationError", "ValidationError"):
-            schema.get("components", {}).get("schemas", {}).pop(name, None)
-        app.openapi_schema = schema
-    return app.openapi_schema
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -82,7 +60,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url="/redoc" if config.docs else None,
         openapi_url="/openapi.json" if config.docs else None,
     )
-    app.openapi = lambda: _openapi(app)
     if config.docs:
         StandaloneDocs(app=app)  # serves Swagger UI's and ReDoc's files itself, not from CDNs
     app.state.settings = config

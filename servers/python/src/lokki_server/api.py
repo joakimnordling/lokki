@@ -11,7 +11,7 @@ from lokki_server import __version__
 from lokki_server.auth import Caller, caller, hash_token, new_token, storage, writer
 from lokki_server.clock import iso, now_ms
 from lokki_server.config import Settings
-from lokki_server.errors import ApiError, documented
+from lokki_server.errors import OTHER_ERRORS, ApiError, documented
 from lokki_server.models import (
     Head,
     Info,
@@ -28,8 +28,8 @@ from lokki_server.models import (
 from lokki_server.storage import Storage
 from lokki_server.storage.base import NameTaken, Outcome
 
-router = APIRouter(prefix="/v1")
-test_router = APIRouter(prefix="/v1/test", tags=["test mode"])
+router = APIRouter(prefix="/v1", responses=OTHER_ERRORS)
+test_router = APIRouter(prefix="/v1/test", tags=["test mode"], responses=OTHER_ERRORS)
 
 # What every endpoint that needs a token can answer
 _SIGNED_IN = documented("unauthorized")
