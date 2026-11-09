@@ -68,8 +68,8 @@ def test_status_counts_rows(http: httpx2.Client, writer: dict[str, str]) -> None
     assert (vault["head"], vault["rows"]) == (4, 3)
 
 
-def test_deleting_the_vault(http: httpx2.Client, account: Tokens) -> None:
-    write, read = bearer(account["write"]), bearer(account["read"])
+def test_deleting_the_vault(http: httpx2.Client, vault: Tokens) -> None:
+    write, read = bearer(vault["write"]), bearer(vault["read"])
     put(http, write, 0, keyring())
 
     assert http.delete("/v1/vault", headers=write).status_code == 204

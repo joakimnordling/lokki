@@ -44,9 +44,9 @@ export async function startServer() {
   }
   return {
     url,
-    /** A new, empty account: {write, read} tokens. */
-    async account() {
-      const response = await fetch(`${url}/v1/test/accounts`, {
+    /** A new, empty vault: its name and {write, read} tokens. */
+    async vault() {
+      const response = await fetch(`${url}/v1/test/vaults`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",

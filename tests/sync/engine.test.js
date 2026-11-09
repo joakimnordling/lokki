@@ -79,7 +79,7 @@ const visible = (d) =>
 describe("two devices, one server", () => {
   it("send and receive changes, and a new device joins with the passphrase", async () => {
     const vault = await newVault();
-    const { write } = await servers[0].account();
+    const { write } = await servers[0].vault();
     const a = device(vault, [servers[0], write]);
     a.put(metric("running"));
     a.put(entry("e1", 5));
@@ -114,7 +114,7 @@ describe("two devices, one server", () => {
 
   it("when both edit the same entry offline, the later edit wins on both", async () => {
     const vault = await newVault();
-    const { write } = await servers[0].account();
+    const { write } = await servers[0].vault();
     const a = device(vault, [servers[0], write]);
     const b = device(vault, [servers[0], write]);
     a.put(metric("running"));
@@ -136,7 +136,7 @@ describe("two devices, one server", () => {
 
   it("pages through many records in both directions", async () => {
     const vault = await newVault();
-    const { write } = await servers[0].account();
+    const { write } = await servers[0].vault();
     const a = device(vault, [servers[0], write]);
     a.put(metric("running"));
     for (let i = 0; i < 1234; i++) a.put(entry(`e${i}`, i));
@@ -150,7 +150,7 @@ describe("two devices, one server", () => {
 describe("several servers", () => {
   it("changes travel between servers through devices that use both", async () => {
     const vault = await newVault();
-    const [one, two] = await Promise.all([servers[0].account(), servers[1].account()]);
+    const [one, two] = await Promise.all([servers[0].vault(), servers[1].vault()]);
     const a = device(vault, [servers[0], one.write]);
     const b = device(vault, [servers[0], one.write], [servers[1], two.write]);
     const c = device(vault, [servers[1], two.write]);
@@ -171,7 +171,7 @@ describe("several servers", () => {
 
   it("deleting a metric stays final, even when an older edit reaches another server first", async () => {
     const vault = await newVault();
-    const [one, two] = await Promise.all([servers[0].account(), servers[1].account()]);
+    const [one, two] = await Promise.all([servers[0].vault(), servers[1].vault()]);
     const a = device(vault, [servers[0], one.write]);
     const b = device(vault, [servers[0], one.write], [servers[1], two.write]);
     const c = device(vault, [servers[1], two.write]);
@@ -211,7 +211,7 @@ describe("the keyring", () => {
   it("a passphrase change travels to every server, and only the new passphrase opens it", async () => {
     const { keyring, dataKey } = await newKeyring(PASS, { now: now(), kdf: SMALL });
     const vault = { keyring, keys: await deriveKeys(dataKey) };
-    const [one, two] = await Promise.all([servers[0].account(), servers[1].account()]);
+    const [one, two] = await Promise.all([servers[0].vault(), servers[1].vault()]);
     const a = device(vault, [servers[0], one.write]);
     const b = device(vault, [servers[0], one.write], [servers[1], two.write]);
     await sync(a);
@@ -231,7 +231,7 @@ describe("the keyring", () => {
 
   it("a server's keyring changed without the keys is replaced, and another vault's is refused", async () => {
     const vault = await newVault();
-    const { write } = await servers[0].account();
+    const { write } = await servers[0].vault();
     const http = new ServerClient(servers[0].url, write);
     const a = device(vault, [servers[0], write]);
     await sync(a);
@@ -249,7 +249,7 @@ describe("the keyring", () => {
 describe("damaged, unknown and missing data", () => {
   it("repairs damaged rows from the device's copy and leaves newer formats alone", async () => {
     const vault = await newVault();
-    const { write } = await servers[0].account();
+    const { write } = await servers[0].vault();
     const http = new ServerClient(servers[0].url, write);
     const a = device(vault, [servers[0], write]);
     a.put(metric("running"));
@@ -277,11 +277,7 @@ describe("damaged, unknown and missing data", () => {
 
   it("starts over with a server that lost changes, or is a different server at the same address", async () => {
     const vault = await newVault();
-    const [first, restored, other] = await Promise.all([
-      servers[0].account(),
-      servers[0].account(),
-      servers[1].account(),
-    ]);
+    const [first, restored, other] = await Promise.all([servers[0].vault(), servers[0].vault(), servers[1].vault()]);
     const a = device(vault, [servers[0], first.write]);
     a.put(metric("running"));
     a.put(entry("e1", 1));
@@ -303,7 +299,7 @@ describe("damaged, unknown and missing data", () => {
 describe("tokens and connections", () => {
   it("a read token receives everything but can't send", async () => {
     const vault = await newVault();
-    const { write, read } = await servers[0].account();
+    const { write, read } = await servers[0].vault();
     const a = device(vault, [servers[0], write]);
     a.put(metric("running"));
     await sync(a);

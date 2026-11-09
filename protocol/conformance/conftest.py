@@ -88,11 +88,11 @@ Tokens = dict[str, str]
 
 
 @pytest.fixture
-def new_account(http: httpx2.Client) -> Callable[[], Tokens]:
-    """A fresh, empty account with a write and a read token (test mode)."""
+def new_vault(http: httpx2.Client) -> Callable[[], Tokens]:
+    """A fresh, empty vault with a write and a read token (test mode)."""
 
     def make() -> Tokens:
-        response = http.post("/v1/test/accounts", json={"name": "conformance"})
+        response = http.post("/v1/test/vaults", json={})
         assert response.status_code == 201, "the server must run in test mode (section 5.5)"
         tokens: Tokens = response.json()
         assert set(tokens) >= {"write", "read"}
@@ -106,10 +106,10 @@ def bearer(token: str) -> dict[str, str]:
 
 
 @pytest.fixture
-def writer(new_account: Callable[[], Tokens]) -> dict[str, str]:
-    return bearer(new_account()["write"])
+def writer(new_vault: Callable[[], Tokens]) -> dict[str, str]:
+    return bearer(new_vault()["write"])
 
 
 @pytest.fixture
-def account(new_account: Callable[[], Tokens]) -> Tokens:
-    return new_account()
+def vault(new_vault: Callable[[], Tokens]) -> Tokens:
+    return new_vault()
