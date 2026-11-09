@@ -28,11 +28,21 @@ def test_a_new_vault(http: httpx2.Client, writer: dict[str, str]) -> None:
 
 
 def test_the_keyring_is_stored_as_sent(http: httpx2.Client, writer: dict[str, str]) -> None:
-    ring = keyring(unknown_field={"nested": [1, "two"]})
+    entry = {**keyring()["keys"][0], "future": {"nested": [1, "two"]}}  # entries are free-form
+    ring = keyring(keys=[entry])
 
     assert put(http, writer, 0, ring).json() == {"keyring_version": 1}
     vault = http.get("/v1/vault", headers=writer).json()
     assert (vault["keyring"], vault["keyring_version"]) == (ring, 1)
+
+
+def test_a_keyring_with_other_fields_is_refused(
+    http: httpx2.Client, writer: dict[str, str]
+) -> None:
+    response = put(http, writer, 0, keyring(unknown_field=True))
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid_request"
 
 
 def test_keyring_writes_need_the_current_version(
