@@ -21,6 +21,7 @@ from lokki_server.models import (
     Pull,
     Push,
     RowOut,
+    Scope,
     TestVaultRequest,
     TestVaultTokens,
     Vault,
@@ -287,16 +288,17 @@ async def create_test_vault(body: TestVaultRequest, store: Store) -> TestVaultTo
         vault_id = await store.create_vault(name, now)
     except NameTaken:
         raise errors.name_taken(name) from None
-    tokens = {"write": new_token(), "read": new_token()}
+    tokens = {scope: new_token() for scope in Scope}
     for scope, token in tokens.items():
         await store.add_token(
             vault_id,
-            scope,
+            scope,  # each test token is labelled with its scope
             hash_token(token),
-            "write" if scope == "write" else "read",
+            scope,
             now,
         )
     return TestVaultTokens(
         name=name,
-        **tokens,
+        write=tokens[Scope.WRITE],
+        read=tokens[Scope.READ],
     )

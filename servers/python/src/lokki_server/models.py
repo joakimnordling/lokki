@@ -5,13 +5,20 @@ Descriptions and examples here are what Swagger UI (/docs) and ReDoc (/redoc) sh
 docstring describes it there, so they're written for the API's readers.
 """
 
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints
 
 from lokki_server.names import VAULT_NAME
 
-Scope = Literal["read", "write"]
+
+class Scope(StrEnum):
+    """What a token may do: `read` only, or `write` (which includes reading)."""
+
+    READ = "read"
+    WRITE = "write"
+
 
 # Values in examples, matching the protocol doc's
 _KEY = "q3Jb0w1sV8ZpK2mXy7c4Ag"

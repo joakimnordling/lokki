@@ -23,7 +23,7 @@ app = typer.Typer(
     add_completion=False,
 )
 
-ScopeOption = Annotated[Scope, typer.Option(help="write (default) or read")]
+ScopeOption = Annotated[Scope, typer.Option(help="What the token may do")]
 
 
 @asynccontextmanager
@@ -196,7 +196,7 @@ async def token_add(
             callback=_label,
         ),
     ],
-    scope: ScopeOption = "write",
+    scope: ScopeOption = Scope.WRITE,
 ) -> None:
     """Add a token to a vault and print the URL and token to enter in the app."""
     settings = Settings()

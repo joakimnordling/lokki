@@ -134,7 +134,7 @@ class SqlStorage:
         return Token(
             token_id=found.id,
             vault_id=found.vault_id,
-            scope=found.scope,
+            scope=Scope(found.scope),
             last_used=found.last_used,
         )
 
@@ -181,7 +181,7 @@ class SqlStorage:
             return [
                 TokenSummary(
                     label=r.label,
-                    scope=r.scope,
+                    scope=Scope(r.scope),
                     created=r.created,
                     last_used=r.last_used,
                 )

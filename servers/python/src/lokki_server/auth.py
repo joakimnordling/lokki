@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from lokki_server import errors
 from lokki_server.clock import now_ms
+from lokki_server.models import Scope
 from lokki_server.storage import Storage
 from lokki_server.storage.base import Token as StoredToken
 
@@ -61,7 +62,7 @@ async def token(
 
 async def write_token(found: Annotated[StoredToken, Depends(token)]) -> StoredToken:
     """The request's token, if it may write; 403 otherwise."""
-    if found.scope != "write":
+    if found.scope != Scope.WRITE:
         raise errors.forbidden()
     return found
 
