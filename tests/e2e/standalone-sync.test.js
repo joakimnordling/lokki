@@ -46,7 +46,7 @@ describe("standalone sync", () => {
   before(async () => {
     h = await startHarness();
     srv = await startServer({ cors: [h.base] });
-    tokens = await srv.account();
+    tokens = await srv.vault();
     A = await h.device("/site/", { claude: false });
     B = await h.device("/site/", { claude: false });
   });

@@ -247,7 +247,7 @@ function serverSheet(bit) {
 function confirmDelete(s) {
   sheet(
     "Delete on Server",
-    `<p class="lead">Delete all your logs on <b>${esc(s.name)}</b>, and the account they're in? Your devices and other servers keep their copies. This can't be undone.</p>
+    `<p class="lead">Delete all your logs on <b>${esc(s.name)}</b>, with its vault and tokens? Your devices and other servers keep their copies. This can't be undone.</p>
     <button class="danger solid" id="dYes">Delete on ${esc(s.name)}</button><div class="err"></div>`,
   );
   $("#dYes").onclick = () => {
@@ -275,7 +275,7 @@ function addServer() {
           throw fail("You already sync with this server.");
         const { keyring } = await sync.inspect(url, token);
         if (keyring && keyring.vault !== sync.vault.keyring.vault)
-          throw fail("This server holds someone else's logs (a different vault). Use another account or server.");
+          throw fail("This server holds someone else's logs (a different vault). Use another token or server.");
         await sync.addServer(url, token);
         return overview;
       }),
