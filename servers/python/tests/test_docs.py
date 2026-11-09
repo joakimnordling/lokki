@@ -1,5 +1,7 @@
 """The API docs: Swagger UI, ReDoc and the OpenAPI schema they're made from."""
 
+import re
+
 from fastapi.testclient import TestClient
 from syrupy.assertion import SnapshotAssertion
 
@@ -44,11 +46,14 @@ def test_endpoints_with_a_token_say_so(client: TestClient) -> None:
     assert schema["paths"]["/v1/vault/rows"]["post"]["security"] == [{"Token": []}]
 
 
-def test_docs_pages(client: TestClient) -> None:
+def test_docs_pages_load_nothing_from_other_sites(client: TestClient) -> None:
     for page in ("/docs", "/redoc"):
         response = client.get(page)
         assert response.status_code == 200
         assert "/openapi.json" in response.text
+        assert not re.search(r"""(src|href)=["']?(https?:)?//""", response.text), page
+        for asset in re.findall(r"""(?:src|href)=["']?(/[^"' >]+)""", response.text):
+            assert client.get(asset).status_code == 200, asset
 
 
 def test_test_mode_is_documented_only_in_test_mode(settings: Settings) -> None:

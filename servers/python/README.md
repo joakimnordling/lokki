@@ -51,8 +51,9 @@ Environment variables, or a `.env` file in the working directory:
 
 The running server documents its API: Swagger UI at `/docs` (choose **Authorize** and paste a token to try the
 endpoints) and ReDoc at `/redoc`, both from `/openapi.json`. The protocol itself is in
-[docs/sync-protocol.md](../../docs/sync-protocol.md). The docs pages load their scripts from a CDN; set
-`LOKKI_DOCS=false` to turn them off.
+[docs/sync-protocol.md](../../docs/sync-protocol.md). The server serves the pages' scripts and styles itself
+([fastapi-standalone-docs](https://github.com/ioxiocom/fastapi-standalone-docs)), so they load nothing from other
+sites. Set `LOKKI_DOCS=false` to turn them off.
 
 ## Development
 

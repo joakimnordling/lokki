@@ -134,6 +134,18 @@ wheels = [
 ]
 
 [[package]]
+name = "fastapi-standalone-docs"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastapi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2f/fb/c0cea3f1a0d9e67ad826bb39756c5dcb73193dce48e80107513cbf1438a5/fastapi_standalone_docs-0.3.0.tar.gz", hash = "sha256:01d331922cfe315cf6f0b8693299f451cc20da4b57a3e0658e3c706ad3b5ee8e", size = 814520, upload-time = "2026-10-16T10:02:13.973Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/57/d2/b6a95d33dfb0ec61bb740c7b2b1590a90db5fb65a817c1d5671f76743aad/fastapi_standalone_docs-0.3.0-py3-none-any.whl", hash = "sha256:2cd0462698c92105655fb70b242f95cb32afe7e20bb2f6b9cc2b65fa985ffe7f", size = 814604, upload-time = "2026-10-16T10:02:12.545Z" },
+]
+
+[[package]]
 name = "greenlet"
 version = "3.5.6"
 source = { registry = "https://pypi.org/simple" }
@@ -268,6 +280,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "alembic" },
     { name = "fastapi" },
+    { name = "fastapi-standalone-docs" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "sqlalchemy", extra = ["asyncio"] },
@@ -290,6 +303,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.22" },
     { name = "alembic", specifier = ">=1.20" },
     { name = "fastapi", specifier = ">=0.162" },
+    { name = "fastapi-standalone-docs", specifier = ">=0.3.0" },
     { name = "pydantic", specifier = ">=2.14" },
     { name = "pydantic-settings", specifier = ">=2.16" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1" },

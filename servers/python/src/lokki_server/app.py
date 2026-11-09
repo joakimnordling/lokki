@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi_standalone_docs import StandaloneDocs  # pyright: ignore[reportMissingTypeStubs] (no py.typed)
 
 from lokki_server import __version__, errors
 from lokki_server.api import router, test_router
@@ -82,6 +83,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json" if config.docs else None,
     )
     app.openapi = lambda: _openapi(app)
+    if config.docs:
+        StandaloneDocs(app=app)  # serves Swagger UI's and ReDoc's files itself, not from CDNs
     app.state.settings = config
     errors.install(app)
     app.include_router(router)

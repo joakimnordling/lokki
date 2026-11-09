@@ -9,6 +9,7 @@ authors = [{ name = "Joakim Nordling", email = "joakim.nordling@gmail.com" }]
 requires-python = ">=3.15"
 dependencies = [
     "fastapi>=0.162",
+    "fastapi-standalone-docs>=0.3.0",
     "uvicorn[standard]>=0.54",
     "pydantic>=2.14",
     "pydantic-settings>=2.16",
