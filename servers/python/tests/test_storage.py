@@ -22,12 +22,17 @@ from tests.helpers import key
 
 
 def test_concurrent_pushes_from_the_same_base(database_url: str) -> None:
+    # Fewer on the Firestore emulator: it locks documents pessimistically, so transactions that
+    # all read the vault and then write it can deadlock until its lock timeout, retries and all.
+    # Firestore itself keeps a retried transaction's place in line.
+    devices = 4 if database_url.startswith("firestore:") else 8
+
     async def scenario() -> list[Outcome]:
         storage = open_storage(database_url)
         try:
             vault = await storage.create_vault("race", 0)
             results = await asyncio.gather(
-                *(storage.push(vault, 0, [(key(n), f"v1.{n}")], 0) for n in range(8))
+                *(storage.push(vault, 0, [(key(n), f"v1.{n}")], 0) for n in range(devices))
             )
             pulled = await storage.pull(vault, 0, 100)
             assert len(pulled.rows) == 1
@@ -39,7 +44,7 @@ def test_concurrent_pushes_from_the_same_base(database_url: str) -> None:
     outcomes = asyncio.run(scenario())
 
     assert outcomes.count(Outcome.OK) == 1
-    assert outcomes.count(Outcome.BEHIND) == 7
+    assert outcomes.count(Outcome.BEHIND) == devices - 1
 
 
 def test_concurrent_first_keyrings(database_url: str) -> None:
