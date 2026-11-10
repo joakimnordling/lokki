@@ -38,3 +38,9 @@ updates:
     groups:
       python:
         patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /servers/python # the server's container image: Python and uv
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7

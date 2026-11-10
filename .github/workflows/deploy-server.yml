@@ -1,0 +1,90 @@
+name: Deploy the server
+
+# Builds servers/python into a container image and deploys it to Cloud Run, once for each GitHub
+# environment listed in the repository variable DEPLOY_ENVIRONMENTS (e.g. ["sync1", "sync2"]).
+# Each environment holds its own variables; docs/deploy-cloud-run.md describes them and the
+# one-time setup in Google Cloud. Without DEPLOY_ENVIRONMENTS, nothing is deployed.
+
+on:
+  push:
+    branches: [main]
+    paths: ["servers/python/**", ".github/workflows/deploy-server.yml"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to ${{ matrix.environment }}
+    if: vars.DEPLOY_ENVIRONMENTS != ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(vars.DEPLOY_ENVIRONMENTS || '[]') }}
+    environment:
+      name: ${{ matrix.environment }}
+      url: ${{ vars.LOKKI_PUBLIC_URL }}
+    permissions:
+      contents: read
+      id-token: write # signing in to Google Cloud with Workload Identity Federation: no stored keys
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      RUNTIME_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/lokki/server:${{ github.sha }}
+      PUBLIC_URL: ${{ vars.LOKKI_PUBLIC_URL }}
+      CORS_ORIGINS: ${{ vars.LOKKI_CORS_ORIGINS }}
+      DATABASE_URL: ${{ vars.LOKKI_DATABASE_URL }}
+      DATABASE_SECRET: ${{ vars.LOKKI_DATABASE_SECRET }}
+      MEMORY: ${{ vars.CLOUD_RUN_MEMORY || '256Mi' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Build and push the image
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build --tag "$IMAGE" servers/python
+          docker push "$IMAGE"
+      - name: Deploy
+        run: |
+          # The database: a Secret Manager secret holding its URL (e.g. PostgreSQL with a
+          # password), or a URL that holds no secret (e.g. firestore://project)
+          # ^|^ makes | the separator, as the CORS origins are a JSON list with commas
+          settings="^|^LOKKI_PUBLIC_URL=$PUBLIC_URL|LOKKI_CORS_ORIGINS=$CORS_ORIGINS"
+          if [ -n "$DATABASE_SECRET" ]; then
+            database=(--set-secrets "LOKKI_DATABASE_URL=$DATABASE_SECRET:latest")
+          else
+            settings+="|LOKKI_DATABASE_URL=$DATABASE_URL"
+            database=(--clear-secrets)
+          fi
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT" \
+            --region "$REGION" \
+            --image "$IMAGE" \
+            --service-account "$RUNTIME_ACCOUNT" \
+            --allow-unauthenticated \
+            --execution-environment gen1 \
+            --cpu 1 \
+            --memory "$MEMORY" \
+            --min-instances 0 \
+            --max-instances 1 \
+            --set-env-vars "$settings" \
+            "${database[@]}" \
+            --quiet
+      - name: Check that it answers
+        run: |
+          url=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" \
+            --format 'value(status.url)')
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$url/v1/info"

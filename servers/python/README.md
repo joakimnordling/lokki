@@ -11,6 +11,9 @@ FastAPI on Python 3.15. It stores in SQLite, PostgreSQL or Google Cloud Firestor
 | PostgreSQL | `postgresql://user:password@host/database`, or as a service gives it, e.g. `postgres://…?sslmode=require` | `lokki-server[postgresql]` |
 | Firestore  | `firestore://PROJECT` or `firestore://PROJECT/DATABASE`, signing in with Google's default credentials     | `lokki-server[firestore]`  |
 
+The container image ([Dockerfile](Dockerfile)) has all three. [docs/deploy-cloud-run.md](../../docs/deploy-cloud-run.md)
+describes running it on Google Cloud Run.
+
 ## Running it
 
 Requires [uv](https://docs.astral.sh/uv/).

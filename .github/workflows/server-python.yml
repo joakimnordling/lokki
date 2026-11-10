@@ -59,3 +59,19 @@ jobs:
           uv run pytest --cov --cov-fail-under=100 --cov-report=term
           --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
 
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        run: docker build --tag lokki-server .
+      - name: Start it and ask what it is
+        run: |
+          docker run --detach --name lokki --publish 8080:8080 \
+            --env LOKKI_DATABASE_URL=sqlite+aiosqlite:////tmp/lokki.db lokki-server
+          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 \
+            http://127.0.0.1:8080/v1/info
+          docker logs lokki
