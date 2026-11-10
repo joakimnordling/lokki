@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 import lokki_server
 from lokki_server.auth import hash_token
 from lokki_server.cli import app
+from lokki_server.pairing import pairing_qr
 
 runner = CliRunner(env={"COLUMNS": "300"})  # no wrapping in error messages
 
@@ -44,6 +45,19 @@ def test_vault_and_tokens() -> None:
     assert "tokens: 1" in run("vault", "list")
     assert "Vault jocke deleted." in run("vault", "delete", "jocke", "--yes")
     assert "No vaults yet" in run("vault", "list")
+
+
+def test_token_add_with_a_qr_code() -> None:
+    run("vault", "add", "jocke")
+    plain = run("token", "add", "jocke", "laptop")
+    assert "Scan QR Code" not in plain
+    assert "\u2588" not in plain
+
+    added = run("token", "add", "jocke", "iPhone 17 Pro", "--qr")
+    token = re.search(r"Token:\s+(lk_\S+)", added)
+    assert token is not None
+    assert "Or scan this in the app's Sync screen (Scan QR Code):" in added
+    assert added.endswith(pairing_qr("https://sync.example.com", token.group(1)))
 
 
 def fails(*args: str) -> str:

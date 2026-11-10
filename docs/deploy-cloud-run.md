@@ -131,10 +131,10 @@ export LOKKI_PUBLIC_URL=https://lokki-sync1-123456789.europe-north1.run.app   # 
 
 uv run lokki-server migrate        # PostgreSQL only, if the server hasn't started yet: creates the tables
 uv run lokki-server vault add jocke
-uv run lokki-server token add jocke "iPhone 17 Pro"
+uv run lokki-server token add jocke "iPhone 17 Pro" --qr
 ```
 
-Enter the URL and token in the app: Preferences → Sync.
+Enter the URL and token in the app: Preferences → Sync, or scan the QR code there with Scan QR Code.
 
 ## A domain of your own
 

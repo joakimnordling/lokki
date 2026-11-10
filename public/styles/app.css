@@ -1008,3 +1008,47 @@ main {
   padding: 4px 8px;
   opacity: 0.7;
 }
+
+/* Scanning a server's QR code (src/ui/scan.js) */
+.sheet .scanbtn {
+  margin-top: 4px;
+}
+.scan {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #000;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+.scan video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scan .frame {
+  position: relative;
+  width: min(70vw, 300px);
+  aspect-ratio: 1;
+  border: 3px solid #fff;
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+}
+.scan p {
+  position: relative;
+  text-align: center;
+  max-width: 320px;
+  font-size: 0.95rem;
+}
+.scan button {
+  position: relative;
+  color: #fff;
+  border-color: #fff;
+}

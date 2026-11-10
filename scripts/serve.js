@@ -21,7 +21,11 @@ const types = {
 };
 
 // Packages the unbundled modules import through the import map in index.html
-const vendor = { "/vendor/hash-wasm.js": join(root, "node_modules", "hash-wasm", "dist", "index.esm.min.js") };
+const vendor = {
+  "/vendor/hash-wasm.js": join(root, "node_modules", "hash-wasm", "dist", "index.esm.min.js"),
+  "/vendor/qr-scanner.min.js": join(root, "node_modules", "qr-scanner", "qr-scanner.min.js"),
+  "/vendor/qr-scanner-worker.min.js": join(root, "node_modules", "qr-scanner", "qr-scanner-worker.min.js"),
+};
 
 async function find(path) {
   if (vendor[path]) return vendor[path];

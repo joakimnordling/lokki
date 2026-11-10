@@ -15,6 +15,7 @@ from lokki_server.clock import iso, now_ms
 from lokki_server.config import Settings
 from lokki_server.models import Scope
 from lokki_server.names import check_label, check_vault_name
+from lokki_server.pairing import pairing_qr
 from lokki_server.storage import Storage, migrate, open_storage
 from lokki_server.storage.base import NameTaken, VaultId
 
@@ -221,6 +222,13 @@ async def token_add(
         ),
     ],
     scope: ScopeOption = Scope.WRITE,
+    qr: Annotated[
+        bool,
+        typer.Option(
+            "--qr",
+            help="Also print a QR code to scan in the app (Sync → Scan QR Code)",
+        ),
+    ] = False,
 ) -> None:
     """Add a token to a vault and print the URL and token to enter in the app."""
     async with _storage() as storage:
@@ -236,9 +244,13 @@ async def token_add(
             )
         except NameTaken:
             _fail(f"The vault {vault} has a token called {label} already.")
+    url = Settings().public_url
     typer.echo(f"Token {label} ({scope}) for the vault {vault}. Enter these in the app:")
-    typer.echo(f"URL:    {Settings().public_url}")
+    typer.echo(f"URL:    {url}")
     typer.echo(f"Token:  {token}    (shown only now)")
+    if qr:
+        typer.echo("\nOr scan this in the app's Sync screen (Scan QR Code):\n")
+        typer.echo(pairing_qr(url, token), nl=False)
 
 
 @token_app.command("list")

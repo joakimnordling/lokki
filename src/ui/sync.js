@@ -6,6 +6,7 @@ import { ServerError } from "../sync/http.js";
 import { hostOf, OTHER_APP, sync } from "../sync/manager.js";
 import { $ } from "./dom.js";
 import { ICON } from "./icons.js";
+import { canScan, scanPairing } from "./scan.js";
 import { sheet, toast } from "./sheets.js";
 
 const MIN_PASSPHRASE = 12;
@@ -34,7 +35,20 @@ const NEW = 'type="password" autocomplete="new-password"';
 const CURRENT = 'type="password" autocomplete="current-password"';
 const serverFields = (url = "") =>
   field("sUrl", "URL", `type="url" inputmode="url" placeholder="https://sync.example.com" value="${esc(url)}"`) +
-  field("sToken", "Token", `type="password" placeholder="lk_…"`);
+  field("sToken", "Token", `type="password" placeholder="lk_…"`) +
+  (canScan() ? '<button class="plain scanbtn" id="sScan">Scan QR Code</button>' : "");
+// Fill the URL and token from a scanned QR code
+function scanButton() {
+  const button = $("#sScan");
+  if (!button) return;
+  button.onclick = async () => {
+    const found = await scanPairing();
+    if (!found) return;
+    $("#sUrl").value = found.url;
+    $("#sToken").value = found.token;
+    toast("Filled in from the QR code.");
+  };
+}
 
 function explain(e) {
   if (e instanceof OtherAppError) return OTHER_APP;
@@ -101,6 +115,7 @@ function connect() {
       }),
     },
   );
+  scanButton();
   $("#sUrl").focus();
 }
 
@@ -283,6 +298,7 @@ function addServer() {
       }),
     },
   );
+  scanButton();
   $("#sUrl").focus();
 }
 

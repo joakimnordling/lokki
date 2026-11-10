@@ -23,6 +23,13 @@ async function files(dir) {
   return list;
 }
 
+// [file in node_modules/qr-scanner, file in vendor/]
+export const QR_SCANNER = [
+  ["qr-scanner.min.js", "qr-scanner.min.js"],
+  ["qr-scanner-worker.min.js", "qr-scanner-worker.min.js"],
+  ["LICENSE", "qr-scanner-LICENSE.txt"],
+];
+
 export async function buildSite() {
   await rm(out, { recursive: true, force: true });
   await mkdir(join(out, "assets"), { recursive: true });
@@ -64,6 +71,12 @@ export async function buildSite() {
   );
   await writeFile(join(out, "index.html"), html);
   await writeFile(join(out, "CNAME"), `${DOMAIN}\n`);
+  // The QR scanner, loaded only when scanning (src/ui/scan.js); its worker sits next to it
+  await mkdir(join(out, "vendor"), { recursive: true });
+  for (const [from, to] of QR_SCANNER) {
+    const text = await readFile(join(root, "node_modules", "qr-scanner", from), "utf8");
+    await writeFile(join(out, "vendor", to), text.replace(/\n\/\/# sourceMappingURL=.*\n?$/, "\n"));
+  }
 
   const cached = ["./", ...(await files(out)).map((f) => relative(out, f).split("\\").join("/"))].filter(
     (f) => !/^(CNAME|index\.html|fonts\/OFL\.txt|icons\/lokki-icon-1024\.png)$/.test(f),

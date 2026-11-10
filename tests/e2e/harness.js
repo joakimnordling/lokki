@@ -58,16 +58,21 @@ function merge(a, b) {
   return a;
 }
 
-export async function startHarness() {
+export async function startHarness({ args = [] } = {}) {
   const artifact = await readFile(join(root, "dist", "lokki-artifact.html"), "utf8");
   const page = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${artifact}</body></html>`;
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, "http://x").pathname;
     if (path === "/" || path.startsWith("/nodb")) return res.writeHead(200, { "content-type": "text/html" }).end(page);
-    if (path === "/dev/vendor/hash-wasm.js")
+    const vendored = {
+      "/dev/vendor/hash-wasm.js": ["hash-wasm", "dist", "index.esm.min.js"],
+      "/dev/vendor/qr-scanner.min.js": ["qr-scanner", "qr-scanner.min.js"],
+      "/dev/vendor/qr-scanner-worker.min.js": ["qr-scanner", "qr-scanner-worker.min.js"],
+    }[path];
+    if (vendored)
       return res
         .writeHead(200, { "content-type": "text/javascript" })
-        .end(await readFile(join(root, "node_modules", "hash-wasm", "dist", "index.esm.min.js")));
+        .end(await readFile(join(root, "node_modules", ...vendored)));
     const site = path.startsWith("/site/");
     if (path.startsWith("/dev/") || site) {
       const rel = (site ? path.slice(6) : path.slice(5)) || "index.html";
@@ -86,7 +91,10 @@ export async function startHarness() {
   await new Promise((ok) => server.listen(0, ok));
   const base = `http://localhost:${server.address().port}`;
   // CHROMIUM_PATH: run with a Chromium other than the one this Playwright version downloads (local runs only)
-  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+  const browser = await chromium.launch({
+    args,
+    ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+  });
 
   const store = { metrics: new Map(), "entries-v2": new Map() };
   const writes = [];
