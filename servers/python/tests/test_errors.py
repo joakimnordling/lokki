@@ -109,13 +109,13 @@ def test_errors_have_only_their_own_fields(client: TestClient, writer: dict[str,
     client.post(
         "/v1/vault/rows",
         headers=writer,
-        json={"base": 0, "rows": [{"key": "A" * 22, "data": "v1.x"}]},
+        json={"base": 0, "mark": None, "rows": [{"key": "A" * 22, "data": "v1.x"}]},
     )
 
     stale = client.post(
         "/v1/vault/rows",
         headers=writer,
-        json={"base": 0, "rows": [{"key": "B" * 22, "data": "v1.y"}]},
+        json={"base": 0, "mark": None, "rows": [{"key": "B" * 22, "data": "v1.y"}]},
     )
     unknown = client.get(
         "/v1/vault",

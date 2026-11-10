@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 import pytest
@@ -8,8 +9,14 @@ from lokki_server.config import Limits
 from tests.helpers import key
 
 
-def push(client: TestClient, headers: dict[str, str], base: int, *rows: tuple[int, str]) -> Any:
-    body = {"base": base, "rows": [{"key": key(n), "data": data} for n, data in rows]}
+def push(
+    client: TestClient,
+    headers: dict[str, str],
+    base: int,
+    *rows: tuple[int, str],
+    mark: str | None = None,
+) -> Any:
+    body = {"base": base, "mark": mark, "rows": [{"key": key(n), "data": data} for n, data in rows]}
     return client.post("/v1/vault/rows", headers=headers, json=body)
 
 
@@ -24,7 +31,7 @@ def test_push_then_pull(
 ) -> None:
     pushed = push(client, writer, 0, (1, "v1.one"), (2, "v1.two"))
 
-    assert pushed.json() == {"head": 2}
+    assert pushed.json() == {"head": 2, "mark": "mark1"}
     assert pull(client, writer) == snapshot_json
 
 
@@ -32,7 +39,7 @@ def test_a_new_version_replaces_the_row_and_gets_a_new_number(
     client: TestClient, writer: dict[str, str]
 ) -> None:
     push(client, writer, 0, (1, "v1.one"), (2, "v1.two"))
-    push(client, writer, 2, (1, "v1.one-again"))
+    push(client, writer, 2, (1, "v1.one-again"), mark="mark1")
 
     everything = pull(client, writer)
 
@@ -80,13 +87,20 @@ def test_the_cursor_reaches_the_head_when_newer_versions_left_gaps(
     client: TestClient, writer: dict[str, str]
 ) -> None:
     push(client, writer, 0, (1, "v1.a"), (2, "v1.b"))
-    push(client, writer, 2, (1, "v1.a2"), (2, "v1.b2"))
+    push(client, writer, 2, (1, "v1.a2"), (2, "v1.b2"), mark="mark1")
 
     result = pull(client, writer, since=1)
 
     assert [r["seq"] for r in result["rows"]] == [3, 4]
     assert (result["cursor"], result["more"], result["head"]) == (4, False, 4)
-    assert pull(client, writer, since=4) == {"rows": [], "cursor": 4, "more": False, "head": 4}
+    assert pull(client, writer, since=4) == {
+        "rows": [],
+        "cursor": 4,
+        "more": False,
+        "head": 4,
+        "since_mark": "mark2",
+        "mark": "mark2",
+    }
 
 
 def test_since_beyond_the_head(client: TestClient, writer: dict[str, str]) -> None:
@@ -94,7 +108,54 @@ def test_since_beyond_the_head(client: TestClient, writer: dict[str, str]) -> No
 
     result = pull(client, writer, since=50)
 
-    assert result == {"rows": [], "cursor": 1, "more": False, "head": 1}
+    assert result == {
+        "rows": [],
+        "cursor": 1,
+        "more": False,
+        "head": 1,
+        "since_mark": None,  # the server never wrote row 50: it lost changes
+        "mark": "mark1",
+    }
+
+
+def test_marks_tell_which_push_wrote_the_rows(client: TestClient, writer: dict[str, str]) -> None:
+    push(client, writer, 0, (1, "v1.a"), (2, "v1.b"))
+    push(client, writer, 2, (3, "v1.c"), mark="mark1")
+
+    def marks(since: int, **params: int) -> tuple[str | None, int, str | None]:
+        page = pull(client, writer, since=since, **params)
+        return page["since_mark"], page["cursor"], page["mark"]
+
+    assert marks(0) == (None, 3, "mark2")
+    assert marks(0, limit=1) == (None, 1, "mark1")
+    assert marks(2) == ("mark1", 3, "mark2")
+    assert marks(3) == ("mark2", 3, "mark2")
+
+
+def test_a_push_from_another_history_writes_nothing(
+    client: TestClient, writer: dict[str, str]
+) -> None:
+    """The same head, but not the push the device pulled up to, e.g. after a restore."""
+    push(client, writer, 0, (1, "v1.a"))
+
+    for mark in (None, "other"):
+        response = push(client, writer, 1, (2, "v1.b"), mark=mark)
+        assert response.status_code == 409
+        assert response.json()["error"] == "behind"
+    assert pull(client, writer)["head"] == 1
+
+
+@pytest.mark.parametrize("history", [2])
+def test_older_marks_are_forgotten(client: TestClient, writer: dict[str, str]) -> None:
+    mark = None
+    for n in range(3):
+        mark = push(client, writer, n, (n + 1, "v1.x"), mark=mark).json()["mark"]
+
+    assert [pull(client, writer, since=s)["since_mark"] for s in (1, 2, 3)] == [
+        None,
+        "mark2",
+        "mark3",
+    ]
 
 
 @pytest.mark.parametrize("limits", [Limits(pull=3, push=5, row_bytes=256)])
@@ -109,17 +170,27 @@ def test_limit_is_an_upper_bound(client: TestClient, writer: dict[str, str]) -> 
 @pytest.mark.parametrize(
     ("body", "status"),
     [
-        ({"base": 0, "rows": []}, 400),
-        ({"base": -1, "rows": [{"key": key(1), "data": "v1.x"}]}, 400),
-        ({"base": 0, "rows": [{"key": "short", "data": "v1.x"}]}, 400),
-        ({"base": 0, "rows": [{"key": key(1) + "=", "data": "v1.x"}]}, 400),
-        ({"base": 0, "rows": [{"key": key(1), "data": ""}]}, 400),
+        ({"base": 0, "rows": [{"key": key(1), "data": "v1.x"}]}, 400),
+        ({"base": 0, "mark": "", "rows": [{"key": key(1), "data": "v1.x"}]}, 400),
+        ({"base": 0, "mark": "no spaces", "rows": [{"key": key(1), "data": "v1.x"}]}, 400),
+        ({"base": 0, "mark": None, "rows": []}, 400),
+        ({"base": -1, "mark": None, "rows": [{"key": key(1), "data": "v1.x"}]}, 400),
+        ({"base": 0, "mark": None, "rows": [{"key": "short", "data": "v1.x"}]}, 400),
+        ({"base": 0, "mark": None, "rows": [{"key": key(1) + "=", "data": "v1.x"}]}, 400),
+        ({"base": 0, "mark": None, "rows": [{"key": key(1), "data": ""}]}, 400),
         (
-            {"base": 0, "rows": [{"key": key(1), "data": "v1.a"}, {"key": key(1), "data": "v1.b"}]},
+            {
+                "base": 0,
+                "mark": None,
+                "rows": [{"key": key(1), "data": "v1.a"}, {"key": key(1), "data": "v1.b"}],
+            },
             400,
         ),
-        ({"base": 0, "rows": [{"key": key(n), "data": "v1.x"} for n in range(6)]}, 413),
-        ({"base": 0, "rows": [{"key": key(1), "data": "v1." + "x" * 300}]}, 413),
+        (
+            {"base": 0, "mark": None, "rows": [{"key": key(n), "data": "v1.x"} for n in range(6)]},
+            413,
+        ),
+        ({"base": 0, "mark": None, "rows": [{"key": key(1), "data": "v1." + "x" * 300}]}, 413),
     ],
 )
 def test_invalid_pushes(
@@ -138,3 +209,13 @@ def test_invalid_pulls(client: TestClient, writer: dict[str, str], params: dict[
 
     assert response.status_code == 400
     assert response.json()["error"] == "invalid_request"
+
+
+def test_marks_are_random(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.undo()  # the real marks, not the tests' mark1, mark2, …
+    from lokki_server.api import new_mark
+
+    marks = {new_mark() for _ in range(100)}
+
+    assert len(marks) == 100
+    assert all(re.fullmatch(r"[A-Za-z0-9_-]{16}", m) for m in marks)

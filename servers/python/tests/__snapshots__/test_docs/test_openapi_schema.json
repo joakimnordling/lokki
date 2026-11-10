@@ -74,10 +74,20 @@
             ],
             "title": "Head",
             "type": "integer"
+          },
+          "mark": {
+            "description": "This push's mark, to keep with `head`",
+            "examples": [
+              "b7Rk2LwQx0VdNe4g"
+            ],
+            "pattern": "^[A-Za-z0-9_-]{1,32}$",
+            "title": "Mark",
+            "type": "string"
           }
         },
         "required": [
-          "head"
+          "head",
+          "mark"
         ],
         "title": "Head",
         "type": "object"
@@ -377,6 +387,22 @@
             "title": "Head",
             "type": "integer"
           },
+          "mark": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The mark of the push that wrote row number `cursor`, to keep with it; null for 0, or when the server doesn't know it",
+            "examples": [
+              "Xq3vT0bK9mWc1sPa"
+            ],
+            "title": "Mark"
+          },
           "more": {
             "description": "Whether there are more rows to fetch now",
             "examples": [
@@ -391,13 +417,31 @@
             },
             "title": "Rows",
             "type": "array"
+          },
+          "since_mark": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The mark of the push that wrote row number `since`; null for 0, or when the server doesn't know it. Differing from the mark the device kept with `since` means the vault's history changed: pull everything (protocol 7.4).",
+            "examples": [
+              "Xq3vT0bK9mWc1sPa"
+            ],
+            "title": "Since Mark"
           }
         },
         "required": [
           "rows",
           "cursor",
           "more",
-          "head"
+          "head",
+          "since_mark",
+          "mark"
         ],
         "title": "Pull",
         "type": "object"
@@ -414,6 +458,22 @@
             "title": "Base",
             "type": "integer"
           },
+          "mark": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The `mark` that came with `base`: null if it was 0. If the latest push has another mark, nothing is written either.",
+            "examples": [
+              "Xq3vT0bK9mWc1sPa"
+            ],
+            "title": "Mark"
+          },
           "rows": {
             "description": "At most `limits.push` rows, each key once",
             "items": {
@@ -426,6 +486,7 @@
         },
         "required": [
           "base",
+          "mark",
           "rows"
         ],
         "title": "Push",
@@ -1141,7 +1202,7 @@
         ]
       },
       "post": {
-        "description": "Adds the rows, replacing any with the same key, all or none, and only if `base` is still the\nvault's `head`. Otherwise nothing is written: `409 behind`, so pull first (protocol 5.3, 7.3).",
+        "description": "Adds the rows, replacing any with the same key, all or none, and only if `base` is still the\nvault's `head` and `mark` the latest push's. Otherwise nothing is written: `409 behind`, so pull\nfirst (protocol 5.3, 7.3, 7.4).",
         "operationId": "push_v1_vault_rows_post",
         "requestBody": {
           "content": {

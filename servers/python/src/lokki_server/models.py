@@ -44,6 +44,9 @@ RowData = Annotated[
     ),
 ]
 Counter = Annotated[int, Field(ge=0)]
+# A push's mark: a random ID that tells this history of the vault apart from another one that
+# reached the same numbers (protocol 7.4)
+Mark = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,32}$")]
 
 
 # What every error has: `error` is a code to act on, `message` is for people
@@ -323,6 +326,17 @@ class Pull(BaseModel):
         "(protocol 7.4).",
         examples=[1042],
     )
+    since_mark: Mark | None = Field(
+        description="The mark of the push that wrote row number `since`; null for 0, or when the "
+        "server doesn't know it. Differing from the mark the device kept with `since` means the "
+        "vault's history changed: pull everything (protocol 7.4).",
+        examples=["Xq3vT0bK9mWc1sPa"],
+    )
+    mark: Mark | None = Field(
+        description="The mark of the push that wrote row number `cursor`, to keep with it; null "
+        "for 0, or when the server doesn't know it",
+        examples=["Xq3vT0bK9mWc1sPa"],
+    )
 
 
 class RowIn(BaseModel):
@@ -340,6 +354,11 @@ class Push(BaseModel):
         "is written: pull first.",
         examples=[1042],
     )
+    mark: Mark | None = Field(
+        description="The `mark` that came with `base`: null if it was 0. If the latest push has "
+        "another mark, nothing is written either.",
+        examples=["Xq3vT0bK9mWc1sPa"],
+    )
     rows: Annotated[list[RowIn], Field(min_length=1)] = Field(
         description="At most `limits.push` rows, each key once"
     )
@@ -351,6 +370,10 @@ class Head(BaseModel):
     head: int = Field(
         description="The vault's counter now; the rows got the numbers after `base`",
         examples=[1044],
+    )
+    mark: Mark = Field(
+        description="This push's mark, to keep with `head`",
+        examples=["b7Rk2LwQx0VdNe4g"],
     )
 
 

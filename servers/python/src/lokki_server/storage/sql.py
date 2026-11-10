@@ -25,7 +25,7 @@ from lokki_server.storage.base import (
     VaultSummary,
     WriteResult,
 )
-from lokki_server.storage.schema import rows, server, tokens, vaults
+from lokki_server.storage.schema import pushes, rows, server, tokens, vaults
 
 
 def engine_url(url: str) -> str:
@@ -229,6 +229,7 @@ class SqlStorage:
     async def delete_vault(self, vault_id: VaultId) -> bool:
         async with self.engine.begin() as conn:
             await conn.execute(delete(rows).where(rows.c.vault_id == vault_id))
+            await conn.execute(delete(pushes).where(pushes.c.vault_id == vault_id))
             await conn.execute(delete(tokens).where(tokens.c.vault_id == vault_id))
             result = await conn.execute(delete(vaults).where(vaults.c.id == vault_id))
             return result.rowcount == 1
@@ -325,41 +326,75 @@ class SqlStorage:
                     .limit(limit + 1)
                 )
             ).all()
-        more = len(found) > limit
-        page = [
-            Row(
-                key=r.key,
-                seq=r.seq,
-                data=r.data,
+            more = len(found) > limit
+            page = [
+                Row(
+                    key=r.key,
+                    seq=r.seq,
+                    data=r.data,
+                )
+                for r in found[:limit]
+            ]
+            cursor = page[-1].seq if more else head
+            return PullResult(
+                rows=page,
+                cursor=cursor,
+                more=more,
+                head=head,
+                since_mark=await self._mark_at(conn, vault_id, since),
+                mark=await self._mark_at(conn, vault_id, cursor),
             )
-            for r in found[:limit]
-        ]
-        return PullResult(
-            rows=page,
-            cursor=page[-1].seq if more else head,
-            more=more,
-            head=head,
-        )
 
     async def push(
         self,
         vault_id: VaultId,
         base: int,
+        base_mark: str | None,
         new_rows: list[tuple[str, str]],
+        new_mark: str,
+        history: int,
         now: int,
     ) -> WriteResult:
+        head = base + len(new_rows)
         async with self.engine.begin() as conn:
-            # Claim the numbers base+1 .. base+n, only if nobody has pushed since `base`.
-            claimed = await conn.execute(
-                update(vaults)
-                .where(vaults.c.id == vault_id, vaults.c.head == base)
-                .values(
-                    head=vaults.c.head + len(new_rows),
-                    changed=now,
+            # Claim the numbers base+1 .. base+n, only if nobody has pushed since `base`, in this
+            # history.
+            number = (
+                await conn.execute(
+                    update(vaults)
+                    .where(
+                        vaults.c.id == vault_id,
+                        vaults.c.head == base,
+                        vaults.c.mark.is_(None)
+                        if base_mark is None
+                        else vaults.c.mark == base_mark,
+                    )
+                    .values(
+                        head=head,
+                        mark=new_mark,
+                        pushes=vaults.c.pushes + 1,
+                        changed=now,
+                    )
+                    .returning(vaults.c.pushes)
+                )
+            ).scalar_one_or_none()
+            if number is None:
+                return WriteResult(Outcome.BEHIND, await self._head(conn, vault_id))
+            await conn.execute(
+                insert(pushes).values(
+                    vault_id=vault_id,
+                    number=number,
+                    base=base,
+                    head=head,
+                    mark=new_mark,
                 )
             )
-            if claimed.rowcount != 1:
-                return WriteResult(Outcome.BEHIND, await self._head(conn, vault_id))
+            await conn.execute(
+                delete(pushes).where(
+                    pushes.c.vault_id == vault_id,
+                    pushes.c.number <= number - history,
+                )
+            )
             keys = [key for key, _ in new_rows]
             await conn.execute(
                 delete(rows).where(rows.c.vault_id == vault_id, rows.c.key.in_(keys))
@@ -374,7 +409,22 @@ class SqlStorage:
                     )
                 ],
             )
-            return WriteResult(Outcome.OK, base + len(new_rows))
+            return WriteResult(Outcome.OK, head, new_mark)
+
+    @staticmethod
+    async def _mark_at(conn: AsyncConnection, vault_id: VaultId, seq: int) -> str | None:
+        """The mark of the push that wrote row number `seq`, if it's remembered."""
+        if seq == 0:
+            return None
+        found = (
+            await conn.execute(
+                select(pushes.c.base, pushes.c.mark)
+                .where(pushes.c.vault_id == vault_id, pushes.c.head >= seq)
+                .order_by(pushes.c.head)
+                .limit(1)
+            )
+        ).one_or_none()
+        return found.mark if found is not None and found.base < seq else None
 
     @staticmethod
     async def _head(conn: AsyncConnection, vault_id: VaultId) -> int:

@@ -16,7 +16,7 @@ const RETRY_MS = [5000, 20000];
 
 export const sync = {
   vault: null, // {keyring, keys}
-  servers: [], // [{bit, url, token, id, cursor, keyringVersion, name, last: {at, ok, error, report}}]
+  servers: [], // [{bit, url, token, id, cursor, mark, keyringVersion, name, last: {at, ok, error, report}}]
   running: false,
   again: false,
   timer: 0,
@@ -115,6 +115,7 @@ export const sync = {
       token,
       name: name || hostOf(url),
       cursor: 0,
+      mark: null,
       keyringVersion: 0,
       last: null,
     };

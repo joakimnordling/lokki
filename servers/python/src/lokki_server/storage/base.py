@@ -55,12 +55,20 @@ class Row:
     slots=True,
 )
 class PullResult:
-    """Rows after a sequence number, and where to continue."""
+    """
+    Rows after a sequence number, and where to continue.
+
+    `since_mark` is the mark of the push that wrote row number `since`, and `mark` that of the
+    push that wrote row number `cursor`: None for 0, or when the server doesn't know (it has
+    forgotten that push, or never had it).
+    """
 
     rows: list[Row]
     cursor: int
     more: bool
     head: int
+    since_mark: str | None
+    mark: str | None
 
 
 class Outcome(Enum):
@@ -76,10 +84,11 @@ class Outcome(Enum):
     slots=True,
 )
 class WriteResult:
-    """The outcome of a conditional write, and the counter after it."""
+    """The outcome of a conditional write, and the counter after it (for a push, also its mark)."""
 
     outcome: Outcome
     version: int
+    mark: str | None = None
 
 
 class NameTaken(Exception):
@@ -124,6 +133,12 @@ class Storage(Protocol):
     Every write that the protocol makes conditional (`put_keyring`, `push`) must be atomic: check
     the counter and write in one transaction, so two devices can never both succeed from the same
     `base`.
+
+    Each push gets a mark, a random ID, which tells this vault's history apart from another one
+    that reached the same numbers, e.g. after the database was restored from a backup and devices
+    pushed again (protocol 7.4). The storage remembers the marks of the latest `history` pushes,
+    together with the rows each wrote (`base` + 1 to its `head`), and forgets older ones in the same
+    transaction as a push.
     """
 
     async def server_id(self) -> str:
@@ -209,8 +224,15 @@ class Storage(Protocol):
         self,
         vault_id: VaultId,
         base: int,
+        base_mark: str | None,
         new_rows: list[tuple[str, str]],
+        new_mark: str,
+        history: int,
         now: int,
     ) -> WriteResult:
-        """Write `(key, data)` rows with the next sequence numbers if `base` is the current head."""
+        """
+        Write `(key, data)` rows with the next sequence numbers if `base` is the current head and
+        `base_mark` the mark of the latest push (None before the first). Records the push with
+        `new_mark`, keeping the marks of the latest `history` pushes.
+        """
         ...

@@ -140,3 +140,9 @@ class Settings(BaseSettings):
     )
     limits: Limits = Field(default_factory=Limits)
     pool: Pool = Field(default_factory=Pool)
+    history: int = Field(
+        default=1000,
+        ge=1,
+        description="How many of each vault's latest pushes the server remembers the marks of. A "
+        "device that last synced longer ago pulls everything once (protocol 7.4).",
+    )

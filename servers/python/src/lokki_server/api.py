@@ -222,6 +222,8 @@ async def pull(
         cursor=result.cursor,
         more=result.more,
         head=result.head,
+        since_mark=result.since_mark,
+        mark=result.mark,
     )
 
 
@@ -246,7 +248,8 @@ async def push(
 ) -> Head:
     """
     Adds the rows, replacing any with the same key, all or none, and only if `base` is still the
-    vault's `head`. Otherwise nothing is written: `409 behind`, so pull first (protocol 5.3, 7.3).
+    vault's `head` and `mark` the latest push's. Otherwise nothing is written: `409 behind`, so pull
+    first (protocol 5.3, 7.3, 7.4).
     """
     limits = config.limits
     if len(body.rows) > limits.push:
@@ -256,15 +259,27 @@ async def push(
     keys = [r.key for r in body.rows]
     if len(set(keys)) != len(keys):
         raise errors.invalid_request("A push can't contain the same key twice.")
+    mark = new_mark()
     result = await store.push(
         token.vault_id,
         body.base,
+        body.mark,
         [(r.key, r.data) for r in body.rows],
+        mark,
+        config.history,
         now_ms(),
     )
     if result.outcome is Outcome.BEHIND:
         raise errors.behind(result.version)
-    return Head(head=result.version)
+    return Head(
+        head=result.version,
+        mark=mark,
+    )
+
+
+def new_mark() -> str:
+    """A push's mark: random, so another history can't come up with the same one (protocol 7.4)."""
+    return secrets.token_urlsafe(12)
 
 
 @test_router.post(

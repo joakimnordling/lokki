@@ -99,8 +99,14 @@ def test_a_keyring_of_another_vault_is_refused(http: httpx2.Client, writer: dict
 
 def test_status_counts_rows(http: httpx2.Client, writer: dict[str, str]) -> None:
     rows = [{"key": key(n), "data": "v1.x"} for n in range(3)]
-    http.post("/v1/vault/rows", headers=writer, json={"base": 0, "rows": rows})
-    http.post("/v1/vault/rows", headers=writer, json={"base": 3, "rows": rows[:1]})
+    first = http.post(
+        "/v1/vault/rows", headers=writer, json={"base": 0, "mark": None, "rows": rows}
+    )
+    http.post(
+        "/v1/vault/rows",
+        headers=writer,
+        json={"base": 3, "mark": first.json()["mark"], "rows": rows[:1]},
+    )
 
     vault = http.get("/v1/vault", headers=writer).json()
 

@@ -7,6 +7,7 @@ running (FIRESTORE_EMULATOR_HOST). CI runs all three. Tests of one storage take 
 """
 
 import asyncio
+import itertools
 import os
 import re
 import uuid
@@ -76,6 +77,16 @@ def _new_postgres_database(server: str) -> str:
     return urlunsplit(urlsplit(server)._replace(path=f"/{name}"))
 
 
+@pytest.fixture(autouse=True)
+def marks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pushes get the marks mark1, mark2, … in each test, so responses can be compared."""
+    numbers = itertools.count(1)
+    monkeypatch.setattr(
+        "lokki_server.api.new_mark",
+        lambda: f"mark{next(numbers)}",
+    )
+
+
 @pytest.fixture
 def limits() -> Limits:
     """The limits for the app; small push and row limits make them easy to test."""
@@ -83,13 +94,20 @@ def limits() -> Limits:
 
 
 @pytest.fixture
-def settings(database_url: str, limits: Limits) -> Settings:
+def history() -> int:
+    """How many pushes' marks the server remembers."""
+    return 1000
+
+
+@pytest.fixture
+def settings(database_url: str, limits: Limits, history: int) -> Settings:
     return Settings(
         database_url=database_url,
         public_url="https://sync.example.com",
         cors_origins=[ORIGIN],
         test_mode=True,
         limits=limits,
+        history=history,
     )
 
 

@@ -1,6 +1,7 @@
 {
   "cursor": 2,
   "head": 2,
+  "mark": "mark1",
   "more": false,
   "rows": [
     {
@@ -13,5 +14,6 @@
       "key": "AAAAAAAAAAAAAAAAAAAAAg",
       "seq": 2
     }
-  ]
+  ],
+  "since_mark": null
 }

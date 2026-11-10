@@ -63,8 +63,8 @@ export class ServerClient {
   pull(since, limit) {
     return this.request("GET", `/v1/vault/rows?since=${since}${limit ? `&limit=${limit}` : ""}`);
   }
-  push(base, rows) {
-    return this.request("POST", "/v1/vault/rows", { base, rows });
+  push(base, mark, rows) {
+    return this.request("POST", "/v1/vault/rows", { base, mark, rows });
   }
   deleteVault() {
     return this.request("DELETE", "/v1/vault");
