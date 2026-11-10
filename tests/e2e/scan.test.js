@@ -13,30 +13,21 @@ import { home, startHarness, toastText } from "./harness.js";
  * background: the harder case.
  */
 async function cameraVideo() {
-  const rows = (
-    await readFile(new URL("media/pairing-qr.txt", import.meta.url), "utf8")
-  )
-    .trim()
-    .split("\n");
+  const rows = (await readFile(new URL("media/pairing-qr.txt", import.meta.url), "utf8")).trim().split("\n");
   const [W, H, SCALE] = [640, 480, 5];
   const side = (rows.length + 8) * SCALE; // with a quiet zone of 4 modules
   const [left, top] = [(W - side) >> 1, (H - side) >> 1];
   const luma = Buffer.alloc(W * H, 128); // grey around it
   for (let y = 0; y < side; y++)
     for (let x = 0; x < side; x++) {
-      const dark =
-        rows[Math.floor(y / SCALE) - 4]?.[Math.floor(x / SCALE) - 4] === "#";
+      const dark = rows[Math.floor(y / SCALE) - 4]?.[Math.floor(x / SCALE) - 4] === "#";
       luma[(top + y) * W + left + x] = dark ? 235 : 16;
     }
   const file = join(await mkdtemp(join(tmpdir(), "lokki-scan-")), "camera.y4m");
   const chroma = Buffer.alloc((W * H) / 2, 128); // no colour: two quarter-size planes
   await writeFile(
     file,
-    Buffer.concat([
-      Buffer.from(`YUV4MPEG2 W${W} H${H} F10:1 Ip A1:1 C420\nFRAME\n`),
-      luma,
-      chroma,
-    ]),
+    Buffer.concat([Buffer.from(`YUV4MPEG2 W${W} H${H} F10:1 Ip A1:1 C420\nFRAME\n`), luma, chroma]),
   );
   return file;
 }
