@@ -10,6 +10,9 @@ import { ServerClient } from "./http.js";
 
 const EVERY_MS = 60000;
 const AFTER_CHANGE_MS = 3000;
+// After a failure that may pass (offline, a server starting up from zero instances, 429, 5xx): try again this soon,
+// and only show the server as failing once these tries have failed too. A server's Retry-After is honoured.
+const RETRY_MS = [5000, 20000];
 
 export const sync = {
   vault: null, // {keyring, keys}
@@ -18,6 +21,7 @@ export const sync = {
   again: false,
   timer: 0,
   device: null,
+  retryDelays: RETRY_MS,
   listeners: new Set(),
 
   async load() {
@@ -164,13 +168,24 @@ export const sync = {
       const links = this.servers.map((server) => ({ server, http: this.client(server.url, server.token) }));
       const results = await syncAll({ device: this.device, keys: this.vault.keys, links });
       await this.device.persist();
-      for (const { server, report, error } of results)
+      let retry = null;
+      for (const { server, report, error } of results) {
+        if (error?.passing && (server.tries || 0) < this.retryDelays.length) {
+          // keep the last result showing for now, and try again soon
+          const wait = Math.max(this.retryDelays[server.tries || 0], Math.min(error.retryAfter || 0, 120) * 1000);
+          server.tries = (server.tries || 0) + 1;
+          retry = retry === null ? wait : Math.min(retry, wait);
+          continue;
+        }
+        server.tries = 0;
         server.last = {
           at: Date.now(),
           ok: !error,
           error: error ? describe(error) : null,
           report: report ? summary(report) : null,
         };
+      }
+      if (retry !== null) this.soon(retry);
       await idb.write(this.servers.map((s) => ["sync", "put", { ...s }]));
       hooks.render();
     } finally {

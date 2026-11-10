@@ -1,12 +1,18 @@
 // A client for a sync server's HTTP API (docs/sync-protocol.md, section 5.3).
 
-/** An error response: `status` is the HTTP status (0 when the server couldn't be reached), `body` the JSON. */
+/** An error response: `status` is the HTTP status (0 when the server couldn't be reached), `body` the JSON, and
+    `retryAfter` the seconds a server asked to wait (Retry-After), if any. */
 export class ServerError extends Error {
-  constructor(status, body) {
+  constructor(status, body, retryAfter = null) {
     super(body?.message || (status ? `HTTP ${status}` : "can't reach the server"));
     this.status = status;
     this.code = body?.error || (status ? "error" : "unreachable");
     this.body = body || {};
+    this.retryAfter = retryAfter;
+  }
+  /** Whether trying again soon may work: unreachable, timed out, too many requests, or a server's own trouble. */
+  get passing() {
+    return this.status === 0 || this.status === 429 || this.status >= 500;
   }
 }
 
@@ -38,7 +44,10 @@ export class ServerClient {
     try {
       json = await response.json();
     } catch {}
-    if (!response.ok) throw new ServerError(response.status, json);
+    if (!response.ok) {
+      const wait = Number(response.headers?.get("Retry-After"));
+      throw new ServerError(response.status, json, Number.isFinite(wait) && wait > 0 ? wait : null);
+    }
     return json;
   }
 
