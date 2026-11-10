@@ -280,8 +280,17 @@ class FirestoreStorage:
         )
         async for token in tokens.stream():
             await token.reference.delete()
-        await self._collection("names").document(_data(found)["name"]).delete()
-        await self.client.recursive_delete(vault_ref)  # with its rows and labels
+
+        # The vault document next, in a transaction: a push or keyring write that passed its token
+        # check just before can no longer write into the vault, as it finds no vault document
+        @async_transactional
+        async def remove(transaction: Any) -> None:
+            await vault_ref.get(transaction=transaction)
+            transaction.delete(self._collection("names").document(_data(found)["name"]))
+            transaction.delete(vault_ref)
+
+        await remove(self._transaction())
+        await self.client.recursive_delete(vault_ref)  # its rows and labels
         return True
 
     # the vault
