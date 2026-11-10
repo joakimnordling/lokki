@@ -41,7 +41,7 @@
         "description": "An error: `error` is a code to act on, `message` is for people.",
         "properties": {
           "error": {
-            "description": "What went wrong, as a code, e.g. `invalid_request`, `unauthorized`, `forbidden`, `too_large`, `not_found` or `internal`",
+            "description": "What went wrong, as a code, e.g. `invalid_request`, `unauthorized`, `forbidden`, `too_large`, `not_found`, `history_changed` or `internal`",
             "examples": [
               "unauthorized"
             ],
@@ -417,22 +417,6 @@
             },
             "title": "Rows",
             "type": "array"
-          },
-          "since_mark": {
-            "anyOf": [
-              {
-                "pattern": "^[A-Za-z0-9_-]{1,32}$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The mark of the push that wrote row number `since`; null for 0, or when the server doesn't know it. Differing from the mark the device kept with `since` means the vault's history changed: pull everything (protocol 7.4).",
-            "examples": [
-              "Xq3vT0bK9mWc1sPa"
-            ],
-            "title": "Since Mark"
           }
         },
         "required": [
@@ -440,7 +424,6 @@
           "cursor",
           "more",
           "head",
-          "since_mark",
           "mark"
         ],
         "title": "Pull",
@@ -1090,7 +1073,7 @@
     },
     "/v1/vault/rows": {
       "get": {
-        "description": "Rows written after `since`, oldest first. While `more` is true, continue with `cursor` as\n`since` (protocol 5.3, 7.2).",
+        "description": "Rows written after `since`, oldest first. While `more` is true, continue with `cursor` as\n`since` and `mark` as `mark` (protocol 5.3, 7.2, 7.4).",
         "operationId": "pull_v1_vault_rows_get",
         "parameters": [
           {
@@ -1107,6 +1090,28 @@
               "minimum": 0,
               "title": "Since",
               "type": "integer"
+            }
+          },
+          {
+            "description": "The `mark` that came with `since`. If row `since` wasn't written by the push with this mark, the vault's history changed: `409 history_changed`. Leave it out to pull without checking.",
+            "in": "query",
+            "name": "mark",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Za-z0-9_-]{1,32}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The `mark` that came with `since`. If row `since` wasn't written by the push with this mark, the vault's history changed: `409 history_changed`. Leave it out to pull without checking.",
+              "examples": [
+                "Xq3vT0bK9mWc1sPa"
+              ],
+              "title": "Mark"
             }
           },
           {
@@ -1175,6 +1180,24 @@
               }
             },
             "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "history_changed": {
+                    "value": {
+                      "error": "history_changed",
+                      "message": "The vault's history changed: row `since` isn't from the push with this mark. Pull everything from 0."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "default": {
             "content": {

@@ -22,7 +22,7 @@ def push(
     return http.post("/v1/vault/rows", headers=headers, json=body)
 
 
-def pull(http: httpx2.Client, headers: dict[str, str], **params: int) -> dict[str, Any]:
+def pull(http: httpx2.Client, headers: dict[str, str], **params: int | str) -> dict[str, Any]:
     response = http.get("/v1/vault/rows", headers=headers, params=params)
     assert response.status_code == 200
     result: dict[str, Any] = response.json()
@@ -60,7 +60,6 @@ def test_push_and_pull(http: httpx2.Client, writer: dict[str, str]) -> None:
         "cursor": 2,
         "more": False,
         "head": 2,
-        "since_mark": None,
         "mark": pushed["mark"],
     }
 
@@ -111,20 +110,32 @@ def test_a_push_from_another_history_writes_nothing(
     assert push(http, writer, 1, (2, "v1.b"), mark=mark).status_code == 200
 
 
-def test_marks_tell_which_push_wrote_a_row(http: httpx2.Client, writer: dict[str, str]) -> None:
+def test_marks_go_with_the_cursor(http: httpx2.Client, writer: dict[str, str]) -> None:
     first = push(http, writer, 0, (1, "v1.a"), (2, "v1.b")).json()["mark"]
     second = push(http, writer, 2, (3, "v1.c"), mark=first).json()["mark"]
     assert first != second
 
-    assert [pull(http, writer, since=s)["since_mark"] for s in range(4)] == [
-        None,
-        first,
-        first,
-        second,
-    ]
     page = pull(http, writer, limit=1)
     assert (page["cursor"], page["mark"]) == (1, first)
-    assert pull(http, writer, since=1)["mark"] == second
+    page = pull(http, writer, since=1, mark=first, limit=1)
+    assert (page["cursor"], page["mark"]) == (2, first)
+    page = pull(http, writer, since=2, mark=first)
+    assert (page["cursor"], page["mark"]) == (3, second)
+    assert pull(http, writer, since=3, mark=second)["rows"] == []
+
+
+def test_a_pull_from_another_history_is_refused(
+    http: httpx2.Client, writer: dict[str, str]
+) -> None:
+    """Section 7.4: row `since` wasn't written by the push with this mark, or never at all."""
+    first = push(http, writer, 0, (1, "v1.a"), (2, "v1.b")).json()["mark"]
+    second = push(http, writer, 2, (3, "v1.c"), mark=first).json()["mark"]
+
+    for since, mark in ((2, second), (3, first), (50, second)):
+        response = http.get("/v1/vault/rows", headers=writer, params={"since": since, "mark": mark})
+        assert response.status_code == 409
+        assert response.json()["error"] == "history_changed"
+        assert isinstance(response.json()["message"], str)
 
 
 def test_paging(http: httpx2.Client, writer: dict[str, str]) -> None:
@@ -149,7 +160,6 @@ def test_paging_over_replaced_rows(http: httpx2.Client, writer: dict[str, str]) 
         "cursor": 7,
         "more": False,
         "head": 7,
-        "since_mark": mark,
         "mark": mark,
     }
 
@@ -170,7 +180,6 @@ def test_since_beyond_the_head(http: httpx2.Client, writer: dict[str, str]) -> N
     page = pull(http, writer, since=100)
 
     assert (page["rows"], page["more"], page["head"]) == ([], False, 1)
-    assert page["since_mark"] is None, "the server never wrote row 100"
 
 
 def test_limits_are_enforced(

@@ -98,7 +98,6 @@ def test_the_cursor_reaches_the_head_when_newer_versions_left_gaps(
         "cursor": 4,
         "more": False,
         "head": 4,
-        "since_mark": "mark2",
         "mark": "mark2",
     }
 
@@ -113,23 +112,49 @@ def test_since_beyond_the_head(client: TestClient, writer: dict[str, str]) -> No
         "cursor": 1,
         "more": False,
         "head": 1,
-        "since_mark": None,  # the server never wrote row 50: it lost changes
         "mark": "mark1",
     }
 
 
-def test_marks_tell_which_push_wrote_the_rows(client: TestClient, writer: dict[str, str]) -> None:
+def test_marks_go_with_the_cursor(client: TestClient, writer: dict[str, str]) -> None:
     push(client, writer, 0, (1, "v1.a"), (2, "v1.b"))
     push(client, writer, 2, (3, "v1.c"), mark="mark1")
 
-    def marks(since: int, **params: int) -> tuple[str | None, int, str | None]:
-        page = pull(client, writer, since=since, **params)
-        return page["since_mark"], page["cursor"], page["mark"]
+    def at(**params: Any) -> tuple[int, str | None]:
+        page = pull(client, writer, **params)
+        return page["cursor"], page["mark"]
 
-    assert marks(0) == (None, 3, "mark2")
-    assert marks(0, limit=1) == (None, 1, "mark1")
-    assert marks(2) == ("mark1", 3, "mark2")
-    assert marks(3) == ("mark2", 3, "mark2")
+    assert at() == (3, "mark2")
+    assert at(limit=1) == (1, "mark1")
+    assert at(since=1, mark="mark1", limit=1) == (2, "mark1")
+    assert at(since=2, mark="mark1") == (3, "mark2")
+    assert at(since=3, mark="mark2") == (3, "mark2")
+    assert at(since=2) == (3, "mark2"), "without a mark, nothing is checked"
+
+
+@pytest.mark.parametrize(
+    ("since", "mark"),
+    [
+        (2, "mark2"),  # row 2 is from the first push
+        (3, "mark1"),
+        (3, "other"),
+        (9, "mark2"),  # never written: the server lost changes
+    ],
+)
+def test_a_pull_from_another_history_is_refused(
+    client: TestClient, writer: dict[str, str], since: int, mark: str
+) -> None:
+    push(client, writer, 0, (1, "v1.a"), (2, "v1.b"))
+    push(client, writer, 2, (3, "v1.c"), mark="mark1")
+
+    response = client.get("/v1/vault/rows", headers=writer, params={"since": since, "mark": mark})
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "history_changed",
+        "message": "The vault's history changed: row `since` isn't from the push with this mark. "
+        "Pull everything from 0.",
+    }
 
 
 def test_a_push_from_another_history_writes_nothing(
@@ -151,11 +176,11 @@ def test_older_marks_are_forgotten(client: TestClient, writer: dict[str, str]) -
     for n in range(3):
         mark = push(client, writer, n, (n + 1, "v1.x"), mark=mark).json()["mark"]
 
-    assert [pull(client, writer, since=s)["since_mark"] for s in (1, 2, 3)] == [
-        None,
-        "mark2",
-        "mark3",
-    ]
+    def known(since: int, mark: str) -> bool:
+        params = {"since": since, "mark": mark}
+        return client.get("/v1/vault/rows", headers=writer, params=params).status_code == 200
+
+    assert [known(1, "mark1"), known(2, "mark2"), known(3, "mark3")] == [False, True, True]
 
 
 @pytest.mark.parametrize("limits", [Limits(pull=3, push=5, row_bytes=256)])
@@ -203,7 +228,16 @@ def test_invalid_pushes(
     assert pull(client, writer)["head"] == 0
 
 
-@pytest.mark.parametrize("params", [{"since": -1}, {"limit": 0}, {"since": "x"}])
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"since": -1},
+        {"limit": 0},
+        {"since": "x"},
+        {"since": 0, "mark": "mark1"},
+        {"since": 1, "mark": "not a mark"},
+    ],
+)
 def test_invalid_pulls(client: TestClient, writer: dict[str, str], params: dict[str, Any]) -> None:
     response = client.get("/v1/vault/rows", headers=writer, params=params)
 

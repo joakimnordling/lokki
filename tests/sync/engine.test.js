@@ -338,6 +338,42 @@ describe("a server's history", () => {
     assert.deepEqual(visible(phone), visible(laptop));
   });
 
+  it("notices a server that went back in time between two pages of one pull", async () => {
+    const vault = await newVault();
+    const [before, restored] = await Promise.all([servers[0].vault(), servers[0].vault()]);
+    const phone = device(vault, [servers[0], before.write]);
+    phone.put(metric("running"));
+    phone.put(entry("e1", 1));
+    await sync(phone);
+    // Restored from before the phone's push; then the tablet, which hadn't seen it, pushed three records
+    const tablet = device(vault, [servers[0], restored.write]);
+    tablet.put(metric("walking"));
+    tablet.put(entry("w1", 5, { metric: "walking" }));
+    tablet.put(entry("w2", 6, { metric: "walking" }));
+    await sync(tablet);
+
+    // A new laptop pulls one row per page: the first page from the server as it was, the rest as restored
+    const laptop = device(vault, [servers[0], before.write]);
+    const [was, now] = [before, restored].map((v) => new ServerClient(servers[0].url, v.write));
+    let pages = 0;
+    laptop.links[0].http = Object.assign(Object.create(now), {
+      info: () => now.info(),
+      vault: () => (pages ? now : was).vault(),
+      pull: (since, mark) => (pages++ ? now : was).pull(since, mark, 1),
+    });
+    await sync(laptop);
+
+    assert.equal(pages > 3, true, "it started over");
+    assert.deepEqual(
+      ["walking", "w1", "w2"].map((id) => !!laptop.get(id === "walking" ? "metric" : "entry", id)),
+      [true, true, true],
+      "everything in the restored history",
+    );
+    assert.ok(laptop.get("metric", "running"), "and the row it pulled before the server went back");
+    await sync(tablet);
+    assert.deepEqual(visible(tablet), visible(laptop), "which the server got back");
+  });
+
   it("a device away for longer than the server remembers pulls everything once", async () => {
     const vault = await newVault();
     const { write } = await forgetful.vault();

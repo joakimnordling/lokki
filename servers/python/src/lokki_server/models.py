@@ -67,7 +67,7 @@ class ErrorBody(BaseModel):
 
     error: str = Field(
         description="What went wrong, as a code, e.g. `invalid_request`, `unauthorized`, "
-        "`forbidden`, `too_large`, `not_found` or `internal`",
+        "`forbidden`, `too_large`, `not_found`, `history_changed` or `internal`",
         examples=["unauthorized"],
     )
     message: Message
@@ -325,12 +325,6 @@ class Pull(BaseModel):
         description="The vault's counter. A `since` above it means the server lost changes "
         "(protocol 7.4).",
         examples=[1042],
-    )
-    since_mark: Mark | None = Field(
-        description="The mark of the push that wrote row number `since`; null for 0, or when the "
-        "server doesn't know it. Differing from the mark the device kept with `since` means the "
-        "vault's history changed: pull everything (protocol 7.4).",
-        examples=["Xq3vT0bK9mWc1sPa"],
     )
     mark: Mark | None = Field(
         description="The mark of the push that wrote row number `cursor`, to keep with it; null "

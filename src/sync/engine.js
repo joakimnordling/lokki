@@ -122,13 +122,16 @@ async function syncKeyring({ server, device, keys, http, vault, report }) {
 }
 
 async function pullAll({ server, device, keys, http, report }) {
-  for (let since = server.cursor, first = true; ; first = false) {
-    const page = await http.pull(since);
-    // Row number `since` written by another push than the one this device pulled up to, or by one the server doesn't
-    // remember: the vault's history may differ from here on, so start over (section 7.4)
-    if (first && since > 0 && (!page.since_mark || page.since_mark !== server.mark)) {
+  for (let since = server.cursor, mark = server.mark ?? null; ; ) {
+    let page;
+    try {
+      // Every page says which push wrote the last row this device has; the server checks it (section 7.4)
+      page = await http.pull(since, since ? mark : null);
+    } catch (e) {
+      if (!(e instanceof ServerError && e.code === "history_changed")) throw e;
+      // Not the history this device pulled from, or the server doesn't remember it: start over
       forget(server, device);
-      since = 0;
+      [since, mark] = [0, null];
       continue;
     }
     const winners = [];
@@ -153,7 +156,7 @@ async function pullAll({ server, device, keys, http, report }) {
       await device.apply(winners, server.bit);
       report.applied += winners.length;
     }
-    since = page.cursor;
+    [since, mark] = [page.cursor, page.mark ?? null];
     // Kept only with a mark: a cursor the server can't vouch for later would mean starting over
     if (page.mark || !page.cursor) {
       server.cursor = page.cursor;

@@ -60,8 +60,11 @@ export class ServerClient {
   putKeyring(base, keyring) {
     return this.request("PUT", "/v1/vault/keyring", { base, keyring });
   }
-  pull(since, limit) {
-    return this.request("GET", `/v1/vault/rows?since=${since}${limit ? `&limit=${limit}` : ""}`);
+  pull(since, mark, limit) {
+    const query = new URLSearchParams({ since });
+    if (mark) query.set("mark", mark);
+    if (limit) query.set("limit", limit);
+    return this.request("GET", `/v1/vault/rows?${query}`);
   }
   push(base, mark, rows) {
     return this.request("POST", "/v1/vault/rows", { base, mark, rows });

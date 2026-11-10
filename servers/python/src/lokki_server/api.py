@@ -18,6 +18,7 @@ from lokki_server.models import (
     InfoLimits,
     KeyringPut,
     KeyringVersion,
+    Mark,
     Pull,
     Push,
     RowOut,
@@ -178,6 +179,7 @@ async def put_keyring(
     responses=documented(
         errors.invalid_request("since: Input should be greater than or equal to 0"),
         errors.unauthorized(),
+        errors.history_changed(),
     ),
 )
 async def pull(
@@ -192,6 +194,15 @@ async def pull(
             examples=[1040],
         ),
     ] = 0,
+    mark: Annotated[
+        Mark | None,
+        Query(
+            description="The `mark` that came with `since`. If row `since` wasn't written by the "
+            "push with this mark, the vault's history changed: `409 history_changed`. Leave it "
+            "out to pull without checking.",
+            examples=["Xq3vT0bK9mWc1sPa"],
+        ),
+    ] = None,
     limit: Annotated[
         int | None,
         Query(
@@ -202,14 +213,20 @@ async def pull(
 ) -> Pull:
     """
     Rows written after `since`, oldest first. While `more` is true, continue with `cursor` as
-    `since` (protocol 5.3, 7.2).
+    `since` and `mark` as `mark` (protocol 5.3, 7.2, 7.4).
     """
+    if mark is not None and since == 0:
+        raise errors.invalid_request("mark: Only with a since above 0")
     most = config.limits.pull if limit is None else min(limit, config.limits.pull)
     result = await store.pull(
         token.vault_id,
         since,
         most,
     )
+    # Checked after reading the rows: if the history changed meanwhile, the rows may be from the
+    # new one, and the mark of `since` is too
+    if mark is not None and result.since_mark != mark:
+        raise errors.history_changed()
     return Pull(
         rows=[
             RowOut(
@@ -222,7 +239,6 @@ async def pull(
         cursor=result.cursor,
         more=result.more,
         head=result.head,
-        since_mark=result.since_mark,
         mark=result.mark,
     )
 

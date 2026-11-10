@@ -61,6 +61,17 @@ def forbidden() -> ApiError:
     )
 
 
+def history_changed() -> ApiError:
+    return ApiError(
+        409,
+        ErrorBody(
+            error="history_changed",
+            message="The vault's history changed: row `since` isn't from the push with this mark. "
+            "Pull everything from 0.",
+        ),
+    )
+
+
 def behind(head: int) -> ApiError:
     return ApiError(
         409,
