@@ -208,6 +208,30 @@ describe("standalone sync", () => {
     assert.match(await C.textContent("#main"), /Running/);
   });
 
+  it("Clear Data warns about changes that reached no server, and can download everything again", async () => {
+    const mid = await B.evaluate(() => [...window.__lokki.metricAll.keys()][0]);
+    await syncNow(B);
+    const before = await live(B, mid);
+    await B.context().setOffline(true);
+    await B.evaluate((m) => window.__test.add(m, "2026-11-08T10:00:00", 13, ""), mid);
+    await home(B);
+    await B.click("#hSet");
+    await B.click("#sClr");
+    assert.match(await B.textContent(".sheet"), /1 change hasn't reached any server yet/);
+    await B.click("#sCancel");
+    await B.context().setOffline(false);
+    await syncNow(B);
+    await home(B);
+    await B.click("#hSet");
+    await B.click("#sClr");
+    assert.doesNotMatch(await B.textContent(".sheet"), /reached any server/);
+    await B.click("#cCopy");
+    await Promise.all([B.waitForEvent("load"), B.click("#cYes")]);
+    await B.waitForFunction(() => window.__lokki?.sync?.vault);
+    await synced(B);
+    assert.deepEqual(await live(B, mid), [...before, 13].sort());
+  });
+
   it("deleting a metric reaches other devices and blanks its entries on the server", async () => {
     await home(A);
     await A.click("text=Running");

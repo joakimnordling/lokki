@@ -9,6 +9,8 @@ export const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Fri
 export const p2 = (n) => String(n).padStart(2, "0");
 export const toLocalStr = (d) =>
   `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+// For file names: local date and time to the minute, sortable and without colons (not allowed on every system).
+export const fileStamp = (d = new Date()) => toLocalStr(d).slice(0, 16).replace("T", "-").replace(":", "");
 export const parseLocal = (s) => new Date(s.length === 16 ? `${s}:00` : s);
 
 export function md(d) {

@@ -1,8 +1,9 @@
 // Preferences sheet.
 import { esc, fmt } from "../core/format.js";
-import { applyLook, LOOKS, prefs, store } from "../core/prefs.js";
+import { applyLook, applyTextSize, LOOKS, prefs, store, TEXT_SIZES } from "../core/prefs.js";
 import { metrics, outbox, S, ui } from "../data/state.js";
 import { sync } from "../sync/manager.js";
+import { openClear, openPrivacy, versionLine } from "./about.js";
 import { backUp } from "./backup.js";
 import { $ } from "./dom.js";
 import { exportAll } from "./files.js";
@@ -13,11 +14,14 @@ import { openSync, syncSummary } from "./sync.js";
 export function openSettings() {
   const total = [...S.entryCache.values()].reduce((a, b) => a + b.length, 0);
   const look = store.get("look") || "auto";
+  const text = store.get("text") || "standard";
   const { weekStart, h24 } = prefs;
   const close = sheet(
     "Preferences",
     `<div class="setrow" style="display:block"><span>Appearance<small>Automatic follows your phone's Light/Dark setting. Saved on this device.</small></span>
     <div class="seg insheet" role="group" aria-label="Appearance">${LOOKS.map(([k, l]) => `<button data-look="${k}" aria-pressed="${look === k}">${l}</button>`).join("")}</div></div>
+    <div class="setrow" style="display:block"><span>Text Size<small>Saved on this device.</small></span>
+    <div class="seg insheet" role="group" aria-label="Text size">${TEXT_SIZES.map(([k, l]) => `<button data-text="${k}" aria-pressed="${text === k}">${l}</button>`).join("")}</div></div>
     <div class="setrow" style="display:block"><span>Week Starts On<small>Used for weekly totals and averages, and the day-of-week list. Saved on this device.</small></span>
     <div class="seg insheet" role="group" aria-label="Week starts on"><button data-ws="1" aria-pressed="${weekStart === 1}">Monday</button><button data-ws="0" aria-pressed="${weekStart === 0}">Sunday</button></div></div>
     <div class="setrow" style="display:block"><span>Time Format<small>How times are shown in the app. Saved on this device.</small></span>
@@ -27,7 +31,10 @@ export function openSettings() {
     <button class="setrow" id="sRes"><span>Restore from Backup<small>Merges a Lokki backup into the app. Shows what will change before anything does.</small></span><span>›</span></button>
     <button class="setrow" id="sExp"><span>Export CSV<small>Every entry as metric, date, value and note, for spreadsheets.</small></span><span>›</span></button>
     <button class="setrow" id="sImp"><span>Import CSV<small>Adds entries from CSV files, including the old Loggr app's. Entries you already have are skipped.</small></span><span>›</span></button>
-    <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. ${S.local ? (sync.vault ? "Saved on this device and synced, end-to-end encrypted." : "Saved on this device only.") : `Saved on this device and synced privately through your claude.ai account${outbox.size ? ` (${outbox.size} waiting to sync)` : ""}.`}</div>`,
+    <button class="setrow" id="sPriv"><span>Privacy<small>Where your logs are kept, and who can see them.</small></span><span>›</span></button>
+    <button class="setrow" id="sClr"><span>Clear Data<small>Removes your logs and settings from this device.</small></span><span>›</span></button>
+    <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. ${S.local ? (sync.vault ? "Saved on this device and synced, end-to-end encrypted." : "Saved on this device only.") : `Saved on this device and synced privately through your claude.ai account${outbox.size ? ` (${outbox.size} waiting to sync)` : ""}.`}</div>
+    <div class="preview version">${versionLine()}</div>`,
     { cancel: "Done" },
   );
   const group = (attr, fn) => {
@@ -43,6 +50,10 @@ export function openSettings() {
     const k = b.dataset.look;
     store.set("look", k);
     applyLook(k);
+  });
+  group("data-text", (b) => {
+    store.set("text", b.dataset.text);
+    applyTextSize(b.dataset.text);
   });
   group("data-ws", (b) => {
     prefs.weekStart = +b.dataset.ws;
@@ -67,6 +78,14 @@ export function openSettings() {
       close();
       openSync();
     };
+  $("#sPriv").onclick = () => {
+    close();
+    openPrivacy();
+  };
+  $("#sClr").onclick = () => {
+    close();
+    openClear();
+  };
   $("#sBak").onclick = () => {
     close();
     backUp();

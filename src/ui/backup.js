@@ -1,7 +1,7 @@
 // Back Up and Restore from Backup. Backups are saved as a .zip holding one .jsonl file (claude.ai only allows certain
 // download types, and .gz isn't one of them). Restore also reads a plain .jsonl and a .jsonl.gz.
 import { parseBackup } from "../core/backup-format.js";
-import { clock, dayLabel, esc, fmt, toLocalStr } from "../core/format.js";
+import { clock, dayLabel, esc, fileStamp, fmt } from "../core/format.js";
 import { normName } from "../core/names.js";
 import { pipeBytes, unzipFirst, zipOne } from "../core/zip.js";
 import { applyRestore, backupText, planRestore } from "../data/backup.js";
@@ -11,7 +11,7 @@ import { saveFile } from "./files.js";
 import { sheet, toast } from "./sheets.js";
 
 export async function backUp() {
-  const day = toLocalStr(new Date()).slice(0, 10),
+  const day = fileStamp(),
     text = backupText();
   let ok;
   if (typeof CompressionStream === "function") {

@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { build } from "esbuild";
+import { buildDefine } from "./build-info.js";
 
 const root = resolve(import.meta.dirname, "..");
 const out = join(root, "dist", "site");
@@ -38,6 +39,7 @@ export async function buildSite() {
       target: "es2022",
       minify: true,
       legalComments: "inline",
+      define: await buildDefine(),
       write: false,
     })
   ).outputFiles[0].text;

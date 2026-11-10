@@ -10,6 +10,7 @@
   },
   "scripts": {
     "icons": "node scripts/build-icons.js",
+    "app-icons": "node scripts/build-app-icons.js",
     "serve": "node scripts/serve.js",
     "build:artifact": "node scripts/build-artifact.js",
     "test": "node --test \"tests/unit/**/*.test.js\"",

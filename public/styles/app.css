@@ -89,7 +89,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
-  font-size: 17px;
+  font-size: var(--text, 17px);
   -webkit-tap-highlight-color: transparent;
 }
 body {
@@ -961,4 +961,20 @@ main {
   color: var(--sheet-dim);
   padding-top: 6px;
   min-height: 1.2em;
+}
+
+/* Preferences extras: the version line, and warnings in Clear Data */
+.preview.version {
+  padding-top: 10px;
+}
+.sheet a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.sheet p.lead.warn {
+  color: var(--danger);
 }

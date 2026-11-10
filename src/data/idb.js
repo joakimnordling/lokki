@@ -35,6 +35,31 @@ export const idb = {
       }
     });
   },
+  /** Empty these stores in one transaction. */
+  clear(names) {
+    if (!this.db) return Promise.resolve();
+    return new Promise((res, rej) => {
+      try {
+        const tx = this.db.transaction(names, "readwrite");
+        for (const n of names) tx.objectStore(n).clear();
+        tx.oncomplete = () => res();
+        tx.onerror = tx.onabort = () => rej(tx.error);
+      } catch (e) {
+        rej(e);
+      }
+    });
+  },
+  /** Delete the whole database. */
+  destroy() {
+    this.db?.close();
+    this.db = null;
+    return new Promise((res, rej) => {
+      const r = indexedDB.deleteDatabase("lokki");
+      r.onsuccess = () => res();
+      r.onerror = () => rej(r.error);
+      r.onblocked = () => rej(new Error("Close Lokki in your other tabs and try again."));
+    });
+  },
   // ops: [store, "put"|"delete", value|key]
   write(ops) {
     if (!this.db || !ops.length) return Promise.resolve();

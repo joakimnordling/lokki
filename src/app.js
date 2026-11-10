@@ -4,7 +4,7 @@ import { parseDate } from "./core/csv.js";
 import { evalExpr } from "./core/expr.js";
 import { uuid5 } from "./core/ids.js";
 import { startOf } from "./core/periods.js";
-import { applyLook, store } from "./core/prefs.js";
+import { applyLook, applyTextSize, store } from "./core/prefs.js";
 import { stats } from "./core/stats.js";
 import { idb } from "./data/idb.js";
 import { addEntry, deleteEntry, deleteMetric, editEntry, restoreEntry } from "./data/records.js";
@@ -22,6 +22,7 @@ import { render } from "./ui/render.js";
 import { openDeleteMetric, openEntrySheet, toast } from "./ui/sheets.js";
 
 applyLook(store.get("look"));
+applyTextSize(store.get("text"));
 hooks.render = render;
 hooks.flushSoon = flushSoon;
 hooks.toast = toast;
