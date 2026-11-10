@@ -30,7 +30,11 @@ ScopeOption = Annotated[Scope, typer.Option(help="What the token may do")]
 @asynccontextmanager
 async def _storage() -> AsyncGenerator[Storage]:
     """The database from the settings, closed again afterwards."""
-    storage = open_storage(Settings().database_url)
+    settings = Settings()
+    storage = open_storage(
+        settings.database_url,
+        settings.pool,
+    )
     try:
         yield storage
     finally:

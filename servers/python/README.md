@@ -45,17 +45,20 @@ on the server: the API never shows them. Add `--help` to any command for more.
 
 Environment variables, or a `.env` file in the working directory:
 
-| Variable                  | Default                        | Meaning                                                                        |
-| ------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
-| `LOKKI_DATABASE_URL`      | `sqlite+aiosqlite:///lokki.db` | Where to store: see the table above                                            |
-| `LOKKI_PUBLIC_URL`        | `http://localhost:8000`        | The URL devices use; printed with new tokens                                   |
-| `LOKKI_CORS_ORIGINS`      | `[]`                           | Where the web app is served from, as JSON: `["https://lokki.example.com"]`     |
-| `LOKKI_LIMITS__PULL`      | `1000`                         | Most rows in one pull                                                          |
-| `LOKKI_LIMITS__PUSH`      | `500`                          | Most rows in one push                                                          |
-| `LOKKI_LIMITS__ROW_BYTES` | `4096`                         | Largest row                                                                    |
-| `LOKKI_DOCS`              | `true`                         | API docs: Swagger UI at `/docs`, ReDoc at `/redoc`                             |
-| `LOKKI_TEST_MODE`         | `false`                        | Enables `POST /v1/test/vaults` for the conformance tests. Never in production. |
-| `PORT`                    | `8000`                         | Port for `serve`                                                               |
+| Variable                   | Default                        | Meaning                                                                        |
+| -------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| `LOKKI_DATABASE_URL`       | `sqlite+aiosqlite:///lokki.db` | Where to store: see the table above                                            |
+| `LOKKI_PUBLIC_URL`         | `http://localhost:8000`        | The URL devices use; printed with new tokens                                   |
+| `LOKKI_CORS_ORIGINS`       | `[]`                           | Where the web app is served from, as JSON: `["https://lokki.example.com"]`     |
+| `LOKKI_LIMITS__PULL`       | `1000`                         | Most rows in one pull                                                          |
+| `LOKKI_LIMITS__PUSH`       | `500`                          | Most rows in one push                                                          |
+| `LOKKI_LIMITS__ROW_BYTES`  | `4096`                         | Largest row                                                                    |
+| `LOKKI_POOL__SIZE`         | `3`                            | PostgreSQL: connections kept open                                              |
+| `LOKKI_POOL__MAX_OVERFLOW` | `2`                            | PostgreSQL: extra connections when all are busy                                |
+| `LOKKI_POOL__RECYCLE`      | `1800`                         | PostgreSQL: seconds before a connection is replaced                            |
+| `LOKKI_DOCS`               | `true`                         | API docs: Swagger UI at `/docs`, ReDoc at `/redoc`                             |
+| `LOKKI_TEST_MODE`          | `false`                        | Enables `POST /v1/test/vaults` for the conformance tests. Never in production. |
+| `PORT`                     | `8000`                         | Port for `serve`                                                               |
 
 ## API docs
 

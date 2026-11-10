@@ -4,12 +4,13 @@ import uuid
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from sqlalchemy import delete, event, func, insert, or_, select, update
+from sqlalchemy import delete, event, func, insert, make_url, or_, select, update
 from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import ConnectionPoolEntry
 
+from lokki_server.config import Pool
 from lokki_server.models import Scope
 from lokki_server.storage.base import (
     NameTaken,
@@ -41,11 +42,19 @@ def engine_url(url: str) -> str:
     return urlunsplit(parts._replace(scheme="postgresql+asyncpg", query=urlencode(query)))
 
 
-def engine_options(url: str) -> dict[str, Any]:
-    """Pool settings: few connections (a free PostgreSQL may allow 20), checked before use."""
-    if url.startswith("sqlite"):
+def engine_options(url: str, pool: Pool) -> dict[str, Any]:
+    """
+    The engine's settings for an engine URL: PostgreSQL's pool from the settings, its connections
+    checked before use. Other databases (SQLite) keep SQLAlchemy's defaults.
+    """
+    if make_url(url).get_backend_name() != "postgresql":
         return {}
-    return {"pool_size": 3, "max_overflow": 2, "pool_pre_ping": True, "pool_recycle": 1800}
+    return {
+        "pool_size": pool.size,
+        "max_overflow": pool.max_overflow,
+        "pool_recycle": pool.recycle,
+        "pool_pre_ping": True,
+    }
 
 
 def _sqlite_pragmas(dbapi_connection: DBAPIConnection, _record: ConnectionPoolEntry) -> None:
@@ -60,11 +69,14 @@ def _sqlite_pragmas(dbapi_connection: DBAPIConnection, _record: ConnectionPoolEn
 class SqlStorage:
     """The storage interface on an SQLAlchemy async engine."""
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, pool: Pool | None = None) -> None:
         url = engine_url(url)
         self.engine: AsyncEngine = create_async_engine(
             url,
-            **engine_options(url),
+            **engine_options(
+                url,
+                pool or Pool(),
+            ),
         )
         if self.engine.dialect.name == "sqlite":
             event.listen(

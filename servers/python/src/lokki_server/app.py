@@ -45,7 +45,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        storage = open_storage(config.database_url)
+        storage = open_storage(
+            config.database_url,
+            config.pool,
+        )
         app.state.storage = storage
         try:
             # made on first start and never changed, so read once: /v1/info needs no database

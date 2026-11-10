@@ -8,8 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from lokki_server.storage.sql import engine_url
-
 
 def _web_address(value: str) -> SplitResult:
     """The URL's parts; ValueError unless it's http(s) with a host."""
@@ -45,6 +43,9 @@ def _check_database_url(value: str) -> str:
 
         parse_url(value)
         return value
+    # imported here: the SQL storage reads its pool settings from this module
+    from lokki_server.storage.sql import engine_url
+
     try:
         make_url(engine_url(value))
     except ArgumentError:
@@ -84,6 +85,26 @@ class Limits(BaseModel):
     )
 
 
+class Pool(BaseModel):
+    """PostgreSQL's connection pool. A free PostgreSQL may allow only 20 connections in all."""
+
+    size: int = Field(
+        default=3,
+        ge=1,
+        description="Connections kept open",
+    )
+    max_overflow: int = Field(
+        default=2,
+        ge=0,
+        description="Extra connections opened when all are busy, closed again afterwards",
+    )
+    recycle: int = Field(
+        default=1800,
+        ge=1,
+        description="Seconds before a connection is replaced, ahead of servers that drop idle ones",
+    )
+
+
 class Settings(BaseSettings):
     """Server settings."""
 
@@ -115,3 +136,4 @@ class Settings(BaseSettings):
         description="Enables POST /v1/test/vaults for the conformance tests; never in production",
     )
     limits: Limits = Field(default_factory=Limits)
+    pool: Pool = Field(default_factory=Pool)

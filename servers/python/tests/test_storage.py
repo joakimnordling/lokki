@@ -9,6 +9,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import Connection, event
 
+from lokki_server.config import Pool, Settings
 from lokki_server.storage import migrate, open_storage
 from lokki_server.storage.base import Outcome
 from lokki_server.storage.schema import metadata
@@ -194,8 +195,23 @@ def test_database_urls_as_services_hand_them_out(given: str, used: str) -> None:
 
 
 def test_postgresql_gets_a_small_pool_checked_before_use() -> None:
-    options = engine_options("postgresql+asyncpg://lokki@db.example.com/lokki")
+    default = engine_options("postgresql+asyncpg://lokki@db.example.com/lokki", Pool())
+    chosen = engine_options(
+        "postgresql+asyncpg://lokki@db.example.com/lokki",
+        Pool(size=1, max_overflow=0, recycle=60),
+    )
 
-    assert options["pool_size"] + options["max_overflow"] <= 5
-    assert options["pool_pre_ping"] is True
-    assert engine_options("sqlite+aiosqlite:///lokki.db") == {}
+    assert default["pool_size"] + default["max_overflow"] <= 5
+    assert default["pool_pre_ping"] is True
+    assert (chosen["pool_size"], chosen["max_overflow"], chosen["pool_recycle"]) == (1, 0, 60)
+
+
+def test_sqlite_keeps_sqlalchemys_pool() -> None:
+    assert engine_options("sqlite+aiosqlite:///lokki.db", Pool()) == {}
+
+
+def test_the_pool_is_set_with_lokki_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOKKI_POOL__SIZE", "5")
+    monkeypatch.setenv("LOKKI_POOL__MAX_OVERFLOW", "0")
+
+    assert Settings().pool == Pool(size=5, max_overflow=0, recycle=1800)
