@@ -16,7 +16,7 @@ from lokki_server.config import Settings
 from lokki_server.models import Scope
 from lokki_server.names import check_label, check_vault_name
 from lokki_server.storage import Storage, migrate, open_storage
-from lokki_server.storage.base import NameTaken
+from lokki_server.storage.base import NameTaken, VaultId
 
 app = typer.Typer(
     help="Lokki sync server. Settings come from LOKKI_* environment variables.",
@@ -142,7 +142,7 @@ def _fail(message: str) -> NoReturn:
     raise typer.Exit(1)
 
 
-async def _find(storage: Storage, name: str) -> int:
+async def _find(storage: Storage, name: str) -> VaultId:
     found = await storage.find_vault(name)
     if found is None:
         _fail(f"There's no vault called {name}. See them with: lokki-server vault list")

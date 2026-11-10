@@ -19,6 +19,12 @@ dependencies = [
     "typer>=0.28",
 ]
 
+[project.optional-dependencies]
+# Storing in PostgreSQL (LOKKI_DATABASE_URL=postgresql://...): pip install lokki-server[postgresql]
+postgresql = ["asyncpg>=0.32"]
+# Storing in Firestore (LOKKI_DATABASE_URL=firestore://PROJECT): pip install lokki-server[firestore]
+firestore = ["google-cloud-firestore>=2.34"]
+
 [project.scripts]
 lokki-server = "lokki_server.cli:app"
 
@@ -32,7 +38,7 @@ dev = [
     "pytest-cov>=7.1",
     "syrupy>=6.1",
     "httpx2>=2.16",  # FastAPI's TestClient
-    "asyncpg>=0.32",  # PostgreSQL's driver: tests make an engine for it, without a database
+    "lokki-server[postgresql,firestore]",  # tests run on every storage that's available
     "ruff==0.17.4",
     "pyright==1.1.414",
 ]
@@ -54,7 +60,8 @@ omit = ["*/lokki_server/migrations/*"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-fail_under = 100
+# CI requires 100% (--cov-fail-under), with the Firestore emulator running; without it, Firestore's
+# storage isn't run locally
 # Code that can't run: the type checker proves it (e.g. after every case of an enum)
 exclude_also = ["assert_never\\("]
 

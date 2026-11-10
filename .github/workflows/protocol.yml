@@ -25,8 +25,20 @@ defaults:
 
 jobs:
   check:
-    name: Vectors and conformance
+    name: Vectors and conformance (${{ matrix.storage }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        storage: [sqlite, postgresql, firestore]
+    services:
+      postgres:
+        image: ${{ matrix.storage == 'postgresql' && 'postgres:18' || '' }}
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,5 +53,13 @@ jobs:
         run: uv run pyright
       - name: Reference implementation against the test vectors
         run: uv run pytest tests
+      - if: matrix.storage == 'firestore'
+        uses: ./.github/actions/firestore-emulator
       - name: Conformance of servers/python
         run: uv run pytest conformance
+        env:
+          LOKKI_CONFORMANCE_DATABASE_URL: >-
+            ${{ matrix.storage == 'firestore' && 'firestore://conformance'
+            || matrix.storage == 'postgresql' && 'postgresql://postgres:postgres@127.0.0.1:5432/postgres'
+            || '' }}
+          FIRESTORE_EMULATOR_HOST: ${{ matrix.storage == 'firestore' && '127.0.0.1:8086' || '' }}

@@ -1,0 +1,6 @@
+# zizmor's settings (https://docs.zizmor.sh/configuration/)
+rules:
+  # GitHub's newer `uses: $/...` for actions in this repository isn't known to actionlint yet, which
+  # then rejects the workflow. Local actions use `./...` after a checkout until it is.
+  self-repository:
+    disable: true

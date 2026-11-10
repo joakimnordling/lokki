@@ -1,0 +1,26 @@
+name: Firestore emulator
+description: >-
+  Starts Google's Firestore emulator in the background on 127.0.0.1:8086, so tests can use
+  Firestore without a Google Cloud project: set FIRESTORE_EMULATOR_HOST=127.0.0.1:8086 for them.
+runs:
+  using: composite
+  steps:
+    # the emulator needs Java 21 or newer (and 25 from gcloud 576 on)
+    - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      with:
+        distribution: temurin
+        java-version: "25"
+    - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      with:
+        install_components: cloud-firestore-emulator
+    - name: Start the emulator
+      shell: bash
+      run: |
+        PORT=8086
+        gcloud emulators firestore start --host-port="127.0.0.1:$PORT" > "$RUNNER_TEMP/firestore-emulator.log" 2>&1 &
+        for _ in $(seq 1 60); do
+          if curl -sf "http://127.0.0.1:$PORT/" > /dev/null; then exit 0; fi
+          sleep 2
+        done
+        cat "$RUNNER_TEMP/firestore-emulator.log"
+        exit 1

@@ -1,7 +1,8 @@
-"""Storage in an SQL database through SQLAlchemy Core: SQLite now, PostgreSQL and MariaDB too."""
+"""Storage in an SQL database through SQLAlchemy Core: SQLite and PostgreSQL."""
 
 import uuid
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import delete, event, func, insert, or_, select, update
 from sqlalchemy.engine.interfaces import DBAPIConnection
@@ -16,12 +17,35 @@ from lokki_server.storage.base import (
     PullResult,
     Row,
     Token,
+    TokenId,
     TokenSummary,
+    VaultId,
     VaultStatus,
     VaultSummary,
     WriteResult,
 )
 from lokki_server.storage.schema import rows, server, tokens, vaults
+
+
+def engine_url(url: str) -> str:
+    """
+    The URL for SQLAlchemy's async engine, also from what database services hand out.
+
+    A plain postgres:// or postgresql:// URL (e.g. from Aiven or Neon) gets the asyncpg driver, and
+    libpq's sslmode=... becomes asyncpg's ssl=..., which means the same.
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in ("postgres", "postgresql"):
+        return url
+    query = [("ssl" if k == "sslmode" else k, v) for k, v in parse_qsl(parts.query)]
+    return urlunsplit(parts._replace(scheme="postgresql+asyncpg", query=urlencode(query)))
+
+
+def engine_options(url: str) -> dict[str, Any]:
+    """Pool settings: few connections (a free PostgreSQL may allow 20), checked before use."""
+    if url.startswith("sqlite"):
+        return {}
+    return {"pool_size": 3, "max_overflow": 2, "pool_pre_ping": True, "pool_recycle": 1800}
 
 
 def _sqlite_pragmas(dbapi_connection: DBAPIConnection, _record: ConnectionPoolEntry) -> None:
@@ -36,10 +60,11 @@ def _sqlite_pragmas(dbapi_connection: DBAPIConnection, _record: ConnectionPoolEn
 class SqlStorage:
     """The storage interface on an SQLAlchemy async engine."""
 
-    def __init__(self, url: str, **engine_options: Any) -> None:
+    def __init__(self, url: str) -> None:
+        url = engine_url(url)
         self.engine: AsyncEngine = create_async_engine(
             url,
-            **engine_options,
+            **engine_options(url),
         )
         if self.engine.dialect.name == "sqlite":
             event.listen(
@@ -73,7 +98,7 @@ class SqlStorage:
 
     # vaults and tokens
 
-    async def create_vault(self, name: str, now: int) -> int:
+    async def create_vault(self, name: str, now: int) -> VaultId:
         try:
             async with self.engine.begin() as conn:
                 result = await conn.execute(
@@ -91,13 +116,13 @@ class SqlStorage:
         except IntegrityError as e:
             raise NameTaken(name) from e
 
-    async def find_vault(self, name: str) -> int | None:
+    async def find_vault(self, name: str) -> VaultId | None:
         async with self.engine.connect() as conn:
             return await conn.scalar(select(vaults.c.id).where(vaults.c.name == name))
 
     async def add_token(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         label: str,
         token_hash: str,
         scope: Scope,
@@ -138,11 +163,11 @@ class SqlStorage:
             last_used=found.last_used,
         )
 
-    async def touch_token(self, token_id: int, now: int) -> None:
+    async def touch_token(self, token_id: TokenId, now: int) -> None:
         async with self.engine.begin() as conn:
             await conn.execute(update(tokens).where(tokens.c.id == token_id).values(last_used=now))
 
-    async def revoke_token(self, vault_id: int, label: str) -> bool:
+    async def revoke_token(self, vault_id: VaultId, label: str) -> bool:
         async with self.engine.begin() as conn:
             result = await conn.execute(
                 delete(tokens).where(tokens.c.vault_id == vault_id, tokens.c.label == label)
@@ -173,7 +198,7 @@ class SqlStorage:
                 for r in found
             ]
 
-    async def list_tokens(self, vault_id: int) -> list[TokenSummary]:
+    async def list_tokens(self, vault_id: VaultId) -> list[TokenSummary]:
         async with self.engine.connect() as conn:
             found = await conn.execute(
                 select(tokens).where(tokens.c.vault_id == vault_id).order_by(tokens.c.id)
@@ -188,7 +213,7 @@ class SqlStorage:
                 for r in found
             ]
 
-    async def delete_vault(self, vault_id: int) -> bool:
+    async def delete_vault(self, vault_id: VaultId) -> bool:
         async with self.engine.begin() as conn:
             await conn.execute(delete(rows).where(rows.c.vault_id == vault_id))
             await conn.execute(delete(tokens).where(tokens.c.vault_id == vault_id))
@@ -197,7 +222,7 @@ class SqlStorage:
 
     # the vault
 
-    async def vault(self, vault_id: int) -> VaultStatus:
+    async def vault(self, vault_id: VaultId) -> VaultStatus:
         async with self.engine.connect() as conn:
             found = (
                 await conn.execute(
@@ -222,7 +247,7 @@ class SqlStorage:
 
     async def put_keyring(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         base: int,
         keyring: str,
         keyring_vault_id: str,
@@ -263,7 +288,7 @@ class SqlStorage:
 
     async def pull(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         since: int,
         limit: int,
     ) -> PullResult:
@@ -305,7 +330,7 @@ class SqlStorage:
 
     async def push(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         base: int,
         new_rows: list[tuple[str, str]],
         now: int,
@@ -339,7 +364,7 @@ class SqlStorage:
             return WriteResult(Outcome.OK, base + len(new_rows))
 
     @staticmethod
-    async def _head(conn: AsyncConnection, vault_id: int) -> int:
+    async def _head(conn: AsyncConnection, vault_id: VaultId) -> int:
         return (
             await conn.execute(select(vaults.c.head).where(vaults.c.id == vault_id))
         ).scalar_one()

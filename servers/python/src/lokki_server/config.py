@@ -8,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from lokki_server.storage.sql import engine_url
+
 
 def _web_address(value: str) -> SplitResult:
     """The URL's parts; ValueError unless it's http(s) with a host."""
@@ -38,8 +40,13 @@ def _check_origin(value: str) -> str:
 
 
 def _check_database_url(value: str) -> str:
+    if value.startswith("firestore:"):
+        from lokki_server.storage.firestore import parse_url
+
+        parse_url(value)
+        return value
     try:
-        make_url(value)
+        make_url(engine_url(value))
     except ArgumentError:
         raise ValueError(
             f"{value!r} isn't a database URL, e.g. sqlite+aiosqlite:///lokki.db."

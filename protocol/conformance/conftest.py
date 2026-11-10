@@ -2,8 +2,9 @@
 Fixtures for checking a sync server over HTTP, whatever it's written in.
 
 Set ``LOKKI_SERVER_URL`` to a running server in test mode (section 5.5). Without it, the Python
-server in ``servers/python`` is started in test mode on a free port with a temporary SQLite
-database.
+server in ``servers/python`` is started in test mode on a free port, with a temporary SQLite
+database, or with ``LOKKI_CONFORMANCE_DATABASE_URL`` if set (e.g. ``firestore://conformance`` with
+the Firestore emulator).
 """
 
 import os
@@ -36,7 +37,8 @@ def server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     database = tmp_path_factory.mktemp("server") / "lokki.db"
     env = {
         **os.environ,
-        "LOKKI_DATABASE_URL": f"sqlite+aiosqlite:///{database}",
+        "LOKKI_DATABASE_URL": os.environ.get("LOKKI_CONFORMANCE_DATABASE_URL")
+        or f"sqlite+aiosqlite:///{database}",
         "LOKKI_TEST_MODE": "true",
     }
     process = subprocess.Popen(

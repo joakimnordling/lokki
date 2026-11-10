@@ -3,7 +3,7 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    directories: ["/", "/.github/actions/*"] # the workflows and this repository's own actions
     schedule:
       interval: monthly
     cooldown:
