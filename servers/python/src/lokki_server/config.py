@@ -86,7 +86,10 @@ class Limits(BaseModel):
 
 
 class Pool(BaseModel):
-    """PostgreSQL's connection pool. A free PostgreSQL may allow only 20 connections in all."""
+    """
+    The connection pool for a database server, e.g. PostgreSQL; SQLite has none of these. A free
+    PostgreSQL may allow only 20 connections in all.
+    """
 
     size: int = Field(
         default=3,

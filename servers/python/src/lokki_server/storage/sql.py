@@ -44,10 +44,11 @@ def engine_url(url: str) -> str:
 
 def engine_options(url: str, pool: Pool) -> dict[str, Any]:
     """
-    The engine's settings for an engine URL: PostgreSQL's pool from the settings, its connections
-    checked before use. Other databases (SQLite) keep SQLAlchemy's defaults.
+    The engine's settings for an engine URL: a database server's pool (PostgreSQL, or any added
+    later) from the settings, its connections checked before use. SQLite, a file, keeps
+    SQLAlchemy's defaults.
     """
-    if make_url(url).get_backend_name() != "postgresql":
+    if make_url(url).get_backend_name() == "sqlite":
         return {}
     return {
         "pool_size": pool.size,
