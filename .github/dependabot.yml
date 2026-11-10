@@ -3,7 +3,7 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    directories: ["/", "/.github/actions/*"] # the workflows and this repository's own actions
     schedule:
       interval: monthly
     cooldown:
@@ -38,3 +38,9 @@ updates:
     groups:
       python:
         patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /servers/python # the server's container image: Python and uv
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7

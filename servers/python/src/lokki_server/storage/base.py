@@ -6,6 +6,10 @@ from typing import Protocol
 
 from lokki_server.models import Scope
 
+# Each storage's own identifiers: numbers in SQL, document IDs in Firestore. Never shown to anyone.
+type VaultId = int | str
+type TokenId = int | str
+
 
 @dataclass(
     frozen=True,
@@ -14,8 +18,8 @@ from lokki_server.models import Scope
 class Token:
     """A token as stored: its vault and what it may do. The token itself is never stored."""
 
-    token_id: int
-    vault_id: int
+    token_id: TokenId
+    vault_id: VaultId
     scope: Scope
     last_used: int | None
 
@@ -132,17 +136,17 @@ class Storage(Protocol):
 
     # vaults and tokens
 
-    async def create_vault(self, name: str, now: int) -> int:
+    async def create_vault(self, name: str, now: int) -> VaultId:
         """Create an empty vault; returns its internal number. NameTaken if the name is in use."""
         ...
 
-    async def find_vault(self, name: str) -> int | None:
+    async def find_vault(self, name: str) -> VaultId | None:
         """The internal number of the vault with this name, if any."""
         ...
 
     async def add_token(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         label: str,
         token_hash: str,
         scope: Scope,
@@ -155,11 +159,11 @@ class Storage(Protocol):
         """The token with this hash, if any."""
         ...
 
-    async def touch_token(self, token_id: int, now: int) -> None:
+    async def touch_token(self, token_id: TokenId, now: int) -> None:
         """Record that a token was used."""
         ...
 
-    async def revoke_token(self, vault_id: int, label: str) -> bool:
+    async def revoke_token(self, vault_id: VaultId, label: str) -> bool:
         """Delete the vault's token with this label; False if there was none."""
         ...
 
@@ -167,23 +171,23 @@ class Storage(Protocol):
         """Every vault, by name."""
         ...
 
-    async def list_tokens(self, vault_id: int) -> list[TokenSummary]:
+    async def list_tokens(self, vault_id: VaultId) -> list[TokenSummary]:
         """A vault's tokens, oldest first."""
         ...
 
-    async def delete_vault(self, vault_id: int) -> bool:
+    async def delete_vault(self, vault_id: VaultId) -> bool:
         """Delete a vault with its keyring, rows and tokens; False if there was none."""
         ...
 
     # the vault
 
-    async def vault(self, vault_id: int) -> VaultStatus:
+    async def vault(self, vault_id: VaultId) -> VaultStatus:
         """The vault's keyring and counters."""
         ...
 
     async def put_keyring(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         base: int,
         keyring: str,
         keyring_vault_id: str,
@@ -194,7 +198,7 @@ class Storage(Protocol):
 
     async def pull(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         since: int,
         limit: int,
     ) -> PullResult:
@@ -203,7 +207,7 @@ class Storage(Protocol):
 
     async def push(
         self,
-        vault_id: int,
+        vault_id: VaultId,
         base: int,
         new_rows: list[tuple[str, str]],
         now: int,

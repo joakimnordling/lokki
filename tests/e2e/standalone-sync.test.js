@@ -128,13 +128,20 @@ describe("standalone sync", () => {
     assert.deepEqual(await live(A, mid), [5, 7, 9]);
   });
 
-  it("shows when changes haven't reached a server, and when a server fails", async () => {
+  it("shows when changes haven't reached a server, and when a server fails after retrying", async () => {
     const mid = await A.evaluate(() => [...window.__lokki.metricAll.keys()][0]);
+    await A.evaluate(() => {
+      window.__lokki.sync.retryDelays = [300, 300]; // instead of 5 and 20 seconds
+    });
     await A.context().setOffline(true);
     await A.evaluate((m) => window.__test.add(m, "2026-11-08T09:00:00", 11, ""), mid);
     await home(A);
     assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences (changes waiting to sync)");
     await A.evaluate(() => window.__lokki.sync.now());
+    await home(A);
+    // a failure that may pass (here: offline) is retried before it shows as a problem
+    assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences (changes waiting to sync)");
+    await A.waitForFunction(() => window.__lokki.sync.headerState() === "bad");
     await home(A);
     assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences (sync has a problem)");
     await open(A);

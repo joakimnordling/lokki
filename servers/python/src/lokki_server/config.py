@@ -38,8 +38,16 @@ def _check_origin(value: str) -> str:
 
 
 def _check_database_url(value: str) -> str:
+    if value.startswith("firestore:"):
+        from lokki_server.storage.firestore import parse_url
+
+        parse_url(value)
+        return value
+    # imported here: the SQL storage reads its pool settings from this module
+    from lokki_server.storage.sql import engine_url
+
     try:
-        make_url(value)
+        make_url(engine_url(value))
     except ArgumentError:
         raise ValueError(
             f"{value!r} isn't a database URL, e.g. sqlite+aiosqlite:///lokki.db."
@@ -77,6 +85,29 @@ class Limits(BaseModel):
     )
 
 
+class Pool(BaseModel):
+    """
+    The connection pool for a database server, e.g. PostgreSQL; SQLite has none of these. A free
+    PostgreSQL may allow only 20 connections in all.
+    """
+
+    size: int = Field(
+        default=3,
+        ge=1,
+        description="Connections kept open",
+    )
+    max_overflow: int = Field(
+        default=2,
+        ge=0,
+        description="Extra connections opened when all are busy, closed again afterwards",
+    )
+    recycle: int = Field(
+        default=1800,
+        ge=1,
+        description="Seconds before a connection is replaced, ahead of servers that drop idle ones",
+    )
+
+
 class Settings(BaseSettings):
     """Server settings."""
 
@@ -108,3 +139,4 @@ class Settings(BaseSettings):
         description="Enables POST /v1/test/vaults for the conformance tests; never in production",
     )
     limits: Limits = Field(default_factory=Limits)
+    pool: Pool = Field(default_factory=Pool)

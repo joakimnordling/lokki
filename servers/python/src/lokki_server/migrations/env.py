@@ -7,6 +7,7 @@ from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from lokki_server.storage.schema import metadata
+from lokki_server.storage.sql import engine_url
 
 
 def _run(connection: Connection) -> None:
@@ -17,7 +18,7 @@ def _run(connection: Connection) -> None:
 
 
 async def _run_async(url: str) -> None:
-    engine = create_async_engine(url)
+    engine = create_async_engine(engine_url(url))
     try:
         async with engine.connect() as connection:
             await connection.run_sync(_run)

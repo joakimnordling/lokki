@@ -3,9 +3,9 @@ name: Server (Python)
 on:
   push:
     branches: [main]
-    paths: ["servers/python/**", ".github/workflows/server-python.yml"]
+    paths: ["servers/python/**", ".github/workflows/server-python.yml", ".github/actions/firestore-emulator/**"]
   pull_request:
-    paths: ["servers/python/**", ".github/workflows/server-python.yml"]
+    paths: ["servers/python/**", ".github/workflows/server-python.yml", ".github/actions/firestore-emulator/**"]
   workflow_dispatch:
 
 permissions:
@@ -28,6 +28,15 @@ jobs:
   check:
     name: Lint, types and tests
     runs-on: ubuntu-latest
+    services:
+      # the tests make a database for each test on it
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,5 +49,29 @@ jobs:
         run: uv run ruff check && uv run ruff format --check
       - name: pyright
         run: uv run pyright
+      # Every API and storage test runs on SQLite, PostgreSQL and, with the emulator, Firestore
+      - uses: ./.github/actions/firestore-emulator
       - name: pytest
-        run: uv run pytest --cov --cov-report=term --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
+        env:
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8086
+          LOKKI_TEST_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: >-
+          uv run pytest --cov --cov-fail-under=100 --cov-report=term
+          --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
+
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        run: docker build --tag lokki-server .
+      - name: Start it and ask what it is
+        run: |
+          docker run --detach --name lokki --publish 8080:8080 \
+            --env LOKKI_DATABASE_URL=sqlite+aiosqlite:////tmp/lokki.db lokki-server
+          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 \
+            http://127.0.0.1:8080/v1/info
+          docker logs lokki

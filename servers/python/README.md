@@ -3,7 +3,16 @@
 The reference sync server for [Lokki](../../README.md): it stores end-to-end encrypted rows for any number of
 devices, as described in [the sync protocol](../../docs/sync-protocol.md). It can't read anything it stores.
 
-FastAPI on Python 3.15. Storage is SQL through SQLAlchemy (SQLite now; PostgreSQL, MariaDB and Firestore planned).
+FastAPI on Python 3.15. It stores in SQLite, PostgreSQL or Google Cloud Firestore, chosen by `LOKKI_DATABASE_URL`:
+
+| Storage    | `LOKKI_DATABASE_URL`                                                                                      | Install                    |
+| ---------- | --------------------------------------------------------------------------------------------------------- | -------------------------- |
+| SQLite     | `sqlite+aiosqlite:///lokki.db` (the default)                                                              | `lokki-server`             |
+| PostgreSQL | `postgresql://user:password@host/database`, or as a service gives it, e.g. `postgres://…?sslmode=require` | `lokki-server[postgresql]` |
+| Firestore  | `firestore://PROJECT[/DATABASE]`; collections are named `lokki_…` unless `?prefix=` says otherwise        | `lokki-server[firestore]`  |
+
+The container image ([Dockerfile](Dockerfile)) has all three. [docs/deploy-cloud-run.md](../../docs/deploy-cloud-run.md)
+describes running it on Google Cloud Run.
 
 ## Running it
 
@@ -36,17 +45,20 @@ on the server: the API never shows them. Add `--help` to any command for more.
 
 Environment variables, or a `.env` file in the working directory:
 
-| Variable                  | Default                        | Meaning                                                                        |
-| ------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
-| `LOKKI_DATABASE_URL`      | `sqlite+aiosqlite:///lokki.db` | SQLAlchemy URL with an async driver                                            |
-| `LOKKI_PUBLIC_URL`        | `http://localhost:8000`        | The URL devices use; printed with new tokens                                   |
-| `LOKKI_CORS_ORIGINS`      | `[]`                           | Where the web app is served from, as JSON: `["https://lokki.example.com"]`     |
-| `LOKKI_LIMITS__PULL`      | `1000`                         | Most rows in one pull                                                          |
-| `LOKKI_LIMITS__PUSH`      | `500`                          | Most rows in one push                                                          |
-| `LOKKI_LIMITS__ROW_BYTES` | `4096`                         | Largest row                                                                    |
-| `LOKKI_DOCS`              | `true`                         | API docs: Swagger UI at `/docs`, ReDoc at `/redoc`                             |
-| `LOKKI_TEST_MODE`         | `false`                        | Enables `POST /v1/test/vaults` for the conformance tests. Never in production. |
-| `PORT`                    | `8000`                         | Port for `serve`                                                               |
+| Variable                   | Default                        | Meaning                                                                        |
+| -------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| `LOKKI_DATABASE_URL`       | `sqlite+aiosqlite:///lokki.db` | Where to store: see the table above                                            |
+| `LOKKI_PUBLIC_URL`         | `http://localhost:8000`        | The URL devices use; printed with new tokens                                   |
+| `LOKKI_CORS_ORIGINS`       | `[]`                           | Where the web app is served from, as JSON: `["https://lokki.example.com"]`     |
+| `LOKKI_LIMITS__PULL`       | `1000`                         | Most rows in one pull                                                          |
+| `LOKKI_LIMITS__PUSH`       | `500`                          | Most rows in one push                                                          |
+| `LOKKI_LIMITS__ROW_BYTES`  | `4096`                         | Largest row                                                                    |
+| `LOKKI_POOL__SIZE`         | `3`                            | PostgreSQL: connections kept open                                              |
+| `LOKKI_POOL__MAX_OVERFLOW` | `2`                            | PostgreSQL: extra connections when all are busy                                |
+| `LOKKI_POOL__RECYCLE`      | `1800`                         | PostgreSQL: seconds before a connection is replaced                            |
+| `LOKKI_DOCS`               | `true`                         | API docs: Swagger UI at `/docs`, ReDoc at `/redoc`                             |
+| `LOKKI_TEST_MODE`          | `false`                        | Enables `POST /v1/test/vaults` for the conformance tests. Never in production. |
+| `PORT`                     | `8000`                         | Port for `serve`                                                               |
 
 ## API docs
 
@@ -61,7 +73,17 @@ sites. Set `LOKKI_DOCS=false` to turn them off.
 ```sh
 uv sync
 uv run pytest            # tests, with snapshots in tests/__snapshots__ (update with --snapshot-update)
-uv run pytest --cov      # also coverage, which must stay at 100% of lines and branches
+uv run pytest --cov      # also coverage; CI requires 100% of lines and branches, on every storage
 uv run ruff check && uv run ruff format --check
 uv run pyright
+```
+
+The tests run on SQLite, and also on the other storages when they're available, as in CI:
+
+```sh
+# PostgreSQL: a server to make a database on for each test
+LOKKI_TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres uv run pytest
+# Firestore: Google's emulator (needs Java 21 or newer)
+gcloud emulators firestore start --host-port=127.0.0.1:8086 &
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8086 uv run pytest
 ```
