@@ -410,14 +410,14 @@ main {
 .li.rank {
   width: 100%;
   display: grid;
-  grid-template-columns: 1.9em 1fr auto;
+  grid-template-columns: var(--pos, 2ch) 1fr auto;
   gap: 10px;
   text-align: left;
   align-items: baseline;
 }
 .li.rank .pos {
   color: var(--fg-dim);
-  text-align: right;
+  text-align: left;
   font-size: 0.95rem;
 }
 .rmore {
