@@ -254,6 +254,8 @@ Token:  lk_6Yq3kM0p…        (shown only now)
   back. The operator can add tokens to a vault (for example one per device, or a read-only one) and revoke them.
 - Tokens have a scope: `write` (the default) or `read`. A `read` token gets `403` for anything but `GET`.
 - There is no sign-up through the API.
+- With `--qr`, the command also prints both as a QR code holding `lokki:sync?url=…&token=…` (URL-encoded); the app's
+  Scan QR Code fills them in from it. The `lokki:` scheme keeps phones' camera apps from opening it as a web link.
 
 ### 5.3 API
 

@@ -22,6 +22,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 uv run lokki-server vault add jocke                    # a vault: one person's logs
 uv run lokki-server token add jocke "iPhone 17 Pro"    # prints the URL and a token to enter in the app
 uv run lokki-server token add jocke browser            # one token per device
+uv run lokki-server token add jocke iPad --qr          # also a QR code to scan in the app
 uv run lokki-server serve                              # http://127.0.0.1:8000, data in ./lokki.db
 ```
 
@@ -33,6 +34,7 @@ development. The other commands:
 | `vault list`                        | The vaults, with how many rows and tokens each has        |
 | `vault delete NAME`                 | Deletes a vault with everything in it and its tokens      |
 | `token add VAULT LABEL [--scope …]` | A new token; `--scope read` for one that can only read    |
+| `token add VAULT LABEL --qr`        | Also prints a QR code: Sync → Scan QR Code in the app     |
 | `token list VAULT`                  | The vault's tokens and when each was last used            |
 | `token revoke VAULT LABEL`          | The device using that token can no longer sync            |
 | `migrate`                           | Updates the database's tables without starting the server |
