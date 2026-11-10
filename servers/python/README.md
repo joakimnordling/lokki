@@ -9,7 +9,7 @@ FastAPI on Python 3.15. It stores in SQLite, PostgreSQL or Google Cloud Firestor
 | ---------- | --------------------------------------------------------------------------------------------------------- | -------------------------- |
 | SQLite     | `sqlite+aiosqlite:///lokki.db` (the default)                                                              | `lokki-server`             |
 | PostgreSQL | `postgresql://user:password@host/database`, or as a service gives it, e.g. `postgres://…?sslmode=require` | `lokki-server[postgresql]` |
-| Firestore  | `firestore://PROJECT` or `firestore://PROJECT/DATABASE`, signing in with Google's default credentials     | `lokki-server[firestore]`  |
+| Firestore  | `firestore://PROJECT[/DATABASE]`; collections are named `lokki_…` unless `?prefix=` says otherwise        | `lokki-server[firestore]`  |
 
 The container image ([Dockerfile](Dockerfile)) has all three. [docs/deploy-cloud-run.md](../../docs/deploy-cloud-run.md)
 describes running it on Google Cloud Run.

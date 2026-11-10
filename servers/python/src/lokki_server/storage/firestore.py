@@ -1,17 +1,20 @@
 """
 The storage interface on Google Cloud Firestore (Native mode), for LOKKI_DATABASE_URL=firestore://...
 
-Collections (each conditional write is one transaction, as the protocol needs):
+Collections, their names prefixed with `lokki_` unless the URL says otherwise (each conditional
+write is one transaction, as the protocol needs):
 
-    server/id                      {value}: the server's ID
-    names/{vault name}             {vault}: which vault document has this name; keeps names unique
-    vaults/{vault id}              {name, head, keyring, keyring_vault_id, keyring_version, created,
+    lokki_server/id                {value}: the server's ID
+    lokki_names/{vault name}       {vault}: which vault document has this name; keeps names unique
+    lokki_vaults/{vault id}        {name, head, keyring, keyring_vault_id, keyring_version, created,
                                     changed}
-    vaults/{vault id}/rows/r{key}  {seq, data}; the "r" keeps a row key from looking like one of
+        rows/r{key}                {seq, data}; the "r" keeps a row key from looking like one of
                                    Firestore's reserved IDs (__...__)
-    vaults/{vault id}/labels/{sha256 of the label}
-                                   {token}: keeps a vault's token labels unique, whatever their text
-    tokens/{sha256 of the token}   {vault, label, scope, created, last_used}
+        labels/{sha256 of label}   {token}: keeps a vault's token labels unique, whatever their text
+    lokki_tokens/{sha256 of token} {vault, label, scope, created, last_used}
+
+The prefix keeps the server's collections apart from anything else in the same database: the free
+quota covers only one database per project.
 
 The server signs in with Google's default credentials: on Cloud Run, its service account; on your
 own machine, `gcloud auth application-default login`. With FIRESTORE_EMULATOR_HOST set, the client
@@ -19,9 +22,10 @@ uses the emulator instead.
 """
 
 import hashlib
+import re
 import uuid
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 from google.cloud.firestore import (
     AsyncClient,
@@ -49,16 +53,33 @@ type Doc = dict[str, Any]
 _ATTEMPTS = 25
 
 
-def parse_url(url: str) -> tuple[str, str]:
-    """
-    The project and database of firestore://PROJECT or firestore://PROJECT/DATABASE.
+DEFAULT_PREFIX = "lokki_"
+_PREFIX = re.compile(r"[A-Za-z0-9_-]{0,32}")
 
-    The database defaults to "(default)", the one Firestore's free quota covers.
+
+def parse_url(url: str) -> tuple[str, str, str]:
+    """
+    The project, database and collection prefix of firestore://PROJECT[/DATABASE][?prefix=PREFIX].
+
+    The database defaults to "(default)", the one Firestore's free quota covers, and the prefix to
+    "lokki_"; `?prefix=` turns it off.
     """
     parts = urlsplit(url)
     if parts.scheme != "firestore" or not parts.netloc:
         raise ValueError(f"{url!r} isn't a Firestore URL, e.g. firestore://my-project.")
-    return parts.netloc, parts.path.strip("/") or "(default)"
+    query = dict(
+        parse_qsl(
+            parts.query,
+            keep_blank_values=True,
+        )
+    )
+    prefix = query.pop("prefix", DEFAULT_PREFIX)
+    if query or not _PREFIX.fullmatch(prefix):
+        raise ValueError(
+            f"{url!r}: the only setting is a prefix of up to 32 letters, digits, _ and -, "
+            "e.g. firestore://my-project?prefix=lokki_."
+        )
+    return parts.netloc, parts.path.strip("/") or "(default)", prefix
 
 
 def _label_id(label: str) -> str:
@@ -69,10 +90,17 @@ class FirestoreStorage:
     """The storage interface on Firestore."""
 
     def __init__(self, url: str) -> None:
-        project, database = parse_url(url)
+        project, database, self.prefix = parse_url(url)
         # Any: the client library's own type hints are partly incomplete (unknown types in
         # references, queries and transactions), which strict type checking can't work with
-        self.client: Any = AsyncClient(project=project, database=database)
+        self.client: Any = AsyncClient(
+            project=project,
+            database=database,
+        )
+
+    def _collection(self, name: str) -> Any:
+        """One of the server's own top-level collections, with the prefix."""
+        return self.client.collection(self.prefix + name)
 
     async def close(self) -> None:
         self.client.close()
@@ -83,10 +111,10 @@ class FirestoreStorage:
         return self.client.transaction(max_attempts=_ATTEMPTS)
 
     def _vault(self, vault_id: VaultId) -> Any:
-        return self.client.collection("vaults").document(str(vault_id))
+        return self._collection("vaults").document(str(vault_id))
 
     async def server_id(self) -> str:
-        ref = self.client.collection("server").document("id")
+        ref = self._collection("server").document("id")
 
         @async_transactional
         async def made_once(transaction: Any) -> str:
@@ -102,8 +130,8 @@ class FirestoreStorage:
     # vaults and tokens
 
     async def create_vault(self, name: str, now: int) -> VaultId:
-        name_ref = self.client.collection("names").document(name)
-        vault_ref = self.client.collection("vaults").document()
+        name_ref = self._collection("names").document(name)
+        vault_ref = self._collection("vaults").document()
 
         @async_transactional
         async def create(transaction: Any) -> VaultId:
@@ -127,7 +155,7 @@ class FirestoreStorage:
         return await create(self._transaction())
 
     async def find_vault(self, name: str) -> VaultId | None:
-        found = await self.client.collection("names").document(name).get()
+        found = await self._collection("names").document(name).get()
         return str(_data(found)["vault"]) if found.exists else None
 
     async def add_token(
@@ -139,7 +167,7 @@ class FirestoreStorage:
         now: int,
     ) -> None:
         label_ref = self._vault(vault_id).collection("labels").document(_label_id(label))
-        token_ref = self.client.collection("tokens").document(token_hash)
+        token_ref = self._collection("tokens").document(token_hash)
 
         @async_transactional
         async def add(transaction: Any) -> None:
@@ -160,7 +188,7 @@ class FirestoreStorage:
         await add(self._transaction())
 
     async def find_token(self, token_hash: str) -> Token | None:
-        found = await self.client.collection("tokens").document(token_hash).get()
+        found = await self._collection("tokens").document(token_hash).get()
         if not found.exists:
             return None
         doc = _data(found)
@@ -172,7 +200,7 @@ class FirestoreStorage:
         )
 
     async def touch_token(self, token_id: TokenId, now: int) -> None:
-        await self.client.collection("tokens").document(str(token_id)).update({"last_used": now})
+        await self._collection("tokens").document(str(token_id)).update({"last_used": now})
 
     async def revoke_token(self, vault_id: VaultId, label: str) -> bool:
         label_ref = self._vault(vault_id).collection("labels").document(_label_id(label))
@@ -182,7 +210,7 @@ class FirestoreStorage:
             found = await label_ref.get(transaction=transaction)
             if not found.exists:
                 return False
-            transaction.delete(self.client.collection("tokens").document(_data(found)["token"]))
+            transaction.delete(self._collection("tokens").document(_data(found)["token"]))
             transaction.delete(label_ref)
             return True
 
@@ -190,7 +218,7 @@ class FirestoreStorage:
 
     async def list_vaults(self) -> list[VaultSummary]:
         found: list[VaultSummary] = []
-        async for vault in self.client.collection("vaults").stream():
+        async for vault in self._collection("vaults").stream():
             doc = _data(vault)
             found.append(
                 VaultSummary(
@@ -198,18 +226,29 @@ class FirestoreStorage:
                     head=doc["head"],
                     rows=await _count(vault.reference.collection("rows")),
                     tokens=await _count(
-                        self.client.collection("tokens").where(
-                            filter=FieldFilter("vault", "==", vault.id)
+                        self._collection("tokens").where(
+                            filter=FieldFilter(
+                                "vault",
+                                "==",
+                                vault.id,
+                            )
                         )
                     ),
                     created=doc["created"],
                 )
             )
-        return sorted(found, key=lambda v: v.name)
+        return sorted(
+            found,
+            key=lambda v: v.name,
+        )
 
     async def list_tokens(self, vault_id: VaultId) -> list[TokenSummary]:
-        query = self.client.collection("tokens").where(
-            filter=FieldFilter("vault", "==", str(vault_id))
+        query = self._collection("tokens").where(
+            filter=FieldFilter(
+                "vault",
+                "==",
+                str(vault_id),
+            )
         )
         found = [_data(t) async for t in query.stream()]
         # sorted here: ordering in the query would need a composite index
@@ -220,7 +259,10 @@ class FirestoreStorage:
                 created=t["created"],
                 last_used=t.get("last_used"),
             )
-            for t in sorted(found, key=lambda t: (t["created"], t["label"]))
+            for t in sorted(
+                found,
+                key=lambda t: (t["created"], t["label"]),
+            )
         ]
 
     async def delete_vault(self, vault_id: VaultId) -> bool:
@@ -229,12 +271,16 @@ class FirestoreStorage:
         if not found.exists:
             return False
         # Tokens first, so nobody can use the vault while the rest goes
-        tokens = self.client.collection("tokens").where(
-            filter=FieldFilter("vault", "==", str(vault_id))
+        tokens = self._collection("tokens").where(
+            filter=FieldFilter(
+                "vault",
+                "==",
+                str(vault_id),
+            )
         )
         async for token in tokens.stream():
             await token.reference.delete()
-        await self.client.collection("names").document(_data(found)["name"]).delete()
+        await self._collection("names").document(_data(found)["name"]).delete()
         await self.client.recursive_delete(vault_ref)  # with its rows and labels
         return True
 
@@ -294,13 +340,29 @@ class FirestoreStorage:
         head: int = _data(await vault_ref.get())["head"]
         query = (
             vault_ref.collection("rows")
-            .where(filter=FieldFilter("seq", ">", since))
-            .where(filter=FieldFilter("seq", "<=", head))
+            .where(
+                filter=FieldFilter(
+                    "seq",
+                    ">",
+                    since,
+                )
+            )
+            .where(
+                filter=FieldFilter(
+                    "seq",
+                    "<=",
+                    head,
+                )
+            )
             .order_by("seq")
             .limit(limit + 1)
         )
         found = [
-            Row(key=row.id[1:], seq=_data(row)["seq"], data=_data(row)["data"])
+            Row(
+                key=row.id[1:],
+                seq=_data(row)["seq"],
+                data=_data(row)["data"],
+            )
             async for row in query.stream()
         ]
         more = len(found) > limit
@@ -327,7 +389,10 @@ class FirestoreStorage:
             head: int = _data(await vault_ref.get(transaction=transaction))["head"]
             if head != base:
                 return WriteResult(Outcome.BEHIND, head)
-            for seq, (key, data) in enumerate(new_rows, start=base + 1):
+            for seq, (key, data) in enumerate(
+                new_rows,
+                start=base + 1,
+            ):
                 transaction.set(rows.document(f"r{key}"), {"seq": seq, "data": data})
             transaction.update(vault_ref, {"head": base + len(new_rows), "changed": now})
             return WriteResult(Outcome.OK, base + len(new_rows))

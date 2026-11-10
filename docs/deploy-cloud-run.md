@@ -82,7 +82,9 @@ gcloud secrets add-iam-policy-binding lokki-database-url --member=serviceAccount
   --role=roles/secretmanager.secretAccessor
 ```
 
-**Firestore**: the free quota covers one database per project, the `(default)` one.
+**Firestore**: the free quota covers one database per project, the `(default)` one. The server's collections are
+named `lokki_…`, so the database can hold other things too; `firestore://PROJECT?prefix=other_` gives a second
+server collections of its own.
 
 ```sh
 gcloud firestore databases create --location=$REGION
