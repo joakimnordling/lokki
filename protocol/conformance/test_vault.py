@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 import httpx2
+import pytest
 
 from conformance.conftest import Tokens, bearer
 from conformance.helpers import key, keyring
@@ -36,10 +37,34 @@ def test_the_keyring_is_stored_as_sent(http: httpx2.Client, writer: dict[str, st
     assert (vault["keyring"], vault["keyring_version"]) == (ring, 1)
 
 
-def test_a_keyring_with_other_fields_is_refused(
-    http: httpx2.Client, writer: dict[str, str]
+@pytest.mark.parametrize(
+    "ring",
+    [
+        keyring(unknown_field=True),
+        {**keyring(), "version": "1"},  # never converted: that would break the mac
+        {**keyring(), "u": 1794130000000.0},
+        {**keyring(), "u": 2**53},
+        keyring(keys=[{**keyring()["keys"][0], "created": 1.5}]),
+        keyring(keys=[{**keyring()["keys"][0], "big": -(2**53)}]),
+        keyring(keys=[{**keyring()["keys"][0], "näme": "x"}]),
+    ],
+    ids=[
+        "other field",
+        "string for a number",
+        "fractional number",
+        "integer too large",
+        "fractional number in an entry",
+        "integer too large in an entry",
+        "non-ASCII object key",
+    ],
+)
+def test_a_keyring_the_mac_could_not_survive_is_refused(
+    http: httpx2.Client,
+    writer: dict[str, str],
+    ring: dict[str, Any],
 ) -> None:
-    response = put(http, writer, 0, keyring(unknown_field=True))
+    """Protocol 4.4: only values whose canonical JSON is the same everywhere, never converted."""
+    response = put(http, writer, 0, ring)
 
     assert response.status_code == 400
     assert response.json()["error"] == "invalid_request"
