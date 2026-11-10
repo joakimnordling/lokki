@@ -100,6 +100,8 @@ export const sync = {
     const used = new Set(this.servers.map((s) => s.bit));
     let bit = 0;
     while (used.has(bit)) bit++;
+    // Each server is one bit in every record's server bits (sb). JavaScript's bitwise operators work on 32-bit
+    // signed integers, so bits 0 to 30 keep sb a positive, exact number; 1 << 31 is negative and 1 << 32 is 1.
     if (bit > 30) throw new Error("Too many servers.");
     const server = {
       k: `server:${bit}`,
