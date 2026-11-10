@@ -72,7 +72,8 @@ export function detailRender() {
     rk = rAll.slice(0, rn);
   const canMore = rAll.length > rn;
   h +=
-    `<div class="sec" id="rankSec"><h2>Rank</h2><div class="seg small">${segBtn("rank", "high", "Highest")}${segBtn("rank", "low", "Lowest")}</div>` +
+    // the positions start at the edge like the other lists, in a column as wide as the longest one shown
+    `<div class="sec" id="rankSec" style="--pos:${String(rk.length).length + 1}ch"><h2>Rank</h2><div class="seg small">${segBtn("rank", "high", "Highest")}${segBtn("rank", "low", "Lowest")}</div>` +
     rk
       .map(
         (x, j) =>

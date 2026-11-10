@@ -1,12 +1,12 @@
 // Builds the self-hosted site (GitHub Pages) into dist/site: the modules bundled into one script and the stylesheet,
-// both with content hashes in their names, the static files from public/, a service worker for offline use, and
-// the CNAME for the custom domain.
+// both with content hashes in their names, the static files from public/, a service worker for offline use, the
+// CNAME for the custom domain, and version.json for the app's update check.
 //   npm run build:site
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { build } from "esbuild";
-import { buildDefine } from "./build-info.js";
+import { buildDefine, buildInfo } from "./build-info.js";
 
 const root = resolve(import.meta.dirname, "..");
 const out = join(root, "dist", "site");
@@ -73,6 +73,8 @@ export async function buildSite() {
     .replace("__VERSION__", version)
     .replace("__FILES__", JSON.stringify(cached));
   await writeFile(join(out, "sw.js"), sw);
+  // What's deployed now, for the app's update check (src/ui/update.js); never cached by the service worker
+  await writeFile(join(out, "version.json"), `${JSON.stringify(await buildInfo())}\n`);
   return { out, version, files: cached.length };
 }
 

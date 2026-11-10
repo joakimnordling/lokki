@@ -20,6 +20,7 @@ import { importCSVFiles, openMetricCSV } from "./ui/files.js";
 import { ICON } from "./ui/icons.js";
 import { render } from "./ui/render.js";
 import { openDeleteMetric, openEntrySheet, toast } from "./ui/sheets.js";
+import { watchForUpdates } from "./ui/update.js";
 
 applyLook(store.get("look"));
 applyTextSize(store.get("text"));
@@ -76,9 +77,11 @@ render();
   }
   S.localReady = true;
   render();
-  // 2. then sync
-  if (S.local) sync.start();
-  else if (!(await connectClaude(render))) return;
+  // 2. then sync, and notice new versions of the standalone app
+  if (S.local) {
+    sync.start();
+    watchForUpdates();
+  } else if (!(await connectClaude(render))) return;
   setInterval(() => {
     if (listShown()) render();
   }, 60000);
