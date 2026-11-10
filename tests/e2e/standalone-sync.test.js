@@ -69,6 +69,19 @@ describe("standalone sync", () => {
     assert.match(await A.textContent("#sSync"), /Off\./);
   });
 
+  it("refuses a server whose vault is for another app, before asking for a passphrase", async () => {
+    const other = await srv.vault();
+    const theirs = { format: "lokki-keyring", version: 1, app: "other-app", vault: "x", keys: [{}], u: 1, mac: "x" };
+    await new ServerClient(srv.url, other.write).putKeyring(0, theirs);
+
+    await connect(A, srv.url, other.write);
+    await A.waitForFunction(() => document.querySelector(".sheet .err")?.textContent);
+    assert.match(await A.textContent(".sheet .err"), /for another app, not Lokki/);
+    assert.equal(await A.$("#p1"), null);
+    await A.click("#sCancel");
+    assert.equal(await A.evaluate(() => window.__lokki.sync.vault), null);
+  });
+
   it("turns on with a first server and a new passphrase, and sends everything encrypted", async () => {
     await connect(A);
     await A.waitForSelector("#p1");
@@ -87,6 +100,7 @@ describe("standalone sync", () => {
     const vault = await new ServerClient(srv.url, tokens.read).vault();
     assert.equal(vault.rows, 3);
     assert.equal(vault.keyring.format, "lokki-keyring");
+    assert.equal(vault.keyring.app, "lokki");
     const { rows } = await new ServerClient(srv.url, tokens.read).pull(0);
     assert.ok(rows.every((r) => r.data.startsWith("v1.") && !r.data.includes("Running")));
   });
@@ -130,6 +144,33 @@ describe("standalone sync", () => {
     await home(A);
     assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences");
     assert.equal(await A.$(".hbtn .dot"), null);
+  });
+
+  it("says so when a server's token now opens another vault, or another app's", async () => {
+    // Switch the server's token, then wait for a sync with it to report this error (or none)
+    const useToken = async (token, expected) => {
+      await A.evaluate(
+        (t) => window.__lokki.sync.updateServer(window.__lokki.sync.servers[0].bit, { token: t }),
+        token,
+      );
+      await A.waitForFunction(
+        (e) => {
+          const last = window.__lokki.sync.servers[0].last;
+          return !window.__lokki.sync.running && (e === null ? last?.ok : last?.error?.startsWith(e));
+        },
+        expected,
+        { timeout: 30000 },
+      );
+    };
+    const keyring = (app) => ({ format: "lokki-keyring", version: 1, app, vault: "y", keys: [{}], u: 1, mac: "x" });
+    const someoneElse = await srv.vault();
+    await new ServerClient(srv.url, someoneElse.write).putKeyring(0, keyring("lokki"));
+    const otherApp = await srv.vault();
+    await new ServerClient(srv.url, otherApp.write).putKeyring(0, keyring("other-app"));
+
+    await useToken(someoneElse.write, "This server holds a different vault.");
+    await useToken(otherApp.write, "This server's vault is for another app, not Lokki.");
+    await useToken(tokens.write, null);
   });
 
   it("keeps the chart view per device", async () => {

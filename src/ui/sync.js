@@ -1,8 +1,9 @@
 // The Sync sheets (standalone only): set up with a first server and a passphrase, servers and their status, passphrase.
 import { ago, esc } from "../core/format.js";
 import { DamagedKeyringError, WrongPassphraseError } from "../sync/crypto.js";
+import { OtherAppError } from "../sync/engine.js";
 import { ServerError } from "../sync/http.js";
-import { hostOf, sync } from "../sync/manager.js";
+import { hostOf, OTHER_APP, sync } from "../sync/manager.js";
 import { $ } from "./dom.js";
 import { ICON } from "./icons.js";
 import { sheet, toast } from "./sheets.js";
@@ -36,6 +37,7 @@ const serverFields = (url = "") =>
   field("sToken", "Token", `type="password" placeholder="lk_…"`);
 
 function explain(e) {
+  if (e instanceof OtherAppError) return OTHER_APP;
   if (e instanceof ServerError) {
     if (e.status === 0) return "Can't reach the server. Check the URL and your connection.";
     if (e.status === 401) return "The server doesn't accept this token.";

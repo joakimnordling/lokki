@@ -3,9 +3,9 @@
    The keys are non-extractable CryptoKeys; neither the passphrase nor the data key is ever stored. */
 import { idb } from "../data/idb.js";
 import { hooks, rebuild, refreshMetrics } from "../data/state.js";
-import { deriveKeys, newKeyring, changePassphrase as rewrap, unlock } from "./crypto.js";
+import { APP, deriveKeys, newKeyring, changePassphrase as rewrap, unlock } from "./crypto.js";
 import { AppDevice } from "./device.js";
-import { syncAll } from "./engine.js";
+import { DifferentVaultError, OtherAppError, syncAll } from "./engine.js";
 import { ServerClient } from "./http.js";
 
 const EVERY_MS = 60000;
@@ -90,10 +90,11 @@ export const sync = {
   client(url, token) {
     return new ServerClient(url, token);
   },
-  /** Look at a server before adding it: {info, keyring} or a ServerError. */
+  /** Look at a server before adding it: {info, keyring}, or a ServerError or OtherAppError. */
   async inspect(url, token) {
     const http = this.client(url, token);
     const [info, vault] = [await http.info(), await http.vault()];
+    if (vault.keyring && vault.keyring.app !== APP) throw new OtherAppError("this server's vault is for another app");
     return { info, keyring: vault.keyring };
   },
   async addServer(url, token, name) {
@@ -211,8 +212,11 @@ export const hostOf = (url) => {
   }
 };
 
+export const OTHER_APP = "This server's vault is for another app, not Lokki. Use another token or server.";
+
 function describe(error) {
-  if (error.name === "DifferentVaultError") return "This server holds a different vault.";
+  if (error instanceof DifferentVaultError) return "This server holds a different vault.";
+  if (error instanceof OtherAppError) return OTHER_APP;
   if (error.status === 0) return "Can't reach the server.";
   if (error.status === 401) return "The server doesn't accept this token any more.";
   if (error.status === 403) return "This token can only read.";
