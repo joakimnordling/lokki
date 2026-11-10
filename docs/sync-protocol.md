@@ -18,8 +18,9 @@ Status: **draft for review**. Nothing here is implemented yet.
 9. [Reading clients](#9-reading-clients)
 10. [Security](#10-security)
 11. [Client status indicators](#11-client-status-indicators)
-12. [Versioning](#12-versioning)
-13. [Later](#13-later)
+12. [Test vectors and conformance](#12-test-vectors-and-conformance)
+13. [Versioning](#13-versioning)
+14. [Later](#14-later)
 
 ## 1. Goals
 
@@ -172,6 +173,7 @@ ID. It holds no data. It is the same on every server, and syncs between them wit
 {
   "format": "lokki-keyring",
   "version": 1,
+  "app": "lokki",
   "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
   "keys": [
     {
@@ -189,6 +191,7 @@ ID. It holds no data. It is the same on every server, and syncs between them wit
 
 | Field   | Meaning                                                                                                   |
 | ------- | --------------------------------------------------------------------------------------------------------- |
+| `app`   | Which app the vault's data is for: `lokki`. Lowercase letters, digits and `-`, at most 32 characters.     |
 | `vault` | Random ID (16 bytes, base64url), made with the data key. A device refuses to mix two different vaults.    |
 | `keys`  | The ways to unlock the data key. Version 1 has one of type `passphrase`; a `recovery` key can come later. |
 | `u`     | When the keyring last changed                                                                             |
@@ -204,8 +207,12 @@ Each entry in `keys`:
 | `kdf`     | Argon2id settings: memory `m` in KiB (64 MiB), iterations `t`, parallelism `p`, 16-byte `salt`; 32-byte output         |
 | `wrapped` | base64url( nonce ‖ AES-256-GCM(entry's key, nonce, data key, additional data = `"lokki/key/v1/" + vault + "/" + id`) ) |
 
+- The same servers can hold vaults of other apps that use this protocol, each naming itself in `app`. A device
+  refuses a vault of another app, and says so before asking for a passphrase. Servers accept any well-formed `app`.
 - A wrong passphrase makes unwrapping fail its integrity check, so the app can say "wrong passphrase" instead of
   showing garbage. Argon2id makes guessing slow.
+- The passphrase is normalised to Unicode NFC and encoded as UTF-8 before Argon2id (version 0x13), so the same
+  passphrase typed on any device, with composed or decomposed letters like "ä", opens the keyring.
 - **Canonical JSON** for the `mac`: object keys sorted, no whitespace, numbers and strings as `JSON.stringify` writes
   them. So that this is the same in every language, a keyring may hold only objects with ASCII keys, arrays, strings,
   `true`, `false`, `null` and integers within ±(2⁵³ − 1); no fractional numbers. Servers refuse anything else
@@ -283,6 +290,7 @@ vault that the token belongs to.
   "keyring": {
     "format": "lokki-keyring",
     "version": 1,
+    "app": "lokki",
     "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
     "keys": ["…"],
     "u": 1794130000000,
@@ -457,7 +465,8 @@ This costs a few bytes per record however many servers there are.
 
 Rounds run when the app opens, when it comes back to the foreground, a few seconds after a change, and about once a
 minute while it is visible. With several servers, a device runs a round with each in turn; a change pulled from one
-is pushed to the others because their bits are clear.
+is pushed to the others because their bits are clear. When a round brought something new, the servers that came
+before it get another round right away, so a change crosses from one server to the others in a single sync.
 
 ### 7.3 Why "up to date to push" is enough
 
@@ -514,7 +523,7 @@ section 6.
 
 **A server can see:** how many rows a vault has, their sizes (192 bytes, or more in steps of 64 for long notes and
 names), when they change, and the keyring. **It can't see:** names, values, notes, times, IDs, or which rows are
-metrics and which are entries.
+metrics and which are entries. The keyring isn't encrypted, so a server also sees which app a vault is for.
 
 - A server, or anyone who steals its database, can't read the data without the passphrase, and guessing it costs
   Argon2id with 64 MiB of memory per guess. A long passphrase matters.
@@ -534,14 +543,22 @@ metrics and which are entries.
   bit for it is clear).
 - **Overall:** a small indicator in the app's top bar when some local change hasn't reached any server yet.
 
-## 12. Versioning
+## 12. Test vectors and conformance
+
+- `protocol/vectors/v1.json` holds fixed inputs and the exact outputs of section 4: derived keys, row keys, padded
+  and encrypted rows, Argon2id results, canonical JSON and a keyring. Every client implementation must reproduce
+  them; the web app and the Python reference implementation in `protocol/` both do.
+- `protocol/conformance/` checks a server over HTTP against sections 5 and 7.3, whatever language it's written in,
+  using test mode (5.5).
+
+## 13. Versioning
 
 - The API version is in the path (`/v1/`); `GET /v1/info` lists the versions a server supports.
 - The encryption scheme is in each row's `data` prefix (`v1.`), bound into its additional data, and in the keyring's
   `version`.
 - Unknown fields in records and keyrings are ignored and kept, so newer clients can add fields.
 
-## 13. Later
+## 14. Later
 
 Not planned for version 1, but the design leaves room for:
 

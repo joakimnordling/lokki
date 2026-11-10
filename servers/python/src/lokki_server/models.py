@@ -184,6 +184,7 @@ class Keyring(BaseModel):
                 {
                     "format": "lokki-keyring",
                     "version": 1,
+                    "app": "lokki",
                     "vault": _VAULT_ID,
                     "keys": [
                         {
@@ -205,6 +206,11 @@ class Keyring(BaseModel):
     version: SafeInt = Field(
         description="The keyring format's version",
         examples=[1],
+    )
+    app: Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")] = Field(
+        description="Which app the vault's data is for, e.g. `lokki`. The server accepts any app; "
+        "devices refuse vaults of other apps.",
+        examples=["lokki"],
     )
     vault: Annotated[
         str,

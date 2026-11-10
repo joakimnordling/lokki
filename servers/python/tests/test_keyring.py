@@ -62,6 +62,10 @@ def test_two_first_keyrings_of_different_vaults(client: TestClient, writer: dict
         {k: v for k, v in keyring().items() if k != "mac"},
         {**keyring(), "keys": []},
         keyring(future_field=True),
+        {k: v for k, v in keyring().items() if k != "app"},
+        keyring(app="Lokki"),
+        keyring(app="other app"),
+        keyring(app="x" * 33),
         {**keyring(), "version": "1"},  # never converted: that would break the mac
         {**keyring(), "u": 1794130000000.0},
         {**keyring(), "u": 2**53},
@@ -95,3 +99,11 @@ def test_entries_may_hold_strings_integers_booleans_and_null(
 
     assert put(client, writer, 0, ring).status_code == 200
     assert client.get("/v1/vault", headers=writer).json()["keyring"] == ring
+
+
+def test_a_keyring_of_another_app_is_stored(client: TestClient, writer: dict[str, str]) -> None:
+    """The server serves any app using the protocol; devices tell the apps apart."""
+    ring = keyring(app="other-app")
+
+    assert put(client, writer, 0, ring).status_code == 200
+    assert client.get("/v1/vault", headers=writer).json()["keyring"]["app"] == "other-app"

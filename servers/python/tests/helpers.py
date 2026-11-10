@@ -15,6 +15,7 @@ def keyring(
     """A keyring as a device would send it. The server never checks keys or mac."""
     return {
         "format": "lokki-keyring",
+        "app": "lokki",
         "version": 1,
         "vault": vault,
         "keys": [
