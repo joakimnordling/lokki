@@ -10,7 +10,7 @@
      clearBit(bit)                   forget what this server has (a different or restored server)
      all()                           every local record
    The server state is a plain object the caller keeps: {url, token, id, bit, cursor, keyringVersion}. */
-import { DamagedRowError, decryptRow, encryptRow, FormatError, rowKey, verifyKeyring } from "./crypto.js";
+import { APP, DamagedRowError, decryptRow, encryptRow, FormatError, rowKey, verifyKeyring } from "./crypto.js";
 import { ServerError } from "./http.js";
 import { compareRecords } from "./merge.js";
 
@@ -19,11 +19,13 @@ const MAX_REPAIRS = 200; // damaged rows replaced from this device's copy, per r
 
 /** The server holds a different vault: stop syncing with it (it's not ours to change). */
 export class DifferentVaultError extends Error {}
+/** The server's vault is for another app using the same protocol (protocol 4.4). */
+export class OtherAppError extends Error {}
 
 /**
  * Pull everything new from a server, merge it, and push what it lacks.
  * Returns a report: {pulled, applied, pushed, unknownFormat, damaged, repaired, keyring}.
- * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token) and DifferentVaultError.
+ * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token), DifferentVaultError and OtherAppError.
  */
 export async function syncRound({ server, device, keys, http }) {
   const report = { pulled: 0, applied: 0, pushed: 0, unknownFormat: 0, damaged: [], repaired: 0, keyring: "same" };
@@ -89,6 +91,7 @@ async function syncKeyring({ server, device, keys, http, vault, report }) {
   for (let tries = 0; tries < MAX_CONFLICTS; tries++) {
     const mine = device.keyring();
     let theirs = vault.keyring;
+    if (theirs && theirs.app !== APP) throw new OtherAppError(`this server's vault is for another app (${theirs.app})`);
     if (theirs && mine && theirs.vault !== mine.vault)
       throw new DifferentVaultError("this server holds a different vault");
     if (theirs && !(await verifyKeyring(keys, theirs))) {

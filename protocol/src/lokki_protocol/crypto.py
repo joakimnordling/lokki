@@ -206,11 +206,16 @@ def passphrase_entry(
     }
 
 
+# The app a keyring is for (section 4.4)
+APP = "lokki"
+
+
 def seal_keyring(keys: Keys, vault: str, entries: list[Json], u: int) -> Json:
     """A complete keyring with its mac."""
     keyring: Json = {
         "format": "lokki-keyring",
         "version": 1,
+        "app": APP,
         "vault": vault,
         "keys": entries,
         "u": u,

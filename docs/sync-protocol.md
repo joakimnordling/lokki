@@ -173,6 +173,7 @@ ID. It holds no data. It is the same on every server, and syncs between them wit
 {
   "format": "lokki-keyring",
   "version": 1,
+  "app": "lokki",
   "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
   "keys": [
     {
@@ -190,6 +191,7 @@ ID. It holds no data. It is the same on every server, and syncs between them wit
 
 | Field   | Meaning                                                                                                   |
 | ------- | --------------------------------------------------------------------------------------------------------- |
+| `app`   | Which app the vault's data is for: `lokki`. Lowercase letters, digits and `-`, at most 32 characters.     |
 | `vault` | Random ID (16 bytes, base64url), made with the data key. A device refuses to mix two different vaults.    |
 | `keys`  | The ways to unlock the data key. Version 1 has one of type `passphrase`; a `recovery` key can come later. |
 | `u`     | When the keyring last changed                                                                             |
@@ -205,6 +207,8 @@ Each entry in `keys`:
 | `kdf`     | Argon2id settings: memory `m` in KiB (64 MiB), iterations `t`, parallelism `p`, 16-byte `salt`; 32-byte output         |
 | `wrapped` | base64url( nonce ‖ AES-256-GCM(entry's key, nonce, data key, additional data = `"lokki/key/v1/" + vault + "/" + id`) ) |
 
+- The same servers can hold vaults of other apps that use this protocol, each naming itself in `app`. A device
+  refuses a vault of another app, and says so before asking for a passphrase. Servers accept any well-formed `app`.
 - A wrong passphrase makes unwrapping fail its integrity check, so the app can say "wrong passphrase" instead of
   showing garbage. Argon2id makes guessing slow.
 - The passphrase is normalised to Unicode NFC and encoded as UTF-8 before Argon2id (version 0x13), so the same
@@ -286,6 +290,7 @@ vault that the token belongs to.
   "keyring": {
     "format": "lokki-keyring",
     "version": 1,
+    "app": "lokki",
     "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
     "keys": ["…"],
     "u": 1794130000000,
@@ -518,7 +523,7 @@ section 6.
 
 **A server can see:** how many rows a vault has, their sizes (192 bytes, or more in steps of 64 for long notes and
 names), when they change, and the keyring. **It can't see:** names, values, notes, times, IDs, or which rows are
-metrics and which are entries.
+metrics and which are entries. The keyring isn't encrypted, so a server also sees which app a vault is for.
 
 - A server, or anyone who steals its database, can't read the data without the passphrase, and guessing it costs
   Argon2id with 64 MiB of memory per guess. A long passphrase matters.

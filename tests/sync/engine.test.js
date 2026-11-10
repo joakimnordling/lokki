@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { deriveKeys, encryptRow, newKeyring, rowKey, unlock, WrongPassphraseError } from "../../src/sync/crypto.js";
-import { DifferentVaultError, syncAll } from "../../src/sync/engine.js";
+import { DifferentVaultError, OtherAppError, syncAll } from "../../src/sync/engine.js";
 import { ServerClient, ServerError } from "../../src/sync/http.js";
 import { MemoryDevice } from "../../src/sync/memory.js";
 import { startServer } from "./server.js";
@@ -243,6 +243,18 @@ describe("the keyring", () => {
 
     const stranger = device(await newVault(), [servers[0], write]);
     await assert.rejects(sync(stranger), DifferentVaultError);
+  });
+
+  it("refuses a vault of another app, and leaves it as it was", async () => {
+    const { write } = await servers[0].vault();
+    const http = new ServerClient(servers[0].url, write);
+    const theirs = { ...(await newVault()).keyring, app: "other-app" };
+    await http.putKeyring(0, theirs);
+
+    const lokki = device(await newVault(), [servers[0], write]);
+    await assert.rejects(sync(lokki), OtherAppError);
+    assert.deepEqual((await http.vault()).keyring, theirs);
+    assert.equal((await http.vault()).rows, 0);
   });
 });
 

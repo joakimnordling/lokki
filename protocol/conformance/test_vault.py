@@ -41,6 +41,8 @@ def test_the_keyring_is_stored_as_sent(http: httpx2.Client, writer: dict[str, st
     "ring",
     [
         keyring(unknown_field=True),
+        {k: v for k, v in keyring().items() if k != "app"},
+        keyring(app="Lokki"),
         {**keyring(), "version": "1"},  # never converted: that would break the mac
         {**keyring(), "u": 1794130000000.0},
         {**keyring(), "u": 2**53},
@@ -50,6 +52,8 @@ def test_the_keyring_is_stored_as_sent(http: httpx2.Client, writer: dict[str, st
     ],
     ids=[
         "other field",
+        "no app",
+        "app not in lowercase",
         "string for a number",
         "fractional number",
         "integer too large",
@@ -110,3 +114,11 @@ def test_deleting_the_vault(http: httpx2.Client, vault: Tokens) -> None:
     assert http.delete("/v1/vault", headers=write).status_code == 204
     assert http.get("/v1/vault", headers=write).status_code == 401
     assert http.get("/v1/vault", headers=read).status_code == 401
+
+
+def test_a_keyring_of_another_app_is_stored(http: httpx2.Client, writer: dict[str, str]) -> None:
+    """Protocol 4.4: servers accept any well-formed app; devices refuse vaults of other apps."""
+    ring = keyring(app="other-app")
+
+    assert put(http, writer, 0, ring).status_code == 200
+    assert http.get("/v1/vault", headers=writer).json()["keyring"] == ring

@@ -173,6 +173,7 @@
     "keyring": {
       "format": "lokki-keyring",
       "version": 1,
+      "app": "lokki",
       "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
       "keys": [
         {
@@ -190,7 +191,7 @@
         }
       ],
       "u": 1794130000000,
-      "mac": "GdzbxxQfTKVxbZuR2Yw1MwPC5KOlXIoowTveTL0BDOI"
+      "mac": "hejcxu9vNGSQ7tOY8P3H2Q00wUb5EWhsPGqIsT-Fe7Q"
     }
   }
 }

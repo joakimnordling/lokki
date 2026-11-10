@@ -176,6 +176,7 @@
         "description": "The vault keyring (protocol 4.4): the vault's key, wrapped by keys made from passphrases.\n\nOnly these fields are accepted, with their exact JSON types and nothing converted, and values\nonly of the kinds the `mac`'s canonical JSON allows. The server checks the format and the vault\nID, so it can refuse another vault's keyring, and stores the rest as sent: it can't check the\nentries in `keys`, or the `mac`.",
         "examples": [
           {
+            "app": "lokki",
             "format": "lokki-keyring",
             "keys": [
               {
@@ -199,6 +200,15 @@
           }
         ],
         "properties": {
+          "app": {
+            "description": "Which app the vault's data is for, e.g. `lokki`. The server accepts any app; devices refuse vaults of other apps.",
+            "examples": [
+              "lokki"
+            ],
+            "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+            "title": "App",
+            "type": "string"
+          },
           "format": {
             "const": "lokki-keyring",
             "description": "Always `lokki-keyring`",
@@ -260,6 +270,7 @@
         "required": [
           "format",
           "version",
+          "app",
           "vault",
           "keys",
           "u",

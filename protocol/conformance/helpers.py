@@ -13,6 +13,7 @@ def keyring(vault: str = "Jq9wq3sKp0m2A1xYbXo3Vg", u: int = 1, **extra: Any) -> 
     """A keyring. A server stores it as sent and never checks its keys or mac."""
     return {
         "format": "lokki-keyring",
+        "app": "lokki",
         "version": 1,
         "vault": vault,
         "keys": [{"id": "a7Kq2m", "type": "passphrase", "created": 1, "kdf": {}, "wrapped": "x"}],

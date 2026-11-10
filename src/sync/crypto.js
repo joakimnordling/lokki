@@ -175,9 +175,12 @@ export async function passphraseEntry(
   return { id, type: "passphrase", created: now, kdf: settings, wrapped: toB64url(both) };
 }
 
+/** The app a keyring is for (protocol 4.4): Lokki refuses vaults of other apps. */
+export const APP = "lokki";
+
 /** A complete keyring with its mac. */
 export async function sealKeyring(keys, vault, entries, u) {
-  const keyring = { format: "lokki-keyring", version: 1, vault, keys: entries, u };
+  const keyring = { format: "lokki-keyring", version: 1, app: APP, vault, keys: entries, u };
   keyring.mac = await keyringMac(keys, keyring);
   return keyring;
 }
