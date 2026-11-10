@@ -10,6 +10,7 @@ import { exportAll } from "./files.js";
 import { render } from "./render.js";
 import { sheet } from "./sheets.js";
 import { openSync, syncSummary } from "./sync.js";
+import { checkForUpdate } from "./update.js";
 
 export function openSettings() {
   const total = [...S.entryCache.values()].reduce((a, b) => a + b.length, 0);
@@ -31,6 +32,7 @@ export function openSettings() {
     <button class="setrow" id="sRes"><span>Restore from Backup<small>Merges a Lokki backup into the app. Shows what will change before anything does.</small></span><span>›</span></button>
     <button class="setrow" id="sExp"><span>Export CSV<small>Every entry as metric, date, value and note, for spreadsheets.</small></span><span>›</span></button>
     <button class="setrow" id="sImp"><span>Import CSV<small>Adds entries from CSV files, including the old Loggr app's. Entries you already have are skipped.</small></span><span>›</span></button>
+    ${S.local ? `<button class="setrow" id="sUpd"><span>Check for Updates<small>Lokki also checks by itself when you open it.</small></span><span>›</span></button>` : ""}
     <button class="setrow" id="sPriv"><span>Privacy<small>Where your logs are kept, and who can see them.</small></span><span>›</span></button>
     <button class="setrow" id="sClr"><span>Clear Data<small>Removes your logs and settings from this device.</small></span><span>›</span></button>
     <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. ${S.local ? (sync.vault ? "Saved on this device and synced, end-to-end encrypted." : "Saved on this device only.") : `Saved on this device and synced privately through your claude.ai account${outbox.size ? ` (${outbox.size} waiting to sync)` : ""}.`}</div>
@@ -77,6 +79,12 @@ export function openSettings() {
     $("#sSync").onclick = () => {
       close();
       openSync();
+    };
+  const upd = $("#sUpd");
+  if (upd)
+    upd.onclick = () => {
+      close();
+      checkForUpdate({ asked: true });
     };
   $("#sPriv").onclick = () => {
     close();
