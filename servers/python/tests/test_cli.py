@@ -149,3 +149,18 @@ def test_serve_with_reload(monkeypatch: pytest.MonkeyPatch) -> None:
     assert options["factory"] is True
     assert options["reload"] is True
     assert options["reload_dirs"] == [str(Path(lokki_server.__file__).parent)]
+
+
+def test_serve_without_migrating(monkeypatch: pytest.MonkeyPatch) -> None:
+    migrated: list[str] = []
+    monkeypatch.setattr("lokki_server.cli.migrate", migrated.append)
+
+    def fake_run(*_args: object, **_options: object) -> None:
+        pass
+
+    monkeypatch.setattr("lokki_server.cli.uvicorn.run", fake_run)
+
+    run("serve", "--no-migrate")
+    assert migrated == []
+    run("serve")
+    assert len(migrated) == 1

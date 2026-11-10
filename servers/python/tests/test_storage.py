@@ -4,12 +4,12 @@ import asyncio
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import Connection
+from sqlalchemy import Connection, event
 
 from lokki_server.storage import migrate
 from lokki_server.storage.base import Outcome
 from lokki_server.storage.schema import metadata
-from lokki_server.storage.sql import SqlStorage
+from lokki_server.storage.sql import SqlStorage, _sqlite_pragmas  # pyright: ignore[reportPrivateUsage]
 from tests.helpers import key
 
 
@@ -85,3 +85,20 @@ def test_migrations_match_the_tables(database_url: str) -> None:
 def test_migrations_go_down_and_up_again(database_url: str) -> None:
     migrate(database_url, "base")
     migrate(database_url)
+
+
+def test_sqlite_settings_only_for_sqlite(database_url: str) -> None:
+    async def scenario() -> tuple[bool, bool]:
+        sqlite = SqlStorage(database_url)
+        # Makes the engine only: nothing connects, so no PostgreSQL is needed
+        postgres = SqlStorage("postgresql+asyncpg://lokki@db.example.com/lokki")
+        try:
+            return (
+                event.contains(sqlite.engine.sync_engine, "connect", _sqlite_pragmas),
+                event.contains(postgres.engine.sync_engine, "connect", _sqlite_pragmas),
+            )
+        finally:
+            await sqlite.close()
+            await postgres.close()
+
+    assert asyncio.run(scenario()) == (True, False)

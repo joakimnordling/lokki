@@ -61,6 +61,7 @@ sites. Set `LOKKI_DOCS=false` to turn them off.
 ```sh
 uv sync
 uv run pytest            # tests, with snapshots in tests/__snapshots__ (update with --snapshot-update)
+uv run pytest --cov      # also coverage, which must stay at 100% of lines and branches
 uv run ruff check && uv run ruff format --check
 uv run pyright
 ```

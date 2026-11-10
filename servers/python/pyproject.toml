@@ -32,6 +32,7 @@ dev = [
     "pytest-cov>=7.1",
     "syrupy>=6.1",
     "httpx2>=2.16",  # FastAPI's TestClient
+    "asyncpg>=0.32",  # PostgreSQL's driver: tests make an engine for it, without a database
     "ruff==0.17.4",
     "pyright==1.1.414",
 ]
@@ -53,6 +54,9 @@ omit = ["*/lokki_server/migrations/*"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+fail_under = 100
+# Code that can't run: the type checker proves it (e.g. after every case of an enum)
+exclude_also = ["assert_never\\("]
 
 [tool.ruff]
 line-length = 100

@@ -2,7 +2,7 @@
 
 import json
 import secrets
-from typing import Annotated
+from typing import Annotated, assert_never
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import JsonValue
@@ -166,6 +166,8 @@ async def put_keyring(
             raise errors.different_vault(result.version)
         case Outcome.BEHIND:
             raise errors.keyring_behind(result.version)
+        case _:
+            assert_never(result.outcome)
 
 
 @router.get(
