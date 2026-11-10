@@ -1,0 +1,13 @@
+{
+  "api": [
+    1
+  ],
+  "id": "str",
+  "limits": {
+    "pull": 1000,
+    "push": 5,
+    "row_bytes": 256
+  },
+  "server": "lokki",
+  "version": "str"
+}

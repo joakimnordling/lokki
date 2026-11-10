@@ -207,7 +207,9 @@ Each entry in `keys`:
 - A wrong passphrase makes unwrapping fail its integrity check, so the app can say "wrong passphrase" instead of
   showing garbage. Argon2id makes guessing slow.
 - **Canonical JSON** for the `mac`: object keys sorted, no whitespace, numbers and strings as `JSON.stringify` writes
-  them.
+  them. So that this is the same in every language, a keyring may hold only objects with ASCII keys, arrays, strings,
+  `true`, `false`, `null` and integers within ±(2⁵³ − 1); no fractional numbers. Servers refuse anything else
+  (`400`), and never convert a value: a changed value would no longer match the `mac`.
 - The `mac` stops a server from forging a keyring or reviving an old one (for example to make an old passphrase work
   again): devices with keys check it before accepting a keyring or passing it on, and a new device checks it right
   after unlocking.
@@ -216,29 +218,33 @@ Each entry in `keys`:
 
 ### 5.1 What it stores
 
-| Table    | Contents                                                                                       |
-| -------- | ---------------------------------------------------------------------------------------------- |
-| server   | its random server ID (UUID, made on first start)                                               |
-| accounts | one per vault: name, `head` (the vault's counter), the vault keyring and its `keyring_version` |
-| tokens   | SHA-256 of each API token, its account, its scope (`read` or `write`), when it was last used   |
-| rows     | `account`, `key`, `seq`, `data`; one row per `key` per account                                 |
+| Table  | Contents                                                                                                  |
+| ------ | --------------------------------------------------------------------------------------------------------- |
+| server | its random server ID (UUID, made on first start)                                                          |
+| vaults | a unique name, `head` (the vault's counter), the vault keyring, the vault ID in it, and `keyring_version` |
+| tokens | SHA-256 of each API token, its vault, a label, its scope (`read` or `write`), when it was last used       |
+| rows   | the vault, `key`, `seq`, `data`; one row per `key` per vault                                              |
+
+A vault's name and its tokens' labels are for the server's operator: the API never shows them. They're unrelated to
+the vault ID in the keyring, which devices make (4.4).
 
 A push writes each row with the next `seq` and replaces any older row with the same `key`. Individual rows are never
 removed; deleting a record is a tombstone like any other change. `DELETE /v1/vault` removes a whole vault.
 
-### 5.2 Accounts and sign-in
+### 5.2 Vaults and sign-in
 
-The server, not the client, issues credentials. Its operator creates an account and gets an API token to enter in
-the app together with the server's URL:
+The server, not the client, issues credentials. Its operator creates a vault, then a token for each device, to enter
+in the app together with the server's URL:
 
 ```
-$ lokki-server add-account "Home"
-URL:   https://sync.example.com
-Token: lk_6Yq3kM0p…        (shown once)
+$ lokki-server vault add jocke
+$ lokki-server token add jocke "iPhone 17 Pro"
+URL:    https://sync.example.com
+Token:  lk_6Yq3kM0p…        (shown only now)
 ```
 
 - Requests carry `Authorization: Bearer <token>`. The server stores only a hash of the token, so it can't be read
-  back. The operator can add tokens to an account (for example one per device, or a read-only one) and revoke them.
+  back. The operator can add tokens to a vault (for example one per device, or a read-only one) and revoke them.
 - Tokens have a scope: `write` (the default) or `read`. A `read` token gets `403` for anything but `GET`.
 - There is no sign-up through the API.
 
@@ -251,7 +257,7 @@ vault that the token belongs to.
 | ---------------------------------- | -------------------------------------------------------------------- |
 | `GET /v1/info`                     | The server's name, version, ID, API versions and limits (no sign-in) |
 | `GET /v1/vault`                    | The vault: its keyring and status                                    |
-| `DELETE /v1/vault`                 | Deletes the vault and its account, including all tokens              |
+| `DELETE /v1/vault`                 | Deletes the vault, including all its tokens                          |
 | `PUT /v1/vault/keyring`            | Replaces the keyring, if up to date                                  |
 | `GET /v1/vault/rows?since=&limit=` | Rows changed after a number                                          |
 | `POST /v1/vault/rows`              | Adds or replaces rows, if up to date                                 |
@@ -295,13 +301,15 @@ vault that the token belongs to.
 
 #### `DELETE /v1/vault`
 
-Deletes the rows, the keyring, the account and all its tokens: `204`. Afterwards every device gets `401` from this
-server and shows it as no longer accepting the device. Syncing with that server again needs a new account.
+Deletes the vault: its rows, keyring and all its tokens: `204`. Afterwards every device gets `401` from this server
+and shows it as no longer accepting the device. Syncing with that server again needs a new vault and token.
 
 #### `PUT /v1/vault/keyring`
 
-Body `{"base": 3, "keyring": {…}}` (`base` is `0` when there is no keyring yet). The server stores the keyring as it
-is; it can't check the `mac`.
+Body `{"base": 3, "keyring": {…}}` (`base` is `0` when there is no keyring yet). The keyring must have exactly the
+fields of 4.4, with at least one entry in `keys`; anything else is refused with `400`. The server stores it as it is;
+it can't check the entries or the `mac`. A new keyring format with other fields will come with a new `version` and
+servers that accept it.
 
 - Accepted only if `base` equals `keyring_version`: `200 {"keyring_version": 4}`.
 - Otherwise `409 {"error": "behind", "keyring_version": 4}`. The client reads the vault again, keeps the keyring with
@@ -348,13 +356,23 @@ Rows written after number `n`, oldest first.
 #### Other status codes
 
 `401` missing or unknown token, `403` a `read` token trying to write, `429` too many requests (with `Retry-After`),
-`5xx` try again later with backoff.
+`5xx` try again later with backoff. A Lokki server's own errors, `5xx` included, are all `{"error", "message"}`; a
+`500` is `{"error": "internal", …}` and gives no details. A proxy in front of it may answer `502` or `503` in its own
+format, so clients go by the status code.
 
 ### 5.4 CORS
 
 The app runs on another origin than the server, so the server answers CORS requests from a configured list of
 origins (for example `https://lokki.example.com` and `http://localhost:8080`): methods `GET, POST, PUT, DELETE`,
 request headers `Authorization, Content-Type`. No cookies are used, so credentials mode is off.
+
+### 5.5 Test mode
+
+So that one test suite can check any server implementation from the outside, a server started in test mode (and
+only then) accepts `POST /v1/test/vaults` without sign-in. It creates an empty vault and returns its name and a token
+of each scope: `201 {"name": "test-…", "write": "lk_…", "read": "lk_…"}`. The body may name the vault,
+`{"name": "…"}`, or be `{}` for a made-up name; a name in use gives `409 name_taken`. Outside test mode the endpoint
+doesn't exist (`404`). A production server must never run in test mode.
 
 ## 6. Merging: which version wins
 
@@ -505,6 +523,9 @@ metrics and which are entries.
 - API tokens are random, sent only over HTTPS, and stored hashed. HTTPS ends at whatever runs in front of the server
   (a cloud platform, a tunnel or a proxy), so that service can see the token. With it, the service could damage rows
   on that server (7.5), but never read or forge your data.
+- Token scopes are enforced by the server alone, so they protect against a leaked `read` token, not against the
+  server's operator, who can change a scope or issue tokens. Without the passphrase, writing can only damage or
+  delete rows, as above; devices keep their own copies.
 - Anyone with an unlocked device can read its data; that is outside what sync can protect.
 
 ## 11. Client status indicators
@@ -527,9 +548,10 @@ Not planned for version 1, but the design leaves room for:
 - **A recovery key:** a long random code as a second entry in the keyring's `keys` (type `recovery`), so a forgotten
   passphrase can be replaced.
 - **Several vaults on one device,** each with its own keys and servers, and each metric belonging to one vault.
-  Servers already map one account to one vault.
+  Servers already keep each vault separately, with its own tokens.
 - **Read-only sharing:** a separate vault for what you want to share, plus a `read` token and that vault's passphrase
-  for the other person.
+  for the other person. Anyone with the passphrase can also make valid rows, so this stops them writing only while
+  the server enforces the scope; read-only in the cryptography itself would need devices to sign rows.
 - **Signed requests** instead of bearer tokens, so services in front of a server never see a usable credential.
   `/v1/info` would list the sign-in methods a server supports.
 - **Replacing the data key,** re-encrypting every row.

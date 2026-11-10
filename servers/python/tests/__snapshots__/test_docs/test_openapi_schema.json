@@ -1,0 +1,1288 @@
+{
+  "components": {
+    "schemas": {
+      "Behind": {
+        "additionalProperties": false,
+        "description": "A push that wasn't written, because the vault changed since `base`: pull first.",
+        "properties": {
+          "error": {
+            "const": "behind",
+            "description": "Always `behind`",
+            "title": "Error",
+            "type": "string"
+          },
+          "head": {
+            "description": "The vault's head now",
+            "examples": [
+              1050
+            ],
+            "title": "Head",
+            "type": "integer"
+          },
+          "message": {
+            "description": "What went wrong, in English",
+            "examples": [
+              "This token isn't valid on this server."
+            ],
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "head"
+        ],
+        "title": "Behind",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "additionalProperties": false,
+        "description": "An error: `error` is a code to act on, `message` is for people.",
+        "properties": {
+          "error": {
+            "description": "What went wrong, as a code, e.g. `invalid_request`, `unauthorized`, `forbidden`, `too_large`, `not_found` or `internal`",
+            "examples": [
+              "unauthorized"
+            ],
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "description": "What went wrong, in English",
+            "examples": [
+              "This token isn't valid on this server."
+            ],
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "Head": {
+        "description": "The rows were written.",
+        "properties": {
+          "head": {
+            "description": "The vault's counter now; the rows got the numbers after `base`",
+            "examples": [
+              1044
+            ],
+            "title": "Head",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "head"
+        ],
+        "title": "Head",
+        "type": "object"
+      },
+      "Info": {
+        "description": "What this server is. Needs no token.",
+        "properties": {
+          "api": {
+            "description": "API versions this server speaks",
+            "examples": [
+              [
+                1
+              ]
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Api",
+            "type": "array"
+          },
+          "id": {
+            "description": "The server's random ID, made on its first start and never changed. Devices recognise a server by it, even after its URL changes.",
+            "examples": [
+              "2c0d4c0e-5b1e-4f35-9b7a-3c86f0e1a2d4"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/InfoLimits"
+          },
+          "server": {
+            "const": "lokki",
+            "default": "lokki",
+            "description": "Always `lokki`",
+            "title": "Server",
+            "type": "string"
+          },
+          "version": {
+            "description": "The server software's version",
+            "examples": [
+              "0.1.0"
+            ],
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "id",
+          "api",
+          "limits"
+        ],
+        "title": "Info",
+        "type": "object"
+      },
+      "InfoLimits": {
+        "description": "Limits a client must respect, and the server enforces.",
+        "properties": {
+          "pull": {
+            "description": "Most rows one pull returns",
+            "examples": [
+              1000
+            ],
+            "title": "Pull",
+            "type": "integer"
+          },
+          "push": {
+            "description": "Most rows one push may contain",
+            "examples": [
+              500
+            ],
+            "title": "Push",
+            "type": "integer"
+          },
+          "row_bytes": {
+            "description": "Largest `data` of a row, in bytes",
+            "examples": [
+              4096
+            ],
+            "title": "Row Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pull",
+          "push",
+          "row_bytes"
+        ],
+        "title": "InfoLimits",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "Keyring": {
+        "additionalProperties": false,
+        "description": "The vault keyring (protocol 4.4): the vault's key, wrapped by keys made from passphrases.\n\nOnly these fields are accepted, with their exact JSON types and nothing converted, and values\nonly of the kinds the `mac`'s canonical JSON allows. The server checks the format and the vault\nID, so it can refuse another vault's keyring, and stores the rest as sent: it can't check the\nentries in `keys`, or the `mac`.",
+        "examples": [
+          {
+            "format": "lokki-keyring",
+            "keys": [
+              {
+                "created": 1794130000000,
+                "id": "a7Kq2m",
+                "kdf": {
+                  "m": 65536,
+                  "name": "argon2id",
+                  "p": 1,
+                  "salt": "…",
+                  "t": 3
+                },
+                "type": "passphrase",
+                "wrapped": "…"
+              }
+            ],
+            "mac": "Hq2v…",
+            "u": 1794130000000,
+            "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
+            "version": 1
+          }
+        ],
+        "properties": {
+          "format": {
+            "const": "lokki-keyring",
+            "description": "Always `lokki-keyring`",
+            "title": "Format",
+            "type": "string"
+          },
+          "keys": {
+            "description": "The ways to unlock the vault's key, each the key wrapped by a key made from a passphrase (protocol 4.4). Devices skip entries of a type they don't know.",
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "minItems": 1,
+            "title": "Keys",
+            "type": "array"
+          },
+          "mac": {
+            "description": "HMAC of the rest of the keyring, so devices can tell a forged or old keyring (protocol 4.4). The server can't check it.",
+            "examples": [
+              "Hq2v…"
+            ],
+            "minLength": 1,
+            "title": "Mac",
+            "type": "string"
+          },
+          "u": {
+            "description": "When the keyring was last changed, in milliseconds since 1970 (UTC)",
+            "examples": [
+              1794130000000
+            ],
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "U",
+            "type": "integer"
+          },
+          "vault": {
+            "description": "The vault's ID, made by the device that created the vault. Unrelated to the vault's name on the server, which the API never shows.",
+            "examples": [
+              "Jq9wq3sKp0m2A1xYbXo3Vg"
+            ],
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Vault",
+            "type": "string"
+          },
+          "version": {
+            "description": "The keyring format's version",
+            "examples": [
+              1
+            ],
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "vault",
+          "keys",
+          "u",
+          "mac"
+        ],
+        "title": "Keyring",
+        "type": "object"
+      },
+      "KeyringConflict": {
+        "additionalProperties": false,
+        "description": "A keyring that wasn't written: `behind` if it changed since `base` (read the vault again), or\n`different_vault` if the server holds another vault.",
+        "properties": {
+          "error": {
+            "description": "`behind` or `different_vault`",
+            "enum": [
+              "behind",
+              "different_vault"
+            ],
+            "title": "Error",
+            "type": "string"
+          },
+          "keyring_version": {
+            "description": "The keyring's version now",
+            "examples": [
+              4
+            ],
+            "title": "Keyring Version",
+            "type": "integer"
+          },
+          "message": {
+            "description": "What went wrong, in English",
+            "examples": [
+              "This token isn't valid on this server."
+            ],
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "keyring_version"
+        ],
+        "title": "KeyringConflict",
+        "type": "object"
+      },
+      "KeyringPut": {
+        "description": "A new keyring, written only if nobody wrote one since the device read it.",
+        "properties": {
+          "base": {
+            "description": "The `keyring_version` the device last read; 0 when there's no keyring yet",
+            "examples": [
+              3
+            ],
+            "minimum": 0.0,
+            "title": "Base",
+            "type": "integer"
+          },
+          "keyring": {
+            "$ref": "#/components/schemas/Keyring"
+          }
+        },
+        "required": [
+          "base",
+          "keyring"
+        ],
+        "title": "KeyringPut",
+        "type": "object"
+      },
+      "KeyringVersion": {
+        "description": "The keyring was written.",
+        "properties": {
+          "keyring_version": {
+            "description": "The keyring's version now",
+            "examples": [
+              4
+            ],
+            "title": "Keyring Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "keyring_version"
+        ],
+        "title": "KeyringVersion",
+        "type": "object"
+      },
+      "Pull": {
+        "description": "Rows written after `since`, oldest first.",
+        "properties": {
+          "cursor": {
+            "description": "Pass this as `since` in the next request while `more` is true; once it's false, remember it for the next sync",
+            "examples": [
+              1042
+            ],
+            "title": "Cursor",
+            "type": "integer"
+          },
+          "head": {
+            "description": "The vault's counter. A `since` above it means the server lost changes (protocol 7.4).",
+            "examples": [
+              1042
+            ],
+            "title": "Head",
+            "type": "integer"
+          },
+          "more": {
+            "description": "Whether there are more rows to fetch now",
+            "examples": [
+              false
+            ],
+            "title": "More",
+            "type": "boolean"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows",
+          "cursor",
+          "more",
+          "head"
+        ],
+        "title": "Pull",
+        "type": "object"
+      },
+      "Push": {
+        "description": "Rows to write, all or none, only if nobody wrote since the device last pulled.",
+        "properties": {
+          "base": {
+            "description": "The vault's `head` when the device last pulled. If it has changed, nothing is written: pull first.",
+            "examples": [
+              1042
+            ],
+            "minimum": 0.0,
+            "title": "Base",
+            "type": "integer"
+          },
+          "rows": {
+            "description": "At most `limits.push` rows, each key once",
+            "items": {
+              "$ref": "#/components/schemas/RowIn"
+            },
+            "minItems": 1,
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "base",
+          "rows"
+        ],
+        "title": "Push",
+        "type": "object"
+      },
+      "RowIn": {
+        "description": "A row to add, or to replace the row with the same key.",
+        "properties": {
+          "data": {
+            "description": "The encrypted record: `v1.` and base64url of nonce and AES-GCM ciphertext (protocol 4.3). Padded, so its size says little about what's inside.",
+            "examples": [
+              "v1.mF3kZq0x…"
+            ],
+            "minLength": 1,
+            "title": "Data",
+            "type": "string"
+          },
+          "key": {
+            "description": "The row's name: base64url of 16 bytes, without padding (protocol 4.2). Made by devices from the record's kind and ID; the server can't tell which record it is.",
+            "examples": [
+              "q3Jb0w1sV8ZpK2mXy7c4Ag"
+            ],
+            "pattern": "^[A-Za-z0-9_-]{22}$",
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "data"
+        ],
+        "title": "RowIn",
+        "type": "object"
+      },
+      "RowOut": {
+        "description": "A row as stored.",
+        "properties": {
+          "data": {
+            "description": "The encrypted record (protocol 4.3)",
+            "examples": [
+              "v1.mF3k…"
+            ],
+            "title": "Data",
+            "type": "string"
+          },
+          "key": {
+            "description": "The row's name (protocol 4.2)",
+            "examples": [
+              "q3Jb0w1sV8ZpK2mXy7c4Ag"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "seq": {
+            "description": "The row's number: the vault's counter when it was last written",
+            "examples": [
+              1041
+            ],
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "seq",
+          "data"
+        ],
+        "title": "RowOut",
+        "type": "object"
+      },
+      "TestVaultRequest": {
+        "description": "A vault to create for tests.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._+@-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The vault's name; leave it out to have one made up",
+            "examples": [
+              "conformance"
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "TestVaultRequest",
+        "type": "object"
+      },
+      "TestVaultTokens": {
+        "description": "The test vault, and a token of each scope for it.",
+        "properties": {
+          "name": {
+            "description": "The vault's name",
+            "examples": [
+              "test-3f9a1c2b7d4e"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "read": {
+            "description": "A token that can only read",
+            "examples": [
+              "lk_Pw81dQe2…"
+            ],
+            "title": "Read",
+            "type": "string"
+          },
+          "write": {
+            "description": "A token that can read and write",
+            "examples": [
+              "lk_6Yq3kM0p…"
+            ],
+            "title": "Write",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "write",
+          "read"
+        ],
+        "title": "TestVaultTokens",
+        "type": "object"
+      },
+      "Vault": {
+        "description": "The vault the token belongs to: its keyring and status.",
+        "properties": {
+          "changed": {
+            "description": "When a row or the keyring last changed (ISO 8601, UTC)",
+            "examples": [
+              "2026-11-08T07:31:04Z"
+            ],
+            "title": "Changed",
+            "type": "string"
+          },
+          "head": {
+            "description": "The vault's counter: the number of the latest row written",
+            "examples": [
+              1042
+            ],
+            "title": "Head",
+            "type": "integer"
+          },
+          "keyring": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The keyring exactly as last written, or null for a new, empty vault",
+            "title": "Keyring"
+          },
+          "keyring_version": {
+            "description": "How many times the keyring was written; 0 while there is none",
+            "examples": [
+              3
+            ],
+            "title": "Keyring Version",
+            "type": "integer"
+          },
+          "rows": {
+            "description": "How many rows the vault holds",
+            "examples": [
+              16977
+            ],
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "keyring",
+          "keyring_version",
+          "head",
+          "rows",
+          "changed"
+        ],
+        "title": "Vault",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "Token": {
+        "description": "An API token from `lokki-server token add`, e.g. `lk_6Yq3kM0p…`",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "\nThe server side of Lokki's sync, as described in [the sync protocol](https://github.com/joakimnordling/lokki/blob/main/docs/sync-protocol.md). Devices\nencrypt everything before sending it, so the server only keeps rows it can't read, and a\ncounter that tells devices what's new.\n\nEvery endpoint except `/v1/info` needs an API token, from `lokki-server token add`, and acts on\nthe vault that token belongs to. To try them here, choose **Authorize** and paste a token.\n\nErrors are always `{\"error\": \"<code>\", \"message\": \"…\"}`, with `400` for a request that isn't\nvalid (never `422`).\n",
+    "summary": "Stores end-to-end encrypted rows for Lokki's devices. It can't read any of them.",
+    "title": "Lokki sync server",
+    "version": "…"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/info": {
+      "get": {
+        "description": "The server's name, version, ID, API versions and limits. Needs no token (protocol 5.3).",
+        "operationId": "info_v1_info_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Info"
+                }
+              }
+            },
+            "description": "The server"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
+          }
+        },
+        "summary": "What this server is",
+        "tags": [
+          "server"
+        ]
+      }
+    },
+    "/v1/test/vaults": {
+      "post": {
+        "description": "Only in test mode, never in production: a new, empty vault with a token of each scope, so a\ntest suite can check any server from the outside (protocol 5.5).",
+        "operationId": "create_test_vault_v1_test_vaults_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestVaultRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestVaultTokens"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "error": "invalid_request",
+                      "message": "name: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._+@-]{0,63}$'"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "name_taken": {
+                    "value": {
+                      "error": "name_taken",
+                      "message": "There's a vault called conformance already."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
+          }
+        },
+        "summary": "Create a test vault",
+        "tags": [
+          "test mode"
+        ]
+      }
+    },
+    "/v1/vault": {
+      "delete": {
+        "description": "Deletes every row, the keyring and all the vault's tokens, including the one used. This can't\nbe undone; devices keep their own copies (protocol 5.3).",
+        "operationId": "delete_vault_v1_vault_delete",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "unauthorized",
+                      "message": "This token isn't valid on this server."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "forbidden",
+                      "message": "This token can only read."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
+          }
+        },
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "summary": "Delete the vault and its tokens",
+        "tags": [
+          "vault"
+        ]
+      },
+      "get": {
+        "description": "The keyring (null for a new vault) and the vault's counters. A device reads this first, to\nunlock the vault and to see whether there's anything new (protocol 5.3, 7.2).",
+        "operationId": "vault_v1_vault_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vault"
+                }
+              }
+            },
+            "description": "The vault"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "unauthorized",
+                      "message": "This token isn't valid on this server."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
+          }
+        },
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "summary": "Read the vault's keyring and status",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/v1/vault/keyring": {
+      "put": {
+        "description": "Written only if `base` is the current `keyring_version`, and only for the same vault:\notherwise `409`, and the device reads the vault again (protocol 4.4, 5.3).",
+        "operationId": "put_keyring_v1_vault_keyring_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyringPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyringVersion"
+                }
+              }
+            },
+            "description": "Written"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "error": "invalid_request",
+                      "message": "rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "unauthorized",
+                      "message": "This token isn't valid on this server."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "forbidden",
+                      "message": "This token can only read."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "behind": {
+                    "value": {
+                      "error": "behind",
+                      "keyring_version": 4,
+                      "message": "The keyring has changed; read the vault again."
+                    }
+                  },
+                  "different_vault": {
+                    "value": {
+                      "error": "different_vault",
+                      "keyring_version": 4,
+                      "message": "This server holds a different vault."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/KeyringConflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "too_large": {
+                    "value": {
+                      "error": "too_large",
+                      "message": "A keyring can be at most 16384 bytes."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
+          }
+        },
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "summary": "Replace the keyring",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/v1/vault/rows": {
+      "get": {
+        "description": "Rows written after `since`, oldest first. While `more` is true, continue with `cursor` as\n`since` (protocol 5.3, 7.2).",
+        "operationId": "pull_v1_vault_rows_get",
+        "parameters": [
+          {
+            "description": "The `cursor` from the last pull; 0 for everything",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "The `cursor` from the last pull; 0 for everything",
+              "examples": [
+                1040
+              ],
+              "minimum": 0,
+              "title": "Since",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most rows to return; at most, and by default, `limits.pull`",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Most rows to return; at most, and by default, `limits.pull`",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pull"
+                }
+              }
+            },
+            "description": "The rows, and where to continue"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "error": "invalid_request",
+                      "message": "since: Input should be greater than or equal to 0"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "unauthorized",
+                      "message": "This token isn't valid on this server."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
+          }
+        },
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "summary": "Pull rows",
+        "tags": [
+          "vault"
+        ]
+      },
+      "post": {
+        "description": "Adds the rows, replacing any with the same key, all or none, and only if `base` is still the\nvault's `head`. Otherwise nothing is written: `409 behind`, so pull first (protocol 5.3, 7.3).",
+        "operationId": "push_v1_vault_rows_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Push"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Head"
+                }
+              }
+            },
+            "description": "Written"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "error": "invalid_request",
+                      "message": "rows.0.key: String should match pattern '^[A-Za-z0-9_-]{22}$'"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "unauthorized",
+                      "message": "This token isn't valid on this server."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "forbidden",
+                      "message": "This token can only read."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "behind": {
+                    "value": {
+                      "error": "behind",
+                      "head": 1050,
+                      "message": "Pull first: the vault has changed."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Behind"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "too_large": {
+                    "value": {
+                      "error": "too_large",
+                      "message": "A push can have at most 500 rows."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "internal",
+                  "message": "Something went wrong on the server. Try again later."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Any other error, in the same format: e.g. 404 unknown path, 405 wrong method, 429 too many requests (with Retry-After), or 500 a fault in the server"
+          }
+        },
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "summary": "Push rows",
+        "tags": [
+          "vault"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "About the server itself",
+      "name": "server"
+    },
+    {
+      "description": "The vault the token belongs to: its keyring and rows",
+      "name": "vault"
+    },
+    {
+      "description": "Only when `LOKKI_TEST_MODE` is on, never in production",
+      "name": "test mode"
+    }
+  ]
+}

@@ -1,10 +1,13 @@
-# Keeps the pinned action hashes (and their version comments) and the npm packages up to date.
+# Keeps the pinned action hashes (and their version comments), the npm packages and the Python server's
+# packages up to date.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7 # let a new release settle before proposing it
     groups:
       actions:
         patterns: ["*"]
@@ -12,6 +15,17 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7 # let a new release settle before proposing it
     groups:
       dev-dependencies:
         dependency-type: development
+  - package-ecosystem: uv
+    directory: /servers/python
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        patterns: ["*"]
