@@ -1,7 +1,10 @@
 """The SQL storage directly: atomic conditional writes, and migrations matching the tables."""
 
 import asyncio
+import sqlite3
+from contextlib import closing
 
+import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import Connection, event
@@ -64,6 +67,30 @@ def test_server_id_is_made_once(database_url: str) -> None:
 
     assert len(set(first)) == 1
     assert asyncio.run(ids()) == first
+
+
+def test_server_id_made_meanwhile_by_another_process(
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Between finding no ID and adding one, another process adds its own: that one is kept."""
+    path = database_url.removeprefix("sqlite+aiosqlite:///")
+
+    def another_process_first() -> str:
+        with closing(sqlite3.connect(path)) as other, other:
+            other.execute("INSERT INTO server (name, value) VALUES ('id', 'theirs')")
+        return "ours"
+
+    monkeypatch.setattr("lokki_server.storage.sql.uuid.uuid4", another_process_first)
+
+    async def server_id() -> str:
+        storage = SqlStorage(database_url)
+        try:
+            return await storage.server_id()
+        finally:
+            await storage.close()
+
+    assert asyncio.run(server_id()) == "theirs"
 
 
 def test_migrations_match_the_tables(database_url: str) -> None:
