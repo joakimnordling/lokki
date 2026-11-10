@@ -68,8 +68,11 @@ describe("backup and restore", () => {
         m = {};
       for (const r of L.recs.values())
         if (!r.d && !L.metricAll.get(r.m)?.deleted) e[r.id] = [r.m, r.t, r.v, r.n || ""].join("|");
-      for (const [id, x] of L.metricAll)
-        m[id] = x.deleted ? "DELETED" : [x.name, x.type || "", x.mode || "", x.gran || ""].join("|");
+      for (const [id, x] of L.metricAll) {
+        // the chart view is per device: saved on it, or (from before) on the metric
+        const view = JSON.parse(localStorage.getItem(`lokki:view:${id}`) || "null") || x;
+        m[id] = x.deleted ? "DELETED" : [x.name, x.type || "", view.mode || "", view.gran || ""].join("|");
+      }
       return { e, m };
     });
   const sameAs = async (x, y) => assert.deepEqual(await snapshot(x), await snapshot(y));
@@ -108,6 +111,7 @@ describe("backup and restore", () => {
         gran: "monthly",
         created: "2023-01-01T08:00:00",
         u: data.metrics.get("running").u,
+        g: 0,
         deleted: false,
       },
     );
@@ -179,11 +183,12 @@ describe("backup and restore", () => {
     await restore(A, k2.f, true);
     await A.waitForTimeout(1500);
     for (const pg of [A, A2]) {
-      const [m, n] = await pg.evaluate(() => [
+      const [m, n, view] = await pg.evaluate(() => [
         window.__lokki.metricAll.get("running"),
         [...window.__lokki.recs.values()].filter((r) => r.m === "running" && !r.d).length,
+        JSON.parse(localStorage.getItem("lokki:view:running")), // the view is per device and survives
       ]);
-      assert.deepEqual([m.name, m.type, m.mode, !!m.deleted, n], ["Running", "Fitness", "totals", false, runs]);
+      assert.deepEqual([m.name, m.type, view?.mode, !!m.deleted, n], ["Running", "Fitness", "totals", false, runs]);
     }
   });
 

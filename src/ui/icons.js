@@ -56,4 +56,9 @@ export const ICON = {
   csv: svg("arrow-down-up", ' aria-hidden="true"'),
   add: svg("plus", ' aria-hidden="true"'),
   trash: svg("trash-2", ' aria-hidden="true"'),
+  synced: svg("cloud-check", ' aria-hidden="true"'),
+  sending: svg("cloud-upload", ' aria-hidden="true"'),
+  offline: svg("cloud-off", ' aria-hidden="true"'),
+  failing: svg("cloud-alert", ' aria-hidden="true"'),
+  syncing: svg("refresh-cw", ' aria-hidden="true"'),
 };

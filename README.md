@@ -9,10 +9,14 @@ exports.
 
 ## Status
 
-Lokki runs at <https://lokki.jocke.fi>, where it keeps everything on your device (use Preferences → Back Up now and
-then). Syncing between devices works when it runs as an artifact on claude.ai; a sync service of its own is planned.
+Lokki runs at <https://lokki.jocke.fi>. It keeps everything on your device, and can sync between devices through one
+or more sync servers you choose: end-to-end encrypted with a passphrase, so servers can't read your logs. Set it up
+in Preferences → Sync with a server's URL and a token from its operator. To run a server yourself, see
+[servers/python](servers/python/README.md).
 
 On an iPhone, open the site in Safari and choose Share → Add to Home Screen. It works offline once opened.
+
+The original version runs as an artifact on claude.ai and syncs through it instead.
 
 ## Layout
 

@@ -11,6 +11,7 @@ import { addEntry, deleteEntry, deleteMetric, editEntry, restoreEntry } from "./
 import { series } from "./data/series.js";
 import { hooks, metricAll, outbox, rebuild, recs, refreshMetrics, S, ui } from "./data/state.js";
 import { connectClaude, flush, flushSoon } from "./sync/claude.js";
+import { sync } from "./sync/manager.js";
 import { restoreFromFile } from "./ui/backup.js";
 import { detailRender } from "./ui/detail.js";
 import { $ } from "./ui/dom.js";
@@ -58,15 +59,42 @@ render();
   refreshMetrics();
   rebuild();
   S.local = !window.claude;
+  const listShown = () => ui.view === "list" && !document.querySelector(".scrim");
+  if (S.local) {
+    // standalone: Lokki's own sync. Changes queued for claude.ai (by older versions) can never be sent from here.
+    if (outbox.size) {
+      const stale = [...outbox.keys()];
+      outbox.clear();
+      await idb.write(stale.map((k) => ["outbox", "delete", k]));
+    }
+    await sync.load();
+    hooks.flushSoon = () => sync.soon();
+    sync.onChange(() => {
+      if (listShown()) render();
+    });
+  }
   S.localReady = true;
   render();
   // 2. then sync
-  if (!(await connectClaude(render))) return;
+  if (S.local) sync.start();
+  else if (!(await connectClaude(render))) return;
   setInterval(() => {
-    if (ui.view === "list" && !document.querySelector(".scrim")) render();
+    if (listShown()) render();
   }, 60000);
 })();
 
 // Hooks for the end-to-end tests.
-window.__lokki = { evalExpr, series, stats, parseDate, startOf, uuid5, recs, outbox, metricAll, flush: () => flush() };
+window.__lokki = {
+  evalExpr,
+  series,
+  stats,
+  parseDate,
+  startOf,
+  uuid5,
+  recs,
+  outbox,
+  metricAll,
+  sync,
+  flush: () => flush(),
+};
 window.__test = { add: addEntry, edit: editEntry, del: deleteEntry, restore: restoreEntry, delMetric: deleteMetric };

@@ -6,7 +6,7 @@
    on conflicts the record with the newest u wins. */
 import { parseLocal } from "../core/format.js";
 import { sameName } from "../core/names.js";
-import { store } from "../core/prefs.js";
+import { hasView, setView, store, viewOf } from "../core/prefs.js";
 
 export const COL = "entries-v2";
 export const metricAll = new Map(); // id -> metric doc, tombstones included
@@ -47,7 +47,11 @@ export const hooks = { render() {}, flushSoon() {}, toast() {} };
 
 export function refreshMetrics() {
   metrics.clear();
-  for (const [id, m] of metricAll) if (!m.deleted && m.name) metrics.set(id, m);
+  for (const [id, m] of metricAll) {
+    if (!m.deleted && m.name) metrics.set(id, m);
+    // The chart view used to be kept on the metric; it's per device now. Keep a metric's old view on this device.
+    if ((m.mode || m.gran) && !hasView(id)) setView(id, viewOf(id, m));
+  }
 }
 export function rebuild() {
   const cache = new Map();

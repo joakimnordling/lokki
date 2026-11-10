@@ -912,3 +912,53 @@ main {
     }
   }
 }
+
+/* Sync: the status dot on the Preferences button, and the server list */
+.hbtn.right {
+  position: relative;
+}
+/* hollow: changes waiting to reach a server; filled: a server has a problem (red is too faint on the orange) */
+.hbtn .dot {
+  position: absolute;
+  top: 4px;
+  right: -3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--fg);
+  background: var(--bg);
+}
+.hbtn .dot.bad {
+  background: var(--fg);
+}
+.sheet p.lead {
+  line-height: 1.5;
+  margin-block: 4px 12px;
+}
+.field input.wide {
+  text-align: left;
+}
+.srv {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.srv svg {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.srv .bad {
+  color: var(--danger);
+}
+.strength {
+  font-size: 0.85rem;
+  color: var(--sheet-dim);
+  padding-top: 6px;
+  min-height: 1.2em;
+}
