@@ -349,53 +349,65 @@ class FirestoreStorage:
         at: int | None = None,
     ) -> PullResult:
         vault_ref = self._vault(vault_id)
-        # The head first, then only rows up to it: a push committing meanwhile only adds rows above
-        # it, which the next pull fetches.
-        head: int = _data(await vault_ref.get())["head"]
-        query = (
-            vault_ref.collection("rows")
-            .where(
-                filter=FieldFilter(
-                    "seq",
-                    ">",
-                    since,
+
+        # A read-only transaction: every read sees the database as it was at one moment
+        @async_transactional
+        async def pull(transaction: Any) -> PullResult:
+            vault = _data(await vault_ref.get(transaction=transaction))
+            head: int = vault["head"]
+            query = (
+                vault_ref.collection("rows")
+                .where(
+                    filter=FieldFilter(
+                        "seq",
+                        ">",
+                        since,
+                    )
                 )
-            )
-            .where(
-                filter=FieldFilter(
-                    "seq",
-                    "<=",
-                    head,
+                .where(
+                    filter=FieldFilter(
+                        "seq",
+                        "<=",
+                        head,
+                    )
                 )
+                .order_by("seq")
+                .limit(limit + 1)
             )
-            .order_by("seq")
-            .limit(limit + 1)
-        )
-        found = [
-            Row(
-                key=row.id[1:],
-                seq=_data(row)["seq"],
-                data=_data(row)["data"],
+            found = [
+                Row(
+                    key=row.id[1:],
+                    seq=_data(row)["seq"],
+                    data=_data(row)["data"],
+                )
+                async for row in await transaction.get(query)
+            ]
+            more = len(found) > limit
+            page = found[:limit]
+            cursor = page[-1].seq if more else head
+
+            async def mark_at(seq: int) -> str | None:
+                """The mark of the push that wrote row `seq`; the head's is in the vault."""
+                if seq == head:
+                    return vault.get("mark")  # .get(): vaults made before marks have none
+                if seq == 0 or seq > head:
+                    return None
+                return await self._find_mark(vault_ref, seq, transaction)
+
+            return PullResult(
+                rows=page,
+                cursor=cursor,
+                more=more,
+                head=head,
+                at_mark=None if at is None else await mark_at(at),
+                mark=await mark_at(cursor),
             )
-            async for row in query.stream()
-        ]
-        more = len(found) > limit
-        page = found[:limit]
-        cursor = page[-1].seq if more else head
-        return PullResult(
-            rows=page,
-            cursor=cursor,
-            more=more,
-            head=head,
-            at_mark=await self._mark_at(vault_ref, since if at is None else at),
-            mark=await self._mark_at(vault_ref, cursor),
-        )
+
+        return await pull(self.client.transaction(read_only=True))
 
     @staticmethod
-    async def _mark_at(vault_ref: Any, seq: int) -> str | None:
+    async def _find_mark(vault_ref: Any, seq: int, transaction: Any) -> str | None:
         """The mark of the push that wrote row number `seq`, if it's remembered."""
-        if seq == 0:
-            return None
         query = (
             vault_ref.collection("pushes")
             .where(
@@ -408,7 +420,7 @@ class FirestoreStorage:
             .order_by("head")
             .limit(1)
         )
-        found = [_data(p) async for p in query.stream()]
+        found = [_data(p) async for p in await transaction.get(query)]
         return found[0]["mark"] if found and found[0]["base"] < seq else None
 
     async def push(

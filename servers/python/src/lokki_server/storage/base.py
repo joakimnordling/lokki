@@ -62,10 +62,10 @@ class PullResult:
     """
     Rows after a sequence number, and where to continue.
 
-    `at_mark` is the mark of the push that wrote row number `at` (by default `since`), and `mark`
-    that of the push that wrote row number `cursor`: None for 0, or when the server doesn't know
-    (it has forgotten that push, or never had it). `at_mark` is read after the rows, so a history
-    that changed meanwhile shows in it.
+    `at_mark` is the mark of the push that wrote row number `at` (None when no `at` was asked
+    for), and `mark` that of the push that wrote row number `cursor`: None for 0, or when the
+    server doesn't know (it has forgotten that push, or never had it). All are read from one
+    snapshot of the database, so the marks belong to the same history as the rows.
     """
 
     rows: list[Row]
@@ -223,7 +223,10 @@ class Storage(Protocol):
         limit: int,
         at: int | None = None,
     ) -> PullResult:
-        """Rows written after `since`, oldest first, at most `limit`, and the mark of row `at`."""
+        """
+        Rows written after `since`, oldest first, at most `limit`, and the mark of row `at` if
+        asked for, all as the database was at one moment.
+        """
         ...
 
     async def push(

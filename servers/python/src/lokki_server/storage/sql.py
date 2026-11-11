@@ -1,6 +1,8 @@
 """Storage in an SQL database through SQLAlchemy Core: SQLite and PostgreSQL."""
 
 import uuid
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -309,10 +311,13 @@ class SqlStorage:
         limit: int,
         at: int | None = None,
     ) -> PullResult:
-        async with self.engine.connect() as conn:
-            # Read the head first and only rows up to it: a push committing meanwhile only adds
-            # rows above it, which the next pull fetches.
-            head = await self._head(conn, vault_id)
+        async with self._snapshot() as conn:
+            vault = (
+                await conn.execute(
+                    select(vaults.c.head, vaults.c.mark).where(vaults.c.id == vault_id)
+                )
+            ).one()
+            head = vault.head
             found = (
                 await conn.execute(
                     select(
@@ -344,9 +349,20 @@ class SqlStorage:
                 cursor=cursor,
                 more=more,
                 head=head,
-                at_mark=await self._mark_at(conn, vault_id, since if at is None else at),
-                mark=await self._mark_at(conn, vault_id, cursor),
+                at_mark=None if at is None else await self._mark_at(conn, vault_id, at, vault),
+                mark=await self._mark_at(conn, vault_id, cursor, vault),
             )
+
+    @asynccontextmanager
+    async def _snapshot(self) -> AsyncGenerator[AsyncConnection]:
+        """A connection whose reads all see the database as it was at one moment."""
+        async with self.engine.connect() as conn:
+            if self.engine.dialect.name == "sqlite":
+                # SQLite's driver begins transactions only for writes; a read one is a snapshot
+                await conn.exec_driver_sql("BEGIN")
+            else:
+                await conn.execution_options(isolation_level="REPEATABLE READ")
+            yield conn  # closing it rolls back
 
     async def push(
         self,
@@ -414,11 +430,26 @@ class SqlStorage:
             )
             return WriteResult(Outcome.OK, head, new_mark)
 
-    @staticmethod
-    async def _mark_at(conn: AsyncConnection, vault_id: VaultId, seq: int) -> str | None:
-        """The mark of the push that wrote row number `seq`, if it's remembered."""
-        if seq == 0:
+    async def _mark_at(
+        self,
+        conn: AsyncConnection,
+        vault_id: VaultId,
+        seq: int,
+        vault: Any,
+    ) -> str | None:
+        """
+        The mark of the push that wrote row number `seq`, if it's remembered. `vault` has the
+        vault's head and latest mark, so the head, the most common case, needs no lookup.
+        """
+        if seq == vault.head:
+            return vault.mark
+        if seq == 0 or seq > vault.head:
             return None
+        return await self._find_mark(conn, vault_id, seq)
+
+    @staticmethod
+    async def _find_mark(conn: AsyncConnection, vault_id: VaultId, seq: int) -> str | None:
+        """The mark of the push that wrote row number `seq`, looked up in the pushes."""
         found = (
             await conn.execute(
                 select(pushes.c.base, pushes.c.mark)

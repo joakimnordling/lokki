@@ -2,19 +2,21 @@
 
 import asyncio
 import sqlite3
+from collections.abc import Awaitable, Callable
 from contextlib import closing
+from typing import Any
 
 import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
-from sqlalchemy import Connection, event
+from sqlalchemy import Connection, event, select
 
 from lokki_server.config import Pool, Settings
 from lokki_server.storage import migrate, open_storage
 from lokki_server.storage.base import Outcome
-from lokki_server.storage.schema import metadata
+from lokki_server.storage.schema import metadata, vaults
 from lokki_server.storage.sql import (
     SqlStorage,
     _sqlite_pragmas,  # pyright: ignore[reportPrivateUsage]
@@ -93,7 +95,7 @@ def test_marks_tell_which_push_wrote_a_row(database_url: str) -> None:
             b = await storage.push(vault, 2, "a", [(key(3), "v1.3")], "b", 9, 0)
             assert (b.outcome, b.version, b.mark) == (Outcome.OK, 3, "b")
 
-            marks = [(await storage.pull(vault, since, 10)).at_mark for since in range(5)]
+            marks = [(await storage.pull(vault, since, 10, since)).at_mark for since in range(5)]
             assert marks == [None, "a", "a", "b", None]  # 0, rows 1-2, row 3, above the head
             everything = await storage.pull(vault, 0, 10)
             assert (everything.cursor, everything.mark) == (3, "b")
@@ -102,6 +104,66 @@ def test_marks_tell_which_push_wrote_a_row(database_url: str) -> None:
             checked = [(await storage.pull(vault, 0, 1, at)).at_mark for at in (1, 3, 4)]
             assert checked == ["a", "b", None]
             assert (await storage.vault(vault)).mark == "b"
+        finally:
+            await storage.close()
+
+    asyncio.run(scenario())
+
+
+def test_marks_of_the_head_need_no_lookup(
+    database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An up-to-date device's pull, and every last page, find the head's mark in the vault."""
+
+    async def scenario() -> None:
+        storage = open_storage(database_url)
+        try:
+            vault = await storage.create_vault("marks", 0)
+            await storage.push(vault, 0, None, [(key(1), "v1.1"), (key(2), "v1.2")], "a", 9, 0)
+            await storage.push(vault, 2, "a", [(key(3), "v1.3")], "b", 9, 0)
+            # each storage's own lookup in its pushes, counted
+            find: Callable[..., Awaitable[str | None]] = getattr(storage, "_find_mark")  # noqa: B009
+            looked_up: list[object] = []
+
+            async def counting(*args: object) -> str | None:
+                looked_up.append(args)
+                return await find(*args)
+
+            monkeypatch.setattr(storage, "_find_mark", counting)
+
+            up_to_date = await storage.pull(vault, 3, 10, 3)
+            everything = await storage.pull(vault, 0, 10, 3)
+            unchecked = await storage.pull(vault, 1, 10)
+            assert (up_to_date.at_mark, up_to_date.mark) == ("b", "b")
+            assert (everything.at_mark, everything.mark, unchecked.at_mark) == ("b", "b", None)
+            assert looked_up == []
+
+            page = await storage.pull(vault, 1, 1, 1)  # rows inside the first push
+            assert (page.at_mark, page.mark) == ("a", "a")
+            assert len(looked_up) == 2
+        finally:
+            await storage.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_pull_reads_one_snapshot(database_url: str) -> None:
+    """A push committing in the middle of a pull doesn't show in it (SQL)."""
+    if database_url.startswith("firestore:"):
+        pytest.skip("Firestore's read-only transactions are snapshots by design")
+
+    async def scenario() -> None:
+        storage = open_storage(database_url)
+        try:
+            vault = await storage.create_vault("snapshot", 0)
+            await storage.push(vault, 0, None, [(key(1), "v1.1")], "a", 9, 0)
+            snapshot: Callable[[], Any] = getattr(storage, "_snapshot")  # noqa: B009
+            head = select(vaults.c.head).where(vaults.c.id == vault)
+            async with snapshot() as conn:
+                assert await conn.scalar(head) == 1
+                await storage.push(vault, 1, "a", [(key(2), "v1.2")], "b", 9, 0)
+                assert await conn.scalar(head) == 1, "still the moment the pull started"
+            assert (await storage.pull(vault, 0, 10)).head == 2
         finally:
             await storage.close()
 
@@ -142,7 +204,9 @@ def test_only_the_latest_pushes_are_remembered(database_url: str) -> None:
                 assert result.outcome is Outcome.OK
 
             async def remembered() -> list[str | None]:
-                return [(await storage.pull(vault, since, 10)).at_mark for since in range(1, 5)]
+                return [
+                    (await storage.pull(vault, since, 10, since)).at_mark for since in range(1, 5)
+                ]
 
             await push(0, None, "a", 2)
             await push(1, "a", "b", 2)
@@ -246,7 +310,7 @@ def test_vaults_with_rows_get_a_push_covering_them(sqlite_url: str) -> None:
             assert (await storage.pull(empty, 0, 10)).mark is None
             pulled = await storage.pull(used, 0, 10)
             assert pulled.mark is not None
-            assert (await storage.pull(used, 1, 10)).at_mark == pulled.mark
+            assert (await storage.pull(used, 1, 10, 1)).at_mark == pulled.mark
             pushed = await storage.push(used, 7, pulled.mark, [(key(1), "v1")], "next", 9, 0)
             assert pushed.outcome is Outcome.OK
         finally:

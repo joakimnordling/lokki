@@ -236,10 +236,9 @@ async def pull(
         token.vault_id,
         since,
         most,
-        at,
+        None if mark is None else since if at is None else at,
     )
-    # Checked after reading the rows: if the history changed meanwhile, the rows may be from the
-    # new one, and the mark of the row checked is too
+    # The mark comes from the same snapshot as the rows, so they're checked together
     if mark is not None and result.at_mark != mark:
         raise errors.history_changed()
     return Pull(
