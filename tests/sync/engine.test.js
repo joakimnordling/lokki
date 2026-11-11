@@ -255,7 +255,7 @@ describe("the keyring", () => {
     const lokki = device(await newVault(), [servers[0], write]);
     await assert.rejects(sync(lokki), OtherAppError);
     assert.deepEqual((await http.vault()).keyring, theirs);
-    assert.equal((await http.vault()).rows, 0);
+    assert.equal((await http.vault()).head, 0, "nothing pushed");
   });
 });
 

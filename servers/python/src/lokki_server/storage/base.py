@@ -38,7 +38,6 @@ class VaultStatus:
     keyring_version: int
     head: int
     mark: str | None
-    rows: int
     changed: int
 
 

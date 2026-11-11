@@ -306,15 +306,15 @@ vault that the token belongs to.
   "keyring_version": 3,
   "head": 1042,
   "mark": "b7Rk2LwQx0VdNe4g",
-  "rows": 16977,
   "changed": "2026-11-08T07:31:04Z"
 }
 ```
 
 - `keyring` is the vault keyring (4.4) exactly as last written, or `null` for a new, empty vault. `keyring_version`
   counts its writes (`0` while there is none).
-- `head` is the vault's counter, `mark` the latest push's mark (`null` before the first; 7.4), `rows` the number of
-  rows, `changed` when a row or the keyring last changed.
+- `head` is the vault's counter, `mark` the latest push's mark (`null` before the first; 7.4), `changed` when a row
+  or the keyring last changed. A device reads this every round, so it holds nothing that costs the server more than
+  reading the vault itself.
 
 #### `DELETE /v1/vault`
 

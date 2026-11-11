@@ -98,10 +98,10 @@ describe("standalone sync", () => {
     assert.doesNotMatch(await A.textContent("#main"), /Saved on this device only/);
 
     const vault = await new ServerClient(srv.url, tokens.read).vault();
-    assert.equal(vault.rows, 3);
     assert.equal(vault.keyring.format, "lokki-keyring");
     assert.equal(vault.keyring.app, "lokki");
     const { rows } = await new ServerClient(srv.url, tokens.read).pull(0);
+    assert.equal(rows.length, 3);
     assert.ok(rows.every((r) => r.data.startsWith("v1.") && !r.data.includes("Running")));
   });
 

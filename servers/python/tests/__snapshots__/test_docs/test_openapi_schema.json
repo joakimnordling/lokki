@@ -656,14 +656,6 @@
               "b7Rk2LwQx0VdNe4g"
             ],
             "title": "Mark"
-          },
-          "rows": {
-            "description": "How many rows the vault holds",
-            "examples": [
-              16977
-            ],
-            "title": "Rows",
-            "type": "integer"
           }
         },
         "required": [
@@ -671,7 +663,6 @@
           "keyring_version",
           "head",
           "mark",
-          "rows",
           "changed"
         ],
         "title": "Vault",

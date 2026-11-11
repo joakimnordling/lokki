@@ -251,15 +251,11 @@ class SqlStorage:
                     ).where(vaults.c.id == vault_id)
                 )
             ).one()
-            count = await conn.scalar(
-                select(func.count()).select_from(rows).where(rows.c.vault_id == vault_id)
-            )
         return VaultStatus(
             keyring=found.keyring,
             keyring_version=found.keyring_version,
             head=found.head,
             mark=found.mark,
-            rows=count or 0,
             changed=found.changed,
         )
 
