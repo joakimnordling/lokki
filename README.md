@@ -24,6 +24,9 @@ in Preferences → Sync with a server's URL and a token from its operator. To ru
 
 On an iPhone, open the site in Safari and choose Share → Add to Home Screen. It works offline once opened.
 
+To look around first, open <https://lokki.jocke.fi/?demo>: a year of made-up logs, ending now, made afresh each time.
+The demo keeps its data apart from yours, never syncs, and is wiped when you close it.
+
 ## Layout
 
 ```
@@ -59,7 +62,7 @@ npm run test:sync                    # the sync engine against the Python server
 npx playwright install chromium      # once, for the end-to-end tests
 npm run test:e2e                     # builds the site, then runs the end-to-end tests
 npm run icons                        # regenerate src/ui/lucide.js after changing the icon list or Lucide version
-npm run screenshots                  # regenerate docs/screenshots (made-up data, light and dark) after a visual change
+npm run screenshots                  # regenerate docs/screenshots (the demo, light and dark) after a visual change
 npm run build:site                   # dist/site, the site deployed to GitHub Pages
 ```
 
