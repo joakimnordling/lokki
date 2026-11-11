@@ -22,12 +22,27 @@ export function drawChart(ser) {
     line: css.getPropertyValue("--line").trim(),
   };
   const bars = ui.mode === "totals";
-  const step = bars ? 14 : ui.mode === "all" ? 7 : 12;
   const AX = 42,
     PAD = 10;
   const W = sc.clientWidth,
     H = sc.clientHeight;
-  const contentW = Math.max(W, ser.length * step + PAD * 2 + AX);
+  // Points sit `step` apart from x0. When they'd leave room to spare, they're spread over the whole plot, as in the
+  // old Loggr app: bars side by side across it, a line from its left edge to its right. Otherwise the chart scrolls.
+  const n = ser.length,
+    plotW = W - AX - PAD * 2;
+  let step = bars ? 14 : ui.mode === "all" ? 7 : 12,
+    x0 = PAD + step / 2;
+  const fits = n * step < plotW;
+  if (fits) {
+    if (bars) {
+      step = plotW / n;
+      x0 = PAD + step / 2;
+    } else if (n > 1) {
+      step = plotW / (n - 1);
+      x0 = PAD;
+    } else x0 = PAD + plotW / 2;
+  }
+  const contentW = fits ? W : n * step + PAD * 2 + AX;
   sp.style.width = `${contentW}px`;
   const vals = ser.map((x) => x.v);
   let mx = Math.max(...vals),
@@ -43,7 +58,7 @@ export function drawChart(ser) {
   const top = 10,
     bot = H - 22;
   const y = (v) => bot - ((v - mn) / (mx - mn)) * (bot - top);
-  const xOf = (i) => PAD + i * step + step / 2;
+  const xOf = (i) => x0 + i * step;
   // x-axis labels sit on calendar boundaries (month / quarter / year...), chosen once for the whole series so they scroll with the bars
   const mi = (t) => {
     const d = new Date(t);
@@ -76,8 +91,8 @@ export function drawChart(ser) {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
     const off = sc.scrollLeft;
-    const i0 = Math.max(0, Math.floor((off - PAD) / step) - 2),
-      i1 = Math.min(ser.length - 1, Math.ceil((off + W - PAD) / step) + 2);
+    const i0 = Math.max(0, Math.floor((off - x0) / step) - 2),
+      i1 = Math.min(ser.length - 1, Math.ceil((off + W - x0) / step) + 2);
     g.strokeStyle = col.line;
     g.lineWidth = 1;
     for (const yy of [top, (top + bot) / 2, bot]) {
@@ -159,7 +174,7 @@ export function drawChart(ser) {
   sc.onclick = (ev) => {
     const r = sc.getBoundingClientRect();
     const x = ev.clientX - r.left + sc.scrollLeft;
-    const i = Math.round((x - PAD - step / 2) / step);
+    const i = Math.round((x - x0) / step);
     if (i >= 0 && i < ser.length) {
       ui.sel = i;
       chartScroll.keep = sc.scrollLeft;
