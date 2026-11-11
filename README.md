@@ -1,4 +1,12 @@
-# Lokki
+<p align="center"><img src="public/icons/lokki-icon.svg" width="96" height="96" alt=""></p>
+
+<h1 align="center">Lokki</h1>
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/home-dark.png"><img src="docs/screenshots/home-light.png" width="250" alt="The home screen: a list of metrics with their latest values"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/running-dark.png"><img src="docs/screenshots/running-light.png" width="250" alt="Running, weekly totals: a bar chart with statistics and correlations below"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/weight-dark.png"><img src="docs/screenshots/weight-light.png" width="250" alt="Body weight, monthly averages: a falling line with statistics below"></picture>
+</p>
 
 A personal life-logging app: log values (a swim, your weight, anything you count) and see them as totals and
 averages per day, week or month, with rankings, distributions, correlations and day-of-week patterns.
@@ -27,7 +35,7 @@ src/core/           pure functions: formatting, periods, statistics, ids, CSV, z
 src/data/           this device's copy: state, IndexedDB, local changes, backups
 src/sync/           syncing: encryption, merge rules and the sync engine for Lokki servers; the claude.ai adapter
 src/ui/             rendering, sheets, chart, entry list, preferences, files
-scripts/            dev server, the site build (with its service worker) and the claude.ai artifact build
+scripts/            dev server, the site build (with its service worker), the claude.ai artifact build, screenshots
 tests/unit/         node:test unit tests
 tests/e2e/          Playwright tests: several simulated devices syncing through a fake database
 docs/               the sync protocol
@@ -53,6 +61,7 @@ npm run test:sync                    # the sync engine against the Python server
 npx playwright install chromium      # once, for the end-to-end tests
 npm run test:e2e                     # builds the artifact, then runs the end-to-end tests
 npm run icons                        # regenerate src/ui/lucide.js after changing the icon list or Lucide version
+npm run screenshots                  # regenerate docs/screenshots (made-up data, light and dark) after a visual change
 npm run build:site                   # dist/site, the site deployed to GitHub Pages
 npm run build:artifact               # dist/lokki-artifact.html, the single page published on claude.ai
 ```
