@@ -19,12 +19,11 @@ def put(
 def test_a_new_vault(http: httpx2.Client, writer: dict[str, str]) -> None:
     vault = http.get("/v1/vault", headers=writer).json()
 
-    assert {k: vault[k] for k in ("keyring", "keyring_version", "head", "mark", "rows")} == {
+    assert {k: vault[k] for k in ("keyring", "keyring_version", "head", "mark")} == {
         "keyring": None,
         "keyring_version": 0,
         "head": 0,
         "mark": None,
-        "rows": 0,
     }
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", vault["changed"])
 
@@ -98,12 +97,12 @@ def test_a_keyring_of_another_vault_is_refused(http: httpx2.Client, writer: dict
         assert other.json()["error"] == "different_vault"
 
 
-def test_status_counts_rows(http: httpx2.Client, writer: dict[str, str]) -> None:
+def test_status_has_the_head_and_its_mark(http: httpx2.Client, writer: dict[str, str]) -> None:
     rows = [{"key": key(n), "data": "v1.x"} for n in range(3)]
     first = http.post(
         "/v1/vault/rows", headers=writer, json={"base": 0, "mark": None, "rows": rows}
     )
-    http.post(
+    second = http.post(
         "/v1/vault/rows",
         headers=writer,
         json={"base": 3, "mark": first.json()["mark"], "rows": rows[:1]},
@@ -111,7 +110,7 @@ def test_status_counts_rows(http: httpx2.Client, writer: dict[str, str]) -> None
 
     vault = http.get("/v1/vault", headers=writer).json()
 
-    assert (vault["head"], vault["rows"]) == (4, 3)
+    assert (vault["head"], vault["mark"]) == (4, second.json()["mark"])
 
 
 def test_deleting_the_vault(http: httpx2.Client, vault: Tokens) -> None:

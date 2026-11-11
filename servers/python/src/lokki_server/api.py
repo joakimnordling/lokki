@@ -102,7 +102,6 @@ async def vault(token: Token, store: Store) -> Vault:
         keyring_version=status.keyring_version,
         head=status.head,
         mark=status.mark,
-        rows=status.rows,
         changed=iso(status.changed),
     )
 

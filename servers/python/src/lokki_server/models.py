@@ -266,10 +266,6 @@ class Vault(BaseModel):
         description="The latest push's mark, which wrote row `head`; null before the first push",
         examples=["b7Rk2LwQx0VdNe4g"],
     )
-    rows: int = Field(
-        description="How many rows the vault holds",
-        examples=[16977],
-    )
     changed: str = Field(
         description="When a row or the keyring last changed (ISO 8601, UTC)",
         examples=["2026-11-08T07:31:04Z"],

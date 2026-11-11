@@ -15,7 +15,7 @@ def test_a_new_vault_is_empty(
     assert response.json() == snapshot_json(matcher=path_type({"changed": (str,)}))
 
 
-def test_status_counts_rows_and_head(client: TestClient, writer: dict[str, str]) -> None:
+def test_status_has_the_head_and_its_mark(client: TestClient, writer: dict[str, str]) -> None:
     rows = [{"key": key(n), "data": f"v1.{n}"} for n in range(3)]
     first = client.post(
         "/v1/vault/rows", headers=writer, json={"base": 0, "mark": None, "rows": rows}
@@ -28,7 +28,8 @@ def test_status_counts_rows_and_head(client: TestClient, writer: dict[str, str])
 
     vault = client.get("/v1/vault", headers=writer).json()
 
-    assert (vault["rows"], vault["head"], vault["mark"]) == (3, 4, "mark2")
+    assert (vault["head"], vault["mark"]) == (4, "mark2")
+    assert "rows" not in vault, "counting them costs reads on Firestore, every round"
 
 
 def test_deleting_the_vault_removes_it_and_its_tokens(client: TestClient, vault: Tokens) -> None:

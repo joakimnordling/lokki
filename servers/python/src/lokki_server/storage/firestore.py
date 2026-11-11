@@ -306,7 +306,6 @@ class FirestoreStorage:
             keyring_version=doc["keyring_version"],
             head=doc["head"],
             mark=doc.get("mark"),
-            rows=await _count(vault_ref.collection("rows")),
             changed=doc["changed"],
         )
 
