@@ -65,7 +65,15 @@ export function drawChart(ser) {
     return d.getFullYear() * 12 + d.getMonth();
   };
   const labels = [];
-  if (ser.length) {
+  const byDay = fits && (ui.mode === "all" || ui.gran !== "monthly");
+  if (byDay) {
+    // Few points, spread out: their own days ("Oct 1"), as many as fit without running into each other
+    const every = Math.ceil(56 / step);
+    for (let i = 0; i < ser.length; i += every) {
+      const d = new Date(ser[i].t);
+      labels.push([i, `${MON[d.getMonth()]} ${d.getDate()}`]);
+    }
+  } else if (ser.length) {
     const span = Math.max(1, mi(ser[ser.length - 1].t) - mi(ser[0].t) + 1),
       bpm = ser.length / span;
     const unit = [1, 3, 6, 12, 24, 60, 120].find((u) => bpm * u * step >= 64) || 120;
