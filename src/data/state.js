@@ -1,35 +1,17 @@
-/* Local-first: every entry lives in memory and in IndexedDB on this device. The sync partner keeps:
-     metrics/<id>               {name,type,created,mode?,gran?,u?} or a tombstone {deleted:true,u}
-     entries-v2/<metric>~<year> {m, y, e:{ <entry id>: {t,v,n,u,d} }}  (deleted: t,v,n = null, d = true)
-   t = when it happened (naive local time), u = when the record last changed (UTC epoch ms), d = deleted.
-   Changes are queued in an outbox (also in IndexedDB) and sent as merging updates, one entry per key;
-   on conflicts the record with the newest u wins. */
+/* Local-first: every entry lives in memory and in IndexedDB on this device, and syncs through the servers set up in
+   Preferences (src/sync). Entries: {id, m, y, t, v, n?, u} or a tombstone {id, m, y, u, d: true}, where t = when it
+   happened (naive local time), u = when the record last changed (UTC epoch ms), d = deleted. */
 import { parseLocal } from "../core/format.js";
 import { sameName } from "../core/names.js";
 import { hasView, setView, store, viewOf } from "../core/prefs.js";
 
-export const COL = "entries-v2";
 export const metricAll = new Map(); // id -> metric doc, tombstones included
 export const metrics = new Map(); // id -> live metrics only
 export const recs = new Map(); // entry id -> {id,m,y,t,v,n?,u} or {id,m,y,u,d:true}
-export const outbox = new Map(); // key -> queued change {k,kind,...,seq}
-export const knownDocs = new Set(); // year documents that exist on the server
 
 // Scalars shared between modules.
 export const S = {
-  // Standalone: not running inside claude.ai, so there is no sync partner yet; everything stays on this device.
-  // Decided at start-up, once this device's copy is loaded (claude.ai provides window.claude by then).
-  local: false,
-  db: null, // sync database (claude.ai), null when not available
-  dl: null, // downloads (claude.ai), null when not available
-  fullCopy: store.get("fullCopy") === true, // this device has finished saving a complete copy at least once
-  localReady: false,
-  remoteReady: false,
-  gotMetrics: false,
-  gotEntries: false,
-  stale: false,
-  syncErr: false,
-  seq: 0,
+  localReady: false, // this device's copy has loaded
   entryCache: new Map(), // mid -> sorted live entries [{id,s,t,v,n,y}]
 };
 export const ui = {

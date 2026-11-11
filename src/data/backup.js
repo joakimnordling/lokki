@@ -5,7 +5,7 @@ import { normName } from "../core/names.js";
 import { hasView, setView, viewOf } from "../core/prefs.js";
 import { compareMetrics } from "../sync/merge.js";
 import { idb } from "./idb.js";
-import { commitRecs, deleteMetricOps, nextU, queueMetric } from "./records.js";
+import { commitRecs, deleteMetricOps, nextU } from "./records.js";
 import { hooks, metricAll, metrics, recs, refreshMetrics } from "./state.js";
 
 // A metric's generation (protocol 6.2). Metrics from before generations existed have none: a deletion then counts
@@ -132,11 +132,10 @@ export function planRestore(b) {
 
 export async function applyRestore(p, bring) {
   const ops = [],
-    list = [],
-    extra = [];
+    list = [];
   const putM = (id, d, bm) => {
     metricAll.set(id, { ...d, sb: 0 });
-    ops.push(["metrics", "put", { id, ...d, sb: 0 }], ...queueMetric(id, d));
+    ops.push(["metrics", "put", { id, ...d, sb: 0 }]);
     // the backup's view, only where this device has none of its own
     if (!hasView(id) && (bm.mode || bm.gran)) setView(id, viewOf(id, bm));
   };
@@ -163,12 +162,7 @@ export async function applyRestore(p, bring) {
     u,
   });
   for (const be of p.addE) list.push(live(be, be.u));
-  for (const be of p.updE) {
-    const loc = recs.get(be.id);
-    if (loc && !loc.d && (loc.y !== +be.t.slice(0, 4) || loc.m !== be.metric))
-      extra.push({ id: loc.id, m: loc.m, y: loc.y, u: be.u - 1, d: true }); // moved: marker in its old place
-    list.push(live(be, be.u));
-  }
+  for (const be of p.updE) list.push(live(be, be.u));
   for (const be of p.delE) {
     const loc = recs.get(be.id);
     list.push({ id: loc.id, m: loc.m, y: loc.y, u: be.u, d: true });
@@ -180,7 +174,7 @@ export async function applyRestore(p, bring) {
       list.push(live(be, nextU(loc?.u)));
     }
   await idb.write(ops);
-  await commitRecs(list, extra);
+  await commitRecs(list);
   hooks.flushSoon();
   return {
     metrics: p.addM.length + p.updM.length + p.delM.length + (bring ? p.bringM.length : 0),

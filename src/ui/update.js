@@ -4,14 +4,13 @@
 
 import { store } from "../core/prefs.js";
 import { BUILD } from "../core/version.js";
-import { S } from "../data/state.js";
 import { toast } from "./sheets.js";
 
 const EVERY_MS = 15 * 60 * 1000;
 let lastCheck = 0;
 
-/** Whether this app can check: the standalone site's build, not claude.ai or unbundled development. */
-const canCheck = () => S.local && !!BUILD.commit && location.protocol.startsWith("http");
+/** Whether this app can check: the site's build, not unbundled development. */
+const canCheck = () => !!BUILD.commit && location.protocol.startsWith("http");
 
 /** The deployed build's info, or null when it can't be fetched. */
 async function deployed() {

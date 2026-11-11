@@ -45,10 +45,5 @@ jobs:
         run: npm test
       - name: Sync engine against the Python server
         run: npm run test:sync
-      - name: End-to-end tests (built artifact and unbundled modules)
+      - name: End-to-end tests (built site and unbundled modules)
         run: npm run test:e2e
-      - name: Keep the built artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: lokki-artifact
-          path: dist/lokki-artifact.html

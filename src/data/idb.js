@@ -1,19 +1,20 @@
-// IndexedDB: this device's copy (stores recs, metrics and outbox). Every call degrades to a no-op if IndexedDB is unavailable.
+// IndexedDB: this device's copy (stores recs, metrics and sync). Every call degrades to a no-op if IndexedDB is unavailable.
 export const idb = {
   db: null,
   async open() {
     try {
       this.db = await new Promise((res, rej) => {
-        const r = indexedDB.open("lokki", 2);
+        const r = indexedDB.open("lokki", 3);
         r.onupgradeneeded = () => {
           const d = r.result;
           for (const [n, k] of [
             ["recs", "id"],
             ["metrics", "id"],
-            ["outbox", "k"], // changes waiting for the claude.ai database
-            ["sync", "k"], // standalone sync: the vault's keyring and keys, and each server's state (version 2)
+            ["sync", "k"], // sync: the vault's keyring and keys, and each server's state (version 2)
           ])
             if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: k });
+          // version 3: the outbox held changes for the claude.ai version, which is gone
+          if (d.objectStoreNames.contains("outbox")) d.deleteObjectStore("outbox");
         };
         r.onsuccess = () => res(r.result);
         r.onerror = () => rej(r.error);

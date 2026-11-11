@@ -12,9 +12,8 @@
     "icons": "node scripts/build-icons.js",
     "app-icons": "node scripts/build-app-icons.js",
     "serve": "node scripts/serve.js",
-    "build:artifact": "node scripts/build-artifact.js",
     "test": "node --test \"tests/unit/**/*.test.js\"",
-    "test:e2e": "node scripts/build-artifact.js && node scripts/build-site.js && node --test --test-concurrency=1 \"tests/e2e/**/*.test.js\"",
+    "test:e2e": "node scripts/build-site.js && node --test --test-concurrency=1 \"tests/e2e/**/*.test.js\"",
     "build:site": "node scripts/build-site.js",
     "test:sync": "node --test \"tests/sync/**/*.test.js\"",
     "screenshots": "node scripts/screenshots.js"
