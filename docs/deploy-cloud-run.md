@@ -119,19 +119,20 @@ change to the server.
 ## 5. Vaults and tokens
 
 The command line works from your own machine, directly on the same database. Nothing on the server needs to be open for
-it, and new tokens appear only on your screen, never in Cloud Run's logs. From `servers/python`:
+it, and new tokens appear only on your screen, never in Cloud Run's logs. From `servers/python`, with the extra for
+your database (`postgresql` or `firestore`):
 
 ```sh
-# PostgreSQL: the same URL as in the secret
-export LOKKI_DATABASE_URL='postgres://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require'
+# PostgreSQL: the same URL as in the secret, typed or pasted without showing it or keeping it in your shell's history
+read -rs LOKKI_DATABASE_URL && export LOKKI_DATABASE_URL   # postgres://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
 # Firestore: sign in once with your Google account
 #   gcloud auth application-default login
 #   export LOKKI_DATABASE_URL=firestore://YOUR-PROJECT-ID
 export LOKKI_PUBLIC_URL=https://lokki-sync1-123456789.europe-north1.run.app   # printed with each token
 
-uv run lokki-server migrate        # PostgreSQL only, if the server hasn't started yet: creates the tables
-uv run lokki-server vault add jocke
-uv run lokki-server token add jocke "iPhone 17 Pro" --qr
+uv run --extra postgresql lokki-server migrate   # only before the server's first start, which creates the tables itself
+uv run --extra postgresql lokki-server vault add jocke
+uv run --extra postgresql lokki-server token add jocke "iPhone 17 Pro" --qr
 ```
 
 Enter the URL and token in the app: Preferences → Sync, or scan the QR code there with Scan QR Code.
