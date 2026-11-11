@@ -101,6 +101,7 @@ async def vault(token: Token, store: Store) -> Vault:
         keyring=keyring,
         keyring_version=status.keyring_version,
         head=status.head,
+        mark=status.mark,
         rows=status.rows,
         changed=iso(status.changed),
     )
@@ -197,10 +198,21 @@ async def pull(
     mark: Annotated[
         Mark | None,
         Query(
-            description="The `mark` that came with `since`. If row `since` wasn't written by the "
-            "push with this mark, the vault's history changed: `409 history_changed`. Leave it "
-            "out to pull without checking.",
+            description="The `mark` that came with row `at`: by default `since`, as `cursor` and "
+            "`mark` of the last pull. If that row wasn't written by the push with this mark, the "
+            "vault's history changed: `409 history_changed`. Leave it out to pull without "
+            "checking.",
             examples=["Xq3vT0bK9mWc1sPa"],
+        ),
+    ] = None,
+    at: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description="Which row `mark` is for, if not `since`: e.g. the vault's `head` and "
+            "`mark` when the device started pulling everything, while its pages have no marks "
+            "of their own (protocol 7.4)",
+            examples=[16977],
         ),
     ] = None,
     limit: Annotated[
@@ -215,17 +227,20 @@ async def pull(
     Rows written after `since`, oldest first. While `more` is true, continue with `cursor` as
     `since` and `mark` as `mark` (protocol 5.3, 7.2, 7.4).
     """
-    if mark is not None and since == 0:
-        raise errors.invalid_request("mark: Only with a since above 0")
+    if at is not None and mark is None:
+        raise errors.invalid_request("at: Only with a mark")
+    if mark is not None and at is None and since == 0:
+        raise errors.invalid_request("mark: Only with a since above 0, or an at")
     most = config.limits.pull if limit is None else min(limit, config.limits.pull)
     result = await store.pull(
         token.vault_id,
         since,
         most,
+        at,
     )
     # Checked after reading the rows: if the history changed meanwhile, the rows may be from the
-    # new one, and the mark of `since` is too
-    if mark is not None and result.since_mark != mark:
+    # new one, and the mark of the row checked is too
+    if mark is not None and result.at_mark != mark:
         raise errors.history_changed()
     return Pull(
         rows=[

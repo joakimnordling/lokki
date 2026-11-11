@@ -29,11 +29,15 @@ class Token:
     slots=True,
 )
 class VaultStatus:
-    """A vault's keyring and counters. Times are milliseconds since 1970 (UTC)."""
+    """
+    A vault's keyring and counters, and the latest push's mark (None before the first). Times are
+    milliseconds since 1970 (UTC).
+    """
 
     keyring: str | None
     keyring_version: int
     head: int
+    mark: str | None
     rows: int
     changed: int
 
@@ -58,16 +62,17 @@ class PullResult:
     """
     Rows after a sequence number, and where to continue.
 
-    `since_mark` is the mark of the push that wrote row number `since`, and `mark` that of the
-    push that wrote row number `cursor`: None for 0, or when the server doesn't know (it has
-    forgotten that push, or never had it).
+    `at_mark` is the mark of the push that wrote row number `at` (by default `since`), and `mark`
+    that of the push that wrote row number `cursor`: None for 0, or when the server doesn't know
+    (it has forgotten that push, or never had it). `at_mark` is read after the rows, so a history
+    that changed meanwhile shows in it.
     """
 
     rows: list[Row]
     cursor: int
     more: bool
     head: int
-    since_mark: str | None
+    at_mark: str | None
     mark: str | None
 
 
@@ -216,8 +221,9 @@ class Storage(Protocol):
         vault_id: VaultId,
         since: int,
         limit: int,
+        at: int | None = None,
     ) -> PullResult:
-        """Rows written after `since`, oldest first, at most `limit`."""
+        """Rows written after `since`, oldest first, at most `limit`, and the mark of row `at`."""
         ...
 
     async def push(

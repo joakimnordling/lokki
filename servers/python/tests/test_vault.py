@@ -28,7 +28,7 @@ def test_status_counts_rows_and_head(client: TestClient, writer: dict[str, str])
 
     vault = client.get("/v1/vault", headers=writer).json()
 
-    assert (vault["rows"], vault["head"]) == (3, 4)
+    assert (vault["rows"], vault["head"], vault["mark"]) == (3, 4, "mark2")
 
 
 def test_deleting_the_vault_removes_it_and_its_tokens(client: TestClient, vault: Tokens) -> None:

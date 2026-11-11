@@ -267,14 +267,14 @@ Token:  lk_6Yq3kM0p…        (shown only now)
 All bodies are JSON. Errors are `{"error": "<code>", "message": "…"}`. Every endpoint except `/v1/info` acts on the
 vault that the token belongs to.
 
-| Method and path                          | What it does                                                         |
-| ---------------------------------------- | -------------------------------------------------------------------- |
-| `GET /v1/info`                           | The server's name, version, ID, API versions and limits (no sign-in) |
-| `GET /v1/vault`                          | The vault: its keyring and status                                    |
-| `DELETE /v1/vault`                       | Deletes the vault, including all its tokens                          |
-| `PUT /v1/vault/keyring`                  | Replaces the keyring, if up to date                                  |
-| `GET /v1/vault/rows?since=&mark=&limit=` | Rows changed after a number                                          |
-| `POST /v1/vault/rows`                    | Adds or replaces rows, if up to date                                 |
+| Method and path                              | What it does                                                         |
+| -------------------------------------------- | -------------------------------------------------------------------- |
+| `GET /v1/info`                               | The server's name, version, ID, API versions and limits (no sign-in) |
+| `GET /v1/vault`                              | The vault: its keyring and status                                    |
+| `DELETE /v1/vault`                           | Deletes the vault, including all its tokens                          |
+| `PUT /v1/vault/keyring`                      | Replaces the keyring, if up to date                                  |
+| `GET /v1/vault/rows?since=&mark=&at=&limit=` | Rows changed after a number                                          |
+| `POST /v1/vault/rows`                        | Adds or replaces rows, if up to date                                 |
 
 #### `GET /v1/info`
 
@@ -305,6 +305,7 @@ vault that the token belongs to.
   },
   "keyring_version": 3,
   "head": 1042,
+  "mark": "b7Rk2LwQx0VdNe4g",
   "rows": 16977,
   "changed": "2026-11-08T07:31:04Z"
 }
@@ -312,7 +313,8 @@ vault that the token belongs to.
 
 - `keyring` is the vault keyring (4.4) exactly as last written, or `null` for a new, empty vault. `keyring_version`
   counts its writes (`0` while there is none).
-- `head` is the vault's counter, `rows` the number of rows, `changed` when a row or the keyring last changed.
+- `head` is the vault's counter, `mark` the latest push's mark (`null` before the first; 7.4), `rows` the number of
+  rows, `changed` when a row or the keyring last changed.
 
 #### `DELETE /v1/vault`
 
@@ -331,7 +333,7 @@ servers that accept it.
   the newer `u`, and tries again if its own was newer.
 - A keyring whose `vault` differs from the stored one is refused: `409 {"error": "different_vault"}`.
 
-#### `GET /v1/vault/rows?since=<n>&mark=<m>&limit=<k>`
+#### `GET /v1/vault/rows?since=<n>&mark=<m>&at=<a>&limit=<k>`
 
 Rows written after number `n`, oldest first.
 
@@ -353,10 +355,11 @@ Rows written after number `n`, oldest first.
 - Pass `cursor` as `since` and `mark` as `mark` in the next request while `more` is `true`.
 - `mark` is the mark of the push that wrote row number `cursor`: on the last page, the latest push. It's `null` for
   `0`, and when the server has forgotten that push. The device keeps it with `cursor`.
-- `mark` in the request is the mark that came with `since`. The server checks that row number `since` was written by
-  the push with that mark; if not, or if it doesn't know (it has forgotten that push, or never wrote that row), it
-  answers `409 {"error": "history_changed"}` and the device starts over (7.4). Without `mark`, nothing is checked:
-  for clients that always pull everything (9). It's refused with `since` 0.
+- `mark` in the request is the mark that came with row number `at`, by default `since`. The server checks that this
+  row was written by the push with that mark; if not, or if it doesn't know (it has forgotten that push, or never
+  wrote that row), it answers `409 {"error": "history_changed"}` and the device starts over (7.4). Without `mark`,
+  nothing is checked: for clients that always pull everything (9). `mark` with `since` 0 needs an `at`, and `at`
+  needs a `mark`.
 - `head` is the vault's current counter.
 
 #### `POST /v1/vault/rows`
@@ -478,9 +481,11 @@ This costs a few bytes per record however many servers there are.
 2. `GET /v1/vault`. Sync the keyring: if the server's has a newer `u` (and a valid `mac`), take it; if this device's
    is newer, or the server has none, write it with `PUT /v1/vault/keyring`.
 3. Pull: `GET /v1/vault/rows?since=cursor&mark=mark` until `more` is `false`, each page with the `cursor` and `mark`
-   of the one before. On `409 history_changed`, start over as in 7.4. Decrypt each row, merge it (section 6) and
-   update the bits. After each page, keep its `cursor` and `mark`; a page without a `mark` leaves the stored pair as
-   it was, and the next page goes without one.
+   of the one before. Without a mark to send (pulling everything, or a page that came without one), read
+   `GET /v1/vault` first and check that instead: `?since=cursor&at=head&mark=mark` with its `head` and `mark`, for
+   every page until one brings a mark. On `409 history_changed`, start over as in 7.4. Decrypt each row, merge it
+   (section 6) and update the bits. After each page, keep its `cursor` and `mark`; a page without a `mark` leaves the
+   stored pair as it was.
 4. Push the records whose bit for this server is clear, in batches, with `base` and `mark` from the end of the pull.
    On `409`, go back to step 3. After each accepted batch, set the bits and keep the new `head` and `mark` as `cursor`
    and `mark`.
@@ -515,8 +520,12 @@ A push carries the mark too, so it's refused in another history even when `base`
 The row checked is the last one the device has. A server's history only ever loses its newest pushes, never ones in
 between, so if the push that wrote that row is still there, everything below it is what the device pulled.
 
-One case isn't covered: early in pulling everything from a vault with more pushes than the server remembers, the
-pages have no marks to send. A server going back past all the pushes it remembers during those pages goes unnoticed.
+Pulling everything from a vault with more pushes than the server remembers, the first pages have no marks: their rows
+were written by pushes it has forgotten. Until a page brings a mark, the device checks the vault's `head` and `mark`
+from when it started instead (`at`). Everything it holds meanwhile is below that head, so the same reasoning holds:
+if the push that wrote the head is still there, nothing below it changed. If the server gets more new pushes during
+the pull than it remembers, it forgets that push too and the device starts over; a vault that busy for that long
+would keep a new device from finishing, which `history` should be large enough to avoid.
 
 ### 7.5 Rows a device can't read
 

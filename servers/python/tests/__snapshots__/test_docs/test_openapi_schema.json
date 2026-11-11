@@ -641,6 +641,22 @@
             "title": "Keyring Version",
             "type": "integer"
           },
+          "mark": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest push's mark, which wrote row `head`; null before the first push",
+            "examples": [
+              "b7Rk2LwQx0VdNe4g"
+            ],
+            "title": "Mark"
+          },
           "rows": {
             "description": "How many rows the vault holds",
             "examples": [
@@ -654,6 +670,7 @@
           "keyring",
           "keyring_version",
           "head",
+          "mark",
           "rows",
           "changed"
         ],
@@ -1093,7 +1110,7 @@
             }
           },
           {
-            "description": "The `mark` that came with `since`. If row `since` wasn't written by the push with this mark, the vault's history changed: `409 history_changed`. Leave it out to pull without checking.",
+            "description": "The `mark` that came with row `at`: by default `since`, as `cursor` and `mark` of the last pull. If that row wasn't written by the push with this mark, the vault's history changed: `409 history_changed`. Leave it out to pull without checking.",
             "in": "query",
             "name": "mark",
             "required": false,
@@ -1107,11 +1124,33 @@
                   "type": "null"
                 }
               ],
-              "description": "The `mark` that came with `since`. If row `since` wasn't written by the push with this mark, the vault's history changed: `409 history_changed`. Leave it out to pull without checking.",
+              "description": "The `mark` that came with row `at`: by default `since`, as `cursor` and `mark` of the last pull. If that row wasn't written by the push with this mark, the vault's history changed: `409 history_changed`. Leave it out to pull without checking.",
               "examples": [
                 "Xq3vT0bK9mWc1sPa"
               ],
               "title": "Mark"
+            }
+          },
+          {
+            "description": "Which row `mark` is for, if not `since`: e.g. the vault's `head` and `mark` when the device started pulling everything, while its pages have no marks of their own (protocol 7.4)",
+            "in": "query",
+            "name": "at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Which row `mark` is for, if not `since`: e.g. the vault's `head` and `mark` when the device started pulling everything, while its pages have no marks of their own (protocol 7.4)",
+              "examples": [
+                16977
+              ],
+              "title": "At"
             }
           },
           {
@@ -1188,7 +1227,7 @@
                   "history_changed": {
                     "value": {
                       "error": "history_changed",
-                      "message": "The vault's history changed: row `since` isn't from the push with this mark. Pull everything from 0."
+                      "message": "The vault's history changed: the row checked isn't from the push with this mark. Pull everything from 0."
                     }
                   }
                 },

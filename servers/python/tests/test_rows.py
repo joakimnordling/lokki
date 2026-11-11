@@ -152,9 +152,42 @@ def test_a_pull_from_another_history_is_refused(
     assert response.status_code == 409
     assert response.json() == {
         "error": "history_changed",
-        "message": "The vault's history changed: row `since` isn't from the push with this mark. "
-        "Pull everything from 0.",
+        "message": "The vault's history changed: the row checked isn't from the push with this "
+        "mark. Pull everything from 0.",
     }
+
+
+def test_a_pull_can_be_checked_against_another_row(
+    client: TestClient, writer: dict[str, str]
+) -> None:
+    """While its pages have no marks, a device checks the head it started from (protocol 7.4)."""
+    push(client, writer, 0, (1, "v1.a"), (2, "v1.b"))
+    push(client, writer, 2, (3, "v1.c"), mark="mark1")
+
+    def status(**params: Any) -> int:
+        return client.get("/v1/vault/rows", headers=writer, params=params).status_code
+
+    assert status(since=0, at=3, mark="mark2") == 200
+    assert status(since=1, at=3, mark="mark2") == 200
+    assert status(since=0, at=2, mark="mark1") == 200
+    assert status(since=0, at=3, mark="mark1") == 409
+    assert status(since=0, at=9, mark="mark2") == 409
+
+
+@pytest.mark.parametrize("history", [2])
+def test_a_forgotten_push_cant_be_checked(client: TestClient, writer: dict[str, str]) -> None:
+    """With more new pushes than the server remembers, a device pulling everything starts over."""
+    mark = None
+    for n in range(3):
+        mark = push(client, writer, n, (n + 1, "v1.x"), mark=mark).json()["mark"]
+
+    response = client.get(
+        "/v1/vault/rows",
+        headers=writer,
+        params={"since": 0, "at": 1, "mark": "mark1"},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"] == "history_changed"
 
 
 def test_a_push_from_another_history_writes_nothing(
@@ -236,6 +269,8 @@ def test_invalid_pushes(
         {"since": "x"},
         {"since": 0, "mark": "mark1"},
         {"since": 1, "mark": "not a mark"},
+        {"since": 0, "at": 3},
+        {"since": 0, "at": 0, "mark": "mark1"},
     ],
 )
 def test_invalid_pulls(client: TestClient, writer: dict[str, str], params: dict[str, Any]) -> None:

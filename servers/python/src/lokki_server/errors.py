@@ -66,8 +66,8 @@ def history_changed() -> ApiError:
         409,
         ErrorBody(
             error="history_changed",
-            message="The vault's history changed: row `since` isn't from the push with this mark. "
-            "Pull everything from 0.",
+            message="The vault's history changed: the row checked isn't from the push with this "
+            "mark. Pull everything from 0.",
         ),
     )
 

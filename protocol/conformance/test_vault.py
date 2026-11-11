@@ -19,10 +19,11 @@ def put(
 def test_a_new_vault(http: httpx2.Client, writer: dict[str, str]) -> None:
     vault = http.get("/v1/vault", headers=writer).json()
 
-    assert {k: vault[k] for k in ("keyring", "keyring_version", "head", "rows")} == {
+    assert {k: vault[k] for k in ("keyring", "keyring_version", "head", "mark", "rows")} == {
         "keyring": None,
         "keyring_version": 0,
         "head": 0,
+        "mark": None,
         "rows": 0,
     }
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", vault["changed"])

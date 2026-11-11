@@ -305,6 +305,7 @@ class FirestoreStorage:
             keyring=doc["keyring"],
             keyring_version=doc["keyring_version"],
             head=doc["head"],
+            mark=doc.get("mark"),
             rows=await _count(vault_ref.collection("rows")),
             changed=doc["changed"],
         )
@@ -345,6 +346,7 @@ class FirestoreStorage:
         vault_id: VaultId,
         since: int,
         limit: int,
+        at: int | None = None,
     ) -> PullResult:
         vault_ref = self._vault(vault_id)
         # The head first, then only rows up to it: a push committing meanwhile only adds rows above
@@ -385,7 +387,7 @@ class FirestoreStorage:
             cursor=cursor,
             more=more,
             head=head,
-            since_mark=await self._mark_at(vault_ref, since),
+            at_mark=await self._mark_at(vault_ref, since if at is None else at),
             mark=await self._mark_at(vault_ref, cursor),
         )
 

@@ -122,16 +122,24 @@ async function syncKeyring({ server, device, keys, http, vault, report }) {
 }
 
 async function pullAll({ server, device, keys, http, report }) {
-  for (let since = server.cursor, mark = server.mark ?? null; ; ) {
+  let since = server.cursor;
+  let mark = server.mark ?? null;
+  let start; // the vault's head and its mark when this device started pulling without marks
+  for (;;) {
+    // The server checks every page (section 7.4): that the push with `mark` wrote the last row this device has; or,
+    // while its pages come without marks, as when pulling everything, that nothing changed up to the head it started at
+    if (!(since && mark) && start === undefined) {
+      const vault = await http.vault();
+      start = vault.head && vault.mark ? { at: vault.head, mark: vault.mark } : null;
+    }
     let page;
     try {
-      // Every page says which push wrote the last row this device has; the server checks it (section 7.4)
-      page = await http.pull(since, since ? mark : null);
+      page = await http.pull(since, since && mark ? { mark } : (start ?? {}));
     } catch (e) {
       if (!(e instanceof ServerError && e.code === "history_changed")) throw e;
       // Not the history this device pulled from, or the server doesn't remember it: start over
       forget(server, device);
-      [since, mark] = [0, null];
+      [since, mark, start] = [0, null, undefined];
       continue;
     }
     const winners = [];

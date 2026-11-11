@@ -138,6 +138,24 @@ def test_a_pull_from_another_history_is_refused(
         assert isinstance(response.json()["message"], str)
 
 
+def test_a_pull_can_be_checked_against_another_row(
+    http: httpx2.Client, writer: dict[str, str]
+) -> None:
+    """Section 7.4: while its pages have no marks, a device checks the head it started from."""
+    first = push(http, writer, 0, (1, "v1.a"), (2, "v1.b")).json()["mark"]
+    second = push(http, writer, 2, (3, "v1.c"), mark=first).json()["mark"]
+    assert http.get("/v1/vault", headers=writer).json()["mark"] == second
+
+    def status(**params: int | str) -> int:
+        return http.get("/v1/vault/rows", headers=writer, params=params).status_code
+
+    assert status(since=0, at=3, mark=second) == 200
+    assert status(since=1, at=3, mark=second, limit=1) == 200
+    assert status(since=0, at=2, mark=first) == 200
+    assert status(since=0, at=3, mark=first) == 409
+    assert status(since=0, at=3) == 400, "at only with a mark"
+
+
 def test_paging(http: httpx2.Client, writer: dict[str, str]) -> None:
     push(http, writer, 0, *((n, f"v1.{n}") for n in range(1, 8)))
 

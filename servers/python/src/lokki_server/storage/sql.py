@@ -244,6 +244,7 @@ class SqlStorage:
                         vaults.c.keyring,
                         vaults.c.keyring_version,
                         vaults.c.head,
+                        vaults.c.mark,
                         vaults.c.changed,
                     ).where(vaults.c.id == vault_id)
                 )
@@ -255,6 +256,7 @@ class SqlStorage:
             keyring=found.keyring,
             keyring_version=found.keyring_version,
             head=found.head,
+            mark=found.mark,
             rows=count or 0,
             changed=found.changed,
         )
@@ -305,6 +307,7 @@ class SqlStorage:
         vault_id: VaultId,
         since: int,
         limit: int,
+        at: int | None = None,
     ) -> PullResult:
         async with self.engine.connect() as conn:
             # Read the head first and only rows up to it: a push committing meanwhile only adds
@@ -341,7 +344,7 @@ class SqlStorage:
                 cursor=cursor,
                 more=more,
                 head=head,
-                since_mark=await self._mark_at(conn, vault_id, since),
+                at_mark=await self._mark_at(conn, vault_id, since if at is None else at),
                 mark=await self._mark_at(conn, vault_id, cursor),
             )
 

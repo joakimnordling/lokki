@@ -85,19 +85,23 @@ def test_marks_tell_which_push_wrote_a_row(database_url: str) -> None:
         try:
             vault = await storage.create_vault("marks", 0)
             first = await storage.pull(vault, 0, 10)
-            assert (first.since_mark, first.mark) == (None, None)
+            assert (first.at_mark, first.mark) == (None, None)
+            assert (await storage.vault(vault)).mark is None
 
             a = await storage.push(vault, 0, None, [(key(1), "v1.1"), (key(2), "v1.2")], "a", 9, 0)
             assert (a.outcome, a.version, a.mark) == (Outcome.OK, 2, "a")
             b = await storage.push(vault, 2, "a", [(key(3), "v1.3")], "b", 9, 0)
             assert (b.outcome, b.version, b.mark) == (Outcome.OK, 3, "b")
 
-            marks = [(await storage.pull(vault, since, 10)).since_mark for since in range(5)]
+            marks = [(await storage.pull(vault, since, 10)).at_mark for since in range(5)]
             assert marks == [None, "a", "a", "b", None]  # 0, rows 1-2, row 3, above the head
             everything = await storage.pull(vault, 0, 10)
             assert (everything.cursor, everything.mark) == (3, "b")
             page = await storage.pull(vault, 0, 1)
             assert (page.cursor, page.more, page.mark) == (1, True, "a")
+            checked = [(await storage.pull(vault, 0, 1, at)).at_mark for at in (1, 3, 4)]
+            assert checked == ["a", "b", None]
+            assert (await storage.vault(vault)).mark == "b"
         finally:
             await storage.close()
 
@@ -138,7 +142,7 @@ def test_only_the_latest_pushes_are_remembered(database_url: str) -> None:
                 assert result.outcome is Outcome.OK
 
             async def remembered() -> list[str | None]:
-                return [(await storage.pull(vault, since, 10)).since_mark for since in range(1, 5)]
+                return [(await storage.pull(vault, since, 10)).at_mark for since in range(1, 5)]
 
             await push(0, None, "a", 2)
             await push(1, "a", "b", 2)
@@ -242,7 +246,7 @@ def test_vaults_with_rows_get_a_push_covering_them(sqlite_url: str) -> None:
             assert (await storage.pull(empty, 0, 10)).mark is None
             pulled = await storage.pull(used, 0, 10)
             assert pulled.mark is not None
-            assert (await storage.pull(used, 1, 10)).since_mark == pulled.mark
+            assert (await storage.pull(used, 1, 10)).at_mark == pulled.mark
             pushed = await storage.push(used, 7, pulled.mark, [(key(1), "v1")], "next", 9, 0)
             assert pushed.outcome is Outcome.OK
         finally:

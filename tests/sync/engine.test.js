@@ -359,7 +359,7 @@ describe("a server's history", () => {
     laptop.links[0].http = Object.assign(Object.create(now), {
       info: () => now.info(),
       vault: () => (pages ? now : was).vault(),
-      pull: (since, mark) => (pages++ ? now : was).pull(since, mark, 1),
+      pull: (since, check) => (pages++ ? now : was).pull(since, check, 1),
     });
     await sync(laptop);
 
@@ -372,6 +372,77 @@ describe("a server's history", () => {
     assert.ok(laptop.get("metric", "running"), "and the row it pulled before the server went back");
     await sync(tablet);
     assert.deepEqual(visible(tablet), visible(laptop), "which the server got back");
+  });
+
+  // A vault on the forgetful server with more pushes than it remembers: its first rows' pages come without marks
+  const busyVault = async (vault, write, entries = 3) => {
+    const phone = device(vault, [forgetful, write]);
+    phone.put(metric("running"));
+    await sync(phone);
+    for (let n = 1; n <= entries; n++) {
+      phone.put(entry(`e${n}`, n));
+      await sync(phone); // one push each
+    }
+    return phone;
+  };
+  // The laptop pulls one row per page; `after(pages)` runs after each page, and `pick(pages)` chooses the client
+  const pullingSlowly = (laptop, pick, after = async () => {}) => {
+    let pages = 0;
+    const pull = async (since, check) => {
+      const page = await pick(pages).pull(since, check, 1);
+      await after(++pages);
+      return page;
+    };
+    laptop.links[0].http = new Proxy(
+      {},
+      { get: (_, name) => (name === "pull" ? pull : (...args) => pick(pages)[name](...args)) },
+    );
+    return () => pages;
+  };
+
+  it("notices a server that went back in time while a device pulled everything, before any page had a mark", async () => {
+    const vault = await newVault();
+    const [before, restored] = await Promise.all([forgetful.vault(), forgetful.vault()]);
+    await busyVault(vault, before.write);
+    const tablet = device(vault, [forgetful, restored.write]);
+    tablet.put(metric("walking"));
+    tablet.put(entry("w1", 5, { metric: "walking" }));
+    await sync(tablet);
+
+    // A new laptop: its first page from the server as it was, then the server is restored to an older state
+    const laptop = device(vault, [forgetful, before.write]);
+    const [was, now] = [before, restored].map((v) => new ServerClient(forgetful.url, v.write));
+    pullingSlowly(laptop, (pages) => (pages ? now : was));
+    await sync(laptop);
+
+    assert.ok(laptop.get("metric", "walking"), "the row it would have missed below its cursor");
+    assert.ok(laptop.get("metric", "running"), "and the row it pulled before");
+    await sync(tablet);
+    assert.deepEqual(visible(tablet), visible(laptop));
+  });
+
+  it("a device pulling everything starts over when the server gets more pushes meanwhile than it remembers", async () => {
+    const vault = await newVault();
+    const { write } = await forgetful.vault();
+    const phone = await busyVault(vault, write);
+    const laptop = device(vault, [forgetful, write]);
+    const client = new ServerClient(forgetful.url, write);
+    const pages = pullingSlowly(
+      laptop,
+      () => client,
+      async (n) => {
+        if (n !== 1) return;
+        for (const id of ["x1", "x2", "x3"]) {
+          phone.put(entry(id, 9));
+          await sync(phone);
+        }
+      },
+    );
+
+    await sync(laptop);
+
+    assert.ok(pages() > 7, "it started over");
+    assert.deepEqual(visible(laptop), visible(phone));
   });
 
   it("a device away for longer than the server remembers pulls everything once", async () => {

@@ -262,6 +262,10 @@ class Vault(BaseModel):
         description="The vault's counter: the number of the latest row written",
         examples=[1042],
     )
+    mark: Mark | None = Field(
+        description="The latest push's mark, which wrote row `head`; null before the first push",
+        examples=["b7Rk2LwQx0VdNe4g"],
+    )
     rows: int = Field(
         description="How many rows the vault holds",
         examples=[16977],

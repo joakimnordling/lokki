@@ -60,9 +60,11 @@ export class ServerClient {
   putKeyring(base, keyring) {
     return this.request("PUT", "/v1/vault/keyring", { base, keyring });
   }
-  pull(since, mark, limit) {
+  /** check: {mark}, the mark that came with `since`, or {at, mark} for another row; {} pulls unchecked. */
+  pull(since, { mark, at } = {}, limit) {
     const query = new URLSearchParams({ since });
     if (mark) query.set("mark", mark);
+    if (at) query.set("at", at);
     if (limit) query.set("limit", limit);
     return this.request("GET", `/v1/vault/rows?${query}`);
   }
