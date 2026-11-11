@@ -277,9 +277,9 @@ main {
   font-size: 0.85rem;
 }
 .state .trydemo {
-  display: inline-block;
-  width: auto;
-  margin-top: 18px;
+  display: block;
+  width: fit-content;
+  margin: 18px auto 0;
   color: var(--fg);
 }
 
