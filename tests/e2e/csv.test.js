@@ -43,10 +43,9 @@ describe("CSV and names", () => {
   before(async () => {
     h = await startHarness();
     data = await makeData();
-    h.seed(data);
     dir = await mkdtemp(join(tmpdir(), "lokki-"));
-    A = await h.device();
-    B = await h.device("/nodb");
+    A = await h.device("/site/", { data });
+    B = await h.device();
   });
   after(() => h.close());
 
@@ -54,8 +53,7 @@ describe("CSV and names", () => {
   it("exports everything as Metric,Date,Value,Note", async () => {
     await home(A);
     await A.click("#hSet");
-    await A.click("#sExp");
-    const s = await saved(A);
+    const s = await saved(A, () => A.click("#sExp"));
     assert.match(s.filename, /^lokki-export-\d{4}-\d{2}-\d{2}-\d{4}\.csv$/);
     const lines = s.bytes.toString().split("\n");
     assert.equal(lines[0], "Metric,Date,Value,Note");
@@ -83,8 +81,7 @@ describe("CSV and names", () => {
     await home(A);
     await A.click("text=Running");
     await A.click("#tbEntries");
-    await A.click("#aExp");
-    const s = await saved(A);
+    const s = await saved(A, () => A.click("#aExp"));
     assert.equal(s.filename, "Running.csv");
     assert.equal(s.bytes.toString().split("\n")[0], "Date,Value,Note");
     assert.match(await imp(A, [await keep(s)], true), /Nothing new/);
@@ -110,12 +107,11 @@ describe("CSV and names", () => {
     await A.fill("#eVal", "3");
     await A.click("#sDone");
     await A.click("#tbEntries");
-    await A.click("#aExp");
-    assert.equal((await saved(A)).filename, "Walk-Run.csv");
+    assert.equal((await saved(A, () => A.click("#aExp"))).filename, "Walk-Run.csv");
   });
 
   it("keeps per-device settings across reloads", async () => {
-    const C = await h.device("/nodb");
+    const C = await h.device();
     await C.click("#hSet");
     await C.click('[data-look="dark"]');
     await C.reload();

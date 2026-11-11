@@ -1,7 +1,7 @@
 // Top-level rendering: the metric list, and dispatch to the detail and entry list views.
 import { ago, esc, fmt } from "../core/format.js";
 import { store } from "../core/prefs.js";
-import { entriesOf, metrics, outbox, S, ui } from "../data/state.js";
+import { entriesOf, metrics, S, ui } from "../data/state.js";
 import { sync } from "../sync/manager.js";
 import { detailRender, loadView } from "./detail.js";
 import { $ } from "./dom.js";
@@ -17,7 +17,7 @@ export function render() {
   if (ui.view !== "list" && !metrics.has(ui.mid)) ui.view = "list";
   if (ui.view !== "entries") main.dataset.view = "";
   if (ui.view === "list") {
-    const state = S.local ? sync.headerState() : null;
+    const state = sync.headerState();
     const dot = state ? `<span class="dot${state === "bad" ? " bad" : ""}"></span>` : "";
     const label =
       state === "bad"
@@ -47,14 +47,7 @@ export function render() {
   }
 }
 function listHTML() {
-  const { db, stale } = S;
   if (!S.localReady) return `<div class="state"><b>Loading your logs…</b></div>`;
-  if (!S.local && !db && !metrics.size)
-    return `<div class="state"><b>Sign in to see your logs</b>Your logs are synced through your claude.ai account. Open this page while signed in to claude.ai.</div>`;
-  if (!S.remoteReady && db && !S.fullCopy)
-    return `<div class="state"><b>${stale ? "Can't reach your logs yet" : "Loading your logs…"}</b>${stale ? "This device doesn't have a saved copy yet. Your logs appear as soon as it connects." : ""}</div>`;
-  if (!S.local && !S.remoteReady && !metrics.size)
-    return `<div class="state"><b>${stale ? "Can't reach your logs yet" : "Loading your logs…"}</b>${stale ? "Check your connection. The list fills in as soon as it connects." : ""}</div>`;
   let ms = [...metrics.entries()].map(([id, m]) => {
     const es = entriesOf(id);
     return { id, ...m, last: es[es.length - 1] };
@@ -64,14 +57,8 @@ function listHTML() {
   let h = `<button class="create" id="cCreate">Create Custom Metric</button>`;
   if (ui.filter)
     h += `<div class="filterbar"><span>Showing ${esc(ui.filter)}</span><button id="clrF">Show all</button></div>`;
-  if (S.local) {
-    if (metrics.size && !sync.vault)
-      h += `<div class="note">Saved on this device only. Back up from Preferences now and then, or set up sync.</div>`;
-  } else if (!db)
-    h += `<div class="note">Not syncing: open this page signed in to claude.ai. Changes are saved on this device.</div>`;
-  else if (outbox.size && (S.syncErr || stale || !navigator.onLine))
-    h += `<div class="note">${outbox.size === 1 ? "1 change" : `${outbox.size} changes`} saved on this device, waiting to sync.</div>`;
-  else if (stale) h += `<div class="note">Can't reach the server right now. Showing what's saved on this device.</div>`;
+  if (metrics.size && !sync.vault)
+    h += `<div class="note">Saved on this device only. Back up from Preferences now and then, or set up sync.</div>`;
   if (!ms.length)
     h += `<div class="state"><b>No metrics yet</b>Create a metric, or import CSV files from Preferences.</div>`;
   for (const m of ms)

@@ -1,4 +1,4 @@
-// The built site (GitHub Pages) running on its own, without claude.ai: everything stays on the device.
+// The built site (GitHub Pages) without sync: everything stays on the device.
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,17 +19,15 @@ describe("standalone site", () => {
   before(async () => {
     h = await startHarness();
     dir = await mkdtemp(join(tmpdir(), "lokki-"));
-    P = await h.device("/site/", { claude: false, wait: 0 });
+    P = await h.device();
     P.on("request", (r) => requests.push(r.url()));
     await P.reload();
     await P.waitForSelector("#cCreate");
   });
   after(() => h.close());
 
-  it("opens ready to use, without asking to sign in", async () => {
-    const text = await P.textContent("#main");
-    assert.doesNotMatch(text, /Sign in|claude\.ai/);
-    assert.match(text, /No metrics yet/);
+  it("opens ready to use", async () => {
+    assert.match(await P.textContent("#main"), /No metrics yet/);
   });
 
   it("logs entries and keeps them across reloads", async () => {
@@ -61,7 +59,7 @@ describe("standalone site", () => {
   });
 
   it("restores the backup on another device", async () => {
-    const Q = await h.device("/site/", { claude: false });
+    const Q = await h.device();
     await Q.click("#hSet");
     const [chooser] = await Promise.all([Q.waitForEvent("filechooser"), Q.click("#sRes")]);
     await chooser.setFiles(backup.f);
@@ -87,6 +85,45 @@ describe("standalone site", () => {
       requests.filter((u) => !u.startsWith(h.base) && !u.startsWith("blob:")),
       [],
     );
+  });
+
+  it("opens a copy saved by an older version, whose database still has the claude.ai outbox", async () => {
+    const ctx = await h.browser.newContext();
+    const pg = await ctx.newPage();
+    pg.on("pageerror", (e) => h.errors.push(e.message));
+    await pg.goto(`${h.base}/site/manifest.webmanifest`); // the app's origin, without starting the app
+    await pg.evaluate(
+      () =>
+        new Promise((done, failed) => {
+          const r = indexedDB.open("lokki", 2);
+          r.onupgradeneeded = () => {
+            for (const [n, k] of [
+              ["recs", "id"],
+              ["metrics", "id"],
+              ["outbox", "k"],
+              ["sync", "k"],
+            ])
+              r.result.createObjectStore(n, { keyPath: k });
+          };
+          r.onsuccess = () => {
+            const tx = r.result.transaction(["recs", "metrics", "outbox"], "readwrite");
+            tx.objectStore("metrics").put({ id: "swim", name: "Swimming", type: "", created: "", u: 1 });
+            tx.objectStore("recs").put({ id: "e1", m: "swim", y: 2026, t: "2026-11-01T10:00:00", v: 1.5, u: 2 });
+            tx.objectStore("outbox").put({ k: "e:swim~2026:e1", kind: "e", seq: 1 });
+            tx.oncomplete = () => {
+              r.result.close();
+              done();
+            };
+            tx.onerror = () => failed(tx.error);
+          };
+        }),
+    );
+    await pg.goto(`${h.base}/site/`);
+    await pg.waitForSelector('[data-add="swim"]');
+    assert.equal(await pg.textContent('[data-add="swim"]'), "1,5");
+    const stores = await pg.evaluate(() => [...window.__lokki.idb.db.objectStoreNames].sort());
+    assert.deepEqual(stores, ["metrics", "recs", "sync"]);
+    await ctx.close();
   });
 
   it("had no script errors", () => assert.deepEqual(h.errors, []));

@@ -1,5 +1,5 @@
-// Back Up and Restore from Backup. Backups are saved as a .zip holding one .jsonl file (claude.ai only allows certain
-// download types, and .gz isn't one of them). Restore also reads a plain .jsonl and a .jsonl.gz.
+// Back Up and Restore from Backup. Backups are saved as a .zip holding one .jsonl file. Restore also reads a plain
+// .jsonl and a .jsonl.gz.
 import { parseBackup } from "../core/backup-format.js";
 import { clock, dayLabel, esc, fileStamp, fmt } from "../core/format.js";
 import { normName } from "../core/names.js";

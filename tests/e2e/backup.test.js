@@ -23,7 +23,7 @@ const unzip = (f) =>
   ).toString();
 
 describe("backup and restore", () => {
-  let h, data, dir, A, A2, B;
+  let h, data, dir, A, B;
   const file = async (name, content) => {
     const f = join(dir, name);
     await writeFile(f, content);
@@ -32,8 +32,7 @@ describe("backup and restore", () => {
   async function backup(pg, tag) {
     await home(pg);
     await pg.click("#hSet");
-    await pg.click("#sBak");
-    const s = await saved(pg);
+    const s = await saved(pg, () => pg.click("#sBak"));
     return { name: s.filename, f: await file(`${tag}-${s.filename}`, s.bytes) };
   }
   async function openRestore(pg, f) {
@@ -80,11 +79,9 @@ describe("backup and restore", () => {
   before(async () => {
     h = await startHarness();
     data = await makeData();
-    h.seed(data);
     dir = await mkdtemp(join(tmpdir(), "lokki-"));
-    A = await h.device();
-    A2 = await h.device();
-    B = await h.device("/nodb");
+    A = await h.device("/site/", { data });
+    B = await h.device();
   });
   after(() => h.close());
 
@@ -162,14 +159,13 @@ describe("backup and restore", () => {
     await sameAs(A, B);
   });
 
-  it("brings back a deleted metric only when asked, under its original id and on every device", async () => {
+  it("brings back a deleted metric only when asked, under its original id", async () => {
     const runs = data.entries.filter((e) => e.m === "running").length;
     await home(A);
     await A.click("text=Running");
     await A.click("#tbDelete");
     await A.click("#dYes");
-    await A.waitForTimeout(1500);
-    assert.equal(await A2.evaluate(() => window.__lokki.metricAll.get("running")?.deleted), true);
+    await A.waitForTimeout(500);
     const text = await openRestore(A, k2.f);
     assert.match(text, /Bring back what you've deleted since/);
     assert.ok(text.includes(`Running (${runs.toLocaleString("fi-FI").replace(/\s/g, " ")} entries)`), text);
@@ -181,15 +177,12 @@ describe("backup and restore", () => {
       "not ticked: stays deleted",
     );
     await restore(A, k2.f, true);
-    await A.waitForTimeout(1500);
-    for (const pg of [A, A2]) {
-      const [m, n, view] = await pg.evaluate(() => [
-        window.__lokki.metricAll.get("running"),
-        [...window.__lokki.recs.values()].filter((r) => r.m === "running" && !r.d).length,
-        JSON.parse(localStorage.getItem("lokki:view:running")), // the view is per device and survives
-      ]);
-      assert.deepEqual([m.name, m.type, view?.mode, !!m.deleted, n], ["Running", "Fitness", "totals", false, runs]);
-    }
+    const [m, n, view] = await A.evaluate(() => [
+      window.__lokki.metricAll.get("running"),
+      [...window.__lokki.recs.values()].filter((r) => r.m === "running" && !r.d).length,
+      JSON.parse(localStorage.getItem("lokki:view:running")), // the view is per device and survives
+    ]);
+    assert.deepEqual([m.name, m.type, view?.mode, !!m.deleted, n], ["Running", "Fitness", "totals", false, runs]);
   });
 
   describe("damaged and hand-made files", () => {

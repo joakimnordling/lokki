@@ -47,8 +47,8 @@ describe("standalone sync", () => {
     h = await startHarness();
     srv = await startServer({ cors: [h.base] });
     tokens = await srv.vault();
-    A = await h.device("/site/", { claude: false });
-    B = await h.device("/site/", { claude: false });
+    A = await h.device();
+    B = await h.device();
   });
   after(async () => {
     await srv?.stop();
@@ -202,7 +202,7 @@ describe("standalone sync", () => {
     await syncNow(A);
     await syncNow(B);
 
-    const C = await h.device("/site/", { claude: false });
+    const C = await h.device();
     await connect(C);
     await C.waitForSelector("#p1");
     await C.fill("#p1", PASS);

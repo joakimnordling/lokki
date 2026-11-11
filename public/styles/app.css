@@ -134,8 +134,7 @@ select:focus-visible,
   display: flex;
   flex-direction: column;
 }
-/* As an iPhone home screen app the page starts under the status bar: start the content below it.
-   Only there: inside claude.ai the app already places the page below its own toolbar. */
+/* As an iPhone home screen app the page starts under the status bar: start the content below it. */
 @media (display-mode: standalone) {
   .app {
     padding-top: env(safe-area-inset-top, 0px);

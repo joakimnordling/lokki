@@ -27,7 +27,7 @@ describe("updates", () => {
 
   before(async () => {
     h = await startHarness();
-    P = await h.device("/site/", { claude: false, wait: 0 });
+    P = await h.device();
     await P.waitForSelector("#cCreate");
   });
   after(() => h.close());
@@ -72,12 +72,6 @@ describe("updates", () => {
     await check();
     await P.waitForSelector(".toast");
     assert.match(await P.textContent(".toast"), /Couldn't check for updates/);
-  });
-
-  it("isn't offered in claude.ai, which updates the page itself", async () => {
-    const C = await h.device("/");
-    await C.click("#hSet");
-    assert.equal(await C.$("#sUpd"), null);
   });
 
   it("had no script errors", () => assert.deepEqual(h.errors, []));

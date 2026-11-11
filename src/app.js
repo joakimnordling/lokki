@@ -9,8 +9,7 @@ import { stats } from "./core/stats.js";
 import { idb } from "./data/idb.js";
 import { addEntry, deleteEntry, deleteMetric, editEntry, restoreEntry } from "./data/records.js";
 import { series } from "./data/series.js";
-import { hooks, metricAll, outbox, rebuild, recs, refreshMetrics, S, ui } from "./data/state.js";
-import { connectClaude, flush, flushSoon } from "./sync/claude.js";
+import { hooks, metricAll, rebuild, recs, refreshMetrics, S, ui } from "./data/state.js";
 import { sync } from "./sync/manager.js";
 import { restoreFromFile } from "./ui/backup.js";
 import { detailRender } from "./ui/detail.js";
@@ -25,7 +24,7 @@ import { watchForUpdates } from "./ui/update.js";
 applyLook(store.get("look"));
 applyTextSize(store.get("text"));
 hooks.render = render;
-hooks.flushSoon = flushSoon;
+hooks.flushSoon = () => sync.soon();
 hooks.toast = toast;
 
 $("#fileIn").onchange = importCSVFiles;
@@ -48,40 +47,24 @@ render();
   try {
     navigator.storage?.persist?.();
   } catch (_e) {}
-  const [lr, lm, lo] = await Promise.all([idb.all("recs"), idb.all("metrics"), idb.all("outbox")]);
+  const [lr, lm] = await Promise.all([idb.all("recs"), idb.all("metrics")]);
   for (const r of lr) recs.set(r.id, r);
   for (const x of lm) {
     const { id, ...d } = x;
     metricAll.set(id, d);
   }
-  for (const o of lo) {
-    outbox.set(o.k, o);
-    S.seq = Math.max(S.seq, o.seq || 0);
-  }
   refreshMetrics();
   rebuild();
-  S.local = !window.claude;
   const listShown = () => ui.view === "list" && !document.querySelector(".scrim");
-  if (S.local) {
-    // standalone: Lokki's own sync. Changes queued for claude.ai (by older versions) can never be sent from here.
-    if (outbox.size) {
-      const stale = [...outbox.keys()];
-      outbox.clear();
-      await idb.write(stale.map((k) => ["outbox", "delete", k]));
-    }
-    await sync.load();
-    hooks.flushSoon = () => sync.soon();
-    sync.onChange(() => {
-      if (listShown()) render();
-    });
-  }
+  await sync.load();
+  sync.onChange(() => {
+    if (listShown()) render();
+  });
   S.localReady = true;
   render();
-  // 2. then sync, and notice new versions of the standalone app
-  if (S.local) {
-    sync.start();
-    watchForUpdates();
-  } else if (!(await connectClaude(render))) return;
+  // 2. then sync, and notice new versions of the app
+  sync.start();
+  watchForUpdates();
   setInterval(() => {
     if (listShown()) render();
   }, 60000);
@@ -96,9 +79,8 @@ window.__lokki = {
   startOf,
   uuid5,
   recs,
-  outbox,
   metricAll,
   sync,
-  flush: () => flush(),
+  idb,
 };
 window.__test = { add: addEntry, edit: editEntry, del: deleteEntry, restore: restoreEntry, delMetric: deleteMetric };

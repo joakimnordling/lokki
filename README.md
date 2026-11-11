@@ -24,8 +24,6 @@ in Preferences → Sync with a server's URL and a token from its operator. To ru
 
 On an iPhone, open the site in Safari and choose Share → Add to Home Screen. It works offline once opened.
 
-The original version runs as an artifact on claude.ai and syncs through it instead.
-
 ## Layout
 
 ```
@@ -33,11 +31,11 @@ index.html          the page; loads src/app.js as an ES module (no build step ne
 public/             static files: styles, the Jost font, icons, web app manifest
 src/core/           pure functions: formatting, periods, statistics, ids, CSV, zip, backup format
 src/data/           this device's copy: state, IndexedDB, local changes, backups
-src/sync/           syncing: encryption, merge rules and the sync engine for Lokki servers; the claude.ai adapter
+src/sync/           syncing: encryption, merge rules and the sync engine for Lokki servers
 src/ui/             rendering, sheets, chart, entry list, preferences, files
-scripts/            dev server, the site build (with its service worker), the claude.ai artifact build, screenshots
+scripts/            dev server, the site build (with its service worker), screenshots
 tests/unit/         node:test unit tests
-tests/e2e/          Playwright tests: several simulated devices syncing through a fake database
+tests/e2e/          Playwright tests: simulated devices running the built site and the unbundled modules
 docs/               the sync protocol
 protocol/           the protocol's test vectors, conformance tests and Python reference implementation
 servers/python/     the sync server: FastAPI, SQLAlchemy (see its README)
@@ -59,16 +57,15 @@ npm run serve                        # http://localhost:8080
 npm test                             # unit tests
 npm run test:sync                    # the sync engine against the Python server (needs uv)
 npx playwright install chromium      # once, for the end-to-end tests
-npm run test:e2e                     # builds the artifact, then runs the end-to-end tests
+npm run test:e2e                     # builds the site, then runs the end-to-end tests
 npm run icons                        # regenerate src/ui/lucide.js after changing the icon list or Lucide version
 npm run screenshots                  # regenerate docs/screenshots (made-up data, light and dark) after a visual change
 npm run build:site                   # dist/site, the site deployed to GitHub Pages
-npm run build:artifact               # dist/lokki-artifact.html, the single page published on claude.ai
 ```
 
 Every push to `main` deploys the site to GitHub Pages (`.github/workflows/pages.yml`).
 
-The end-to-end tests run against both the built artifact and the unbundled modules, with generated data only.
+The end-to-end tests run against both the built site and the unbundled modules, with generated data only.
 
 ## License
 

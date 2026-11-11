@@ -49,7 +49,7 @@ describe("scanning a pairing code", () => {
         `--use-file-for-fake-video-capture=${video}`,
       ],
     });
-    P = await h.device("/site/", { claude: false, wait: 0 });
+    P = await h.device();
     await P.context().grantPermissions(["camera"]);
     await P.waitForSelector("#cCreate");
   });

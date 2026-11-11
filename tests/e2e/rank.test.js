@@ -7,7 +7,7 @@ describe("rank list", () => {
   let h, P;
   before(async () => {
     h = await startHarness();
-    P = await h.device("/site/", { claude: false, wait: 0 });
+    P = await h.device();
     await P.waitForSelector("#cCreate");
   });
   after(() => h.close());

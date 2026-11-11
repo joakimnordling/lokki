@@ -1,10 +1,10 @@
-// CSV export and import, and saving files through the downloads capability.
+// CSV export and import, and saving files.
 import { csvq, decodeLoggrName, readCSV } from "../core/csv.js";
 import { esc, fileStamp } from "../core/format.js";
 import { uuid4, uuid5 } from "../core/ids.js";
 import { safeFile } from "../core/names.js";
 import { commitRecs, fail, nextU, saveMetric } from "../data/records.js";
-import { entriesOf, findMetricByName, metrics, rebuild, recs, S, ui } from "../data/state.js";
+import { entriesOf, findMetricByName, metrics, rebuild, recs, ui } from "../data/state.js";
 import { $ } from "./dom.js";
 import { render } from "./render.js";
 import { toast } from "./sheets.js";
@@ -12,7 +12,7 @@ import { toast } from "./sheets.js";
 let importTarget = null;
 
 const MIME = { zip: "application/zip", csv: "text/csv", txt: "text/plain" };
-// Without claude.ai: the share sheet where it can take files (iPhone: Save to Files), otherwise an ordinary download.
+// The share sheet where it can take files (iPhone: Save to Files), otherwise an ordinary download.
 async function saveLocally(filename, data, what) {
   const file = new File([data], filename, { type: MIME[filename.split(".").pop()] || "application/octet-stream" });
   if (navigator.canShare?.({ files: [file] })) {
@@ -38,29 +38,8 @@ async function saveLocally(filename, data, what) {
   }
 }
 
-export async function saveFile(filename, data, what = "Export") {
-  if (S.local) return saveLocally(filename, data, what);
-  if (!S.dl) {
-    toast("Downloads aren't available here.");
-    return false;
-  }
-  try {
-    await S.dl.save({ filename, data });
-    return true;
-  } catch (e) {
-    const c = e?.code;
-    if (c === "declined" || c === "cancelled") return false;
-    const why =
-      {
-        rejected_extension: "this file type can't be saved here",
-        extension_not_enabled: "this file type can't be saved here",
-        too_large: "the file is too large",
-        rate_limited: "another save is still open. Try again in a moment",
-        unavailable: "saving isn't available in this view",
-      }[c] || (c ? `error: ${c}` : "unknown error");
-    toast(`${what} didn't finish: ${why}.`);
-    return false;
-  }
+export function saveFile(filename, data, what = "Export") {
+  return saveLocally(filename, data, what);
 }
 export function exportMetric(mid) {
   const m = metrics.get(mid);

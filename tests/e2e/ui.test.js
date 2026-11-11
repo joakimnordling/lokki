@@ -2,15 +2,14 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { makeData } from "./fixtures.js";
-import { counts, startHarness } from "./harness.js";
+import { counts, ready, startHarness } from "./harness.js";
 
 describe("entry list", () => {
   let h, A;
   const first = () => A.evaluate(() => document.querySelector(".er .open")?.textContent.replace(/\s+/g, " "));
   before(async () => {
     h = await startHarness();
-    h.seed(await makeData());
-    A = await h.device();
+    A = await h.device("/site/", { data: await makeData() });
     await A.click("text=Running");
     await A.click("#nList");
   });
@@ -28,7 +27,7 @@ describe("entry list", () => {
     assert.equal(await first(), f0);
   });
 
-  it("edits the value and note, sent as a one-entry update", async () => {
+  it("edits the value and note", async () => {
     await A.click("#eDone");
     await A.click('[data-open="0"]');
     await A.fill("#eVal", "4,6");
@@ -36,8 +35,6 @@ describe("entry list", () => {
     await A.click("#sDone");
     await A.waitForTimeout(500);
     assert.match(await first(), /4,6.*test note|test note.*4,6/);
-    assert.equal(h.writes.at(-1).op, "update");
-    assert.equal(h.writes.at(-1).keys, 1);
   });
 
   it("searches entries", async () => {
@@ -54,15 +51,14 @@ describe("unbundled modules", () => {
   const requests = [];
   before(async () => {
     h = await startHarness();
-    h.seed(await makeData());
-    D = await h.device("/dev/", { wait: 0 });
+    D = await h.device("/dev/", { data: await makeData() });
     D.on("request", (r) => requests.push(r.url()));
     await D.reload();
-    await D.waitForTimeout(1500);
+    await ready(D);
   });
   after(() => h.close());
 
-  it("load, sync and log an entry", async () => {
+  it("load and log an entry", async () => {
     const n = (await counts(D)).live;
     assert.ok(n > 1000);
     await D.click('[data-add="running"]');
@@ -70,7 +66,6 @@ describe("unbundled modules", () => {
     await D.click("#sDone");
     await D.waitForTimeout(600);
     assert.equal((await counts(D)).live, n + 1);
-    assert.equal(h.writes.at(-1).op, "update");
   });
 
   it("use the self-hosted font and request nothing from elsewhere", async () => {

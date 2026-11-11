@@ -1,7 +1,7 @@
 /* Clearing this device's data. Both ways reload the app afterwards, so nothing in memory outlives what was cleared.
-   - clearEverything: the logs, the sync setup and this device's settings. What's on servers or in claude.ai stays.
-   - clearCopy: only the logs; they download again from where they sync (the servers, or claude.ai), and the
-     settings and the sync setup stay. Changes that haven't reached anywhere yet are lost, so the UI warns first. */
+   - clearEverything: the logs, the sync setup and this device's settings. What's on the servers stays.
+   - clearCopy: only the logs; they download again from the servers, and the settings and the sync setup stay.
+     Changes that haven't reached a server yet are lost, so the UI warns first. */
 import { idb } from "./idb.js";
 
 const reload = () => location.reload();
@@ -16,10 +16,7 @@ export async function clearEverything() {
 
 /** servers: the standalone sync's servers, whose state is reset so the next sync downloads everything. */
 export async function clearCopy(servers = []) {
-  await idb.clear(["recs", "metrics", "outbox"]);
+  await idb.clear(["recs", "metrics"]);
   await idb.write(servers.map((s) => ["sync", "put", { ...s, cursor: 0, mark: null, keyringVersion: 0, last: null }]));
-  try {
-    localStorage.removeItem("lokki:fullCopy"); // claude.ai: this device no longer has a complete copy
-  } catch (_e) {}
   reload();
 }
