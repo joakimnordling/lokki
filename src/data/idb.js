@@ -1,10 +1,14 @@
 // IndexedDB: this device's copy (stores recs, metrics and sync). Every call degrades to a no-op if IndexedDB is unavailable.
+// The demo has a database of its own, so it never touches the real one.
+import { DEMO } from "../core/demo.js";
+
+const NAME = DEMO ? "lokki-demo" : "lokki";
 export const idb = {
   db: null,
   async open() {
     try {
       this.db = await new Promise((res, rej) => {
-        const r = indexedDB.open("lokki", 3);
+        const r = indexedDB.open(NAME, 3);
         r.onupgradeneeded = () => {
           const d = r.result;
           for (const [n, k] of [
@@ -55,7 +59,7 @@ export const idb = {
     this.db?.close();
     this.db = null;
     return new Promise((res, rej) => {
-      const r = indexedDB.deleteDatabase("lokki");
+      const r = indexedDB.deleteDatabase(NAME);
       r.onsuccess = () => res();
       r.onerror = () => rej(r.error);
       r.onblocked = () => rej(new Error("Close Lokki in your other tabs and try again."));

@@ -1,6 +1,9 @@
 // Top-level rendering: the metric list, and dispatch to the detail and entry list views.
+
+import { DEMO } from "../core/demo.js";
 import { ago, esc, fmt } from "../core/format.js";
 import { store } from "../core/prefs.js";
+import { closeDemo } from "../data/demo.js";
 import { entriesOf, metrics, S, ui } from "../data/state.js";
 import { sync } from "../sync/manager.js";
 import { detailRender, loadView } from "./detail.js";
@@ -57,10 +60,15 @@ function listHTML() {
   let h = `<button class="create" id="cCreate">Create Custom Metric</button>`;
   if (ui.filter)
     h += `<div class="filterbar"><span>Showing ${esc(ui.filter)}</span><button id="clrF">Show all</button></div>`;
-  if (metrics.size && !sync.vault)
+  if (DEMO)
+    h += `<div class="note demo">Demo: a year of made-up logs, made afresh each time. Your own logs are untouched.
+      <span class="demobtns"><button id="dAgain">Start Over</button><button id="dClose">Close Demo</button></span></div>`;
+  else if (metrics.size && !sync.vault)
     h += `<div class="note">Saved on this device only. Back up from Preferences now and then, or set up sync.</div>`;
   if (!ms.length)
-    h += `<div class="state"><b>No metrics yet</b>Create a metric, or import CSV files from Preferences.</div>`;
+    h += `<div class="state"><b>No metrics yet</b>Create a metric, or import CSV files from Preferences.${
+      DEMO ? "" : `<button class="plain trydemo" id="cDemo">Try with Demo Data</button>`
+    }</div>`;
   for (const m of ms)
     h += `<div class="row"><button class="name" data-open="${esc(m.id)}">${esc(m.name)}<span class="ago">${m.last ? ago(m.last.t) : "No Entries"}</span></button><button class="pill" data-add="${esc(m.id)}" aria-label="Add ${esc(m.name)} entry">${m.last ? fmt(m.last.v) : "+"}</button></div>`;
   return `${h}<div style="border-top:1px solid var(--line)"></div>`;
@@ -68,6 +76,12 @@ function listHTML() {
 function bindList() {
   const c = $("#cCreate");
   if (c) c.onclick = () => openMetricSheet(null);
+  const demo = $("#cDemo");
+  if (demo) demo.onclick = () => location.assign("?demo");
+  const again = $("#dAgain");
+  if (again) again.onclick = () => location.reload();
+  const close = $("#dClose");
+  if (close) close.onclick = closeDemo;
   const f = $("#clrF");
   if (f)
     f.onclick = () => {

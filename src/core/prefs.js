@@ -1,15 +1,18 @@
-// Per-device settings in localStorage, under "lokki:<name>".
+// Per-device settings in localStorage, under "lokki:<name>" ("lokki-demo:<name>" in the demo).
+import { DEMO } from "./demo.js";
+
+export const PREFIX = DEMO ? "lokki-demo:" : "lokki:";
 export const store = {
   get(k) {
     try {
-      return JSON.parse(localStorage.getItem(`lokki:${k}`));
+      return JSON.parse(localStorage.getItem(`${PREFIX}${k}`));
     } catch (_e) {
       return null;
     }
   },
   set(k, v) {
     try {
-      localStorage.setItem(`lokki:${k}`, JSON.stringify(v));
+      localStorage.setItem(`${PREFIX}${k}`, JSON.stringify(v));
     } catch (_e) {}
   },
 };

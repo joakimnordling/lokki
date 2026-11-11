@@ -2,6 +2,7 @@
    - clearEverything: the logs, the sync setup and this device's settings. What's on the servers stays.
    - clearCopy: only the logs; they download again from the servers, and the settings and the sync setup stay.
      Changes that haven't reached a server yet are lost, so the UI warns first. */
+import { PREFIX } from "../core/prefs.js";
 import { idb } from "./idb.js";
 
 const reload = () => location.reload();
@@ -9,7 +10,7 @@ const reload = () => location.reload();
 export async function clearEverything() {
   await idb.destroy();
   try {
-    for (const k of Object.keys(localStorage)) if (k.startsWith("lokki:")) localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if (k.startsWith(PREFIX)) localStorage.removeItem(k);
   } catch (_e) {}
   reload();
 }

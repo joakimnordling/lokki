@@ -1,11 +1,13 @@
 // Lokki: wires the modules together and starts the app.
 
 import { parseDate } from "./core/csv.js";
+import { DEMO } from "./core/demo.js";
 import { evalExpr } from "./core/expr.js";
 import { uuid5 } from "./core/ids.js";
 import { startOf } from "./core/periods.js";
 import { applyLook, applyTextSize, store } from "./core/prefs.js";
 import { stats } from "./core/stats.js";
+import { fillDemo } from "./data/demo.js";
 import { idb } from "./data/idb.js";
 import { addEntry, deleteEntry, deleteMetric, editEntry, restoreEntry } from "./data/records.js";
 import { series } from "./data/series.js";
@@ -24,7 +26,7 @@ import { watchForUpdates } from "./ui/update.js";
 applyLook(store.get("look"));
 applyTextSize(store.get("text"));
 hooks.render = render;
-hooks.flushSoon = () => sync.soon();
+hooks.flushSoon = () => DEMO || sync.soon();
 hooks.toast = toast;
 
 $("#fileIn").onchange = importCSVFiles;
@@ -44,6 +46,7 @@ render();
 (async () => {
   // 1. this device's copy first: the app opens with your data even offline
   await idb.open();
+  if (DEMO) await fillDemo();
   try {
     navigator.storage?.persist?.();
   } catch (_e) {}
@@ -56,14 +59,16 @@ render();
   refreshMetrics();
   rebuild();
   const listShown = () => ui.view === "list" && !document.querySelector(".scrim");
-  await sync.load();
-  sync.onChange(() => {
-    if (listShown()) render();
-  });
+  if (!DEMO) {
+    await sync.load();
+    sync.onChange(() => {
+      if (listShown()) render();
+    });
+  }
   S.localReady = true;
   render();
-  // 2. then sync, and notice new versions of the app
-  sync.start();
+  // 2. then sync (never in the demo), and notice new versions of the app
+  if (!DEMO) sync.start();
   watchForUpdates();
   setInterval(() => {
     if (listShown()) render();
