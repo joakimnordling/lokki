@@ -17,7 +17,7 @@ export async function clearEverything() {
 /** servers: the standalone sync's servers, whose state is reset so the next sync downloads everything. */
 export async function clearCopy(servers = []) {
   await idb.clear(["recs", "metrics", "outbox"]);
-  await idb.write(servers.map((s) => ["sync", "put", { ...s, cursor: 0, keyringVersion: 0, last: null }]));
+  await idb.write(servers.map((s) => ["sync", "put", { ...s, cursor: 0, mark: null, keyringVersion: 0, last: null }]));
   try {
     localStorage.removeItem("lokki:fullCopy"); // claude.ai: this device no longer has a complete copy
   } catch (_e) {}

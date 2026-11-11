@@ -1,6 +1,8 @@
 """Storage in an SQL database through SQLAlchemy Core: SQLite and PostgreSQL."""
 
 import uuid
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -25,7 +27,7 @@ from lokki_server.storage.base import (
     VaultSummary,
     WriteResult,
 )
-from lokki_server.storage.schema import rows, server, tokens, vaults
+from lokki_server.storage.schema import pushes, rows, server, tokens, vaults
 
 
 def engine_url(url: str) -> str:
@@ -229,6 +231,7 @@ class SqlStorage:
     async def delete_vault(self, vault_id: VaultId) -> bool:
         async with self.engine.begin() as conn:
             await conn.execute(delete(rows).where(rows.c.vault_id == vault_id))
+            await conn.execute(delete(pushes).where(pushes.c.vault_id == vault_id))
             await conn.execute(delete(tokens).where(tokens.c.vault_id == vault_id))
             result = await conn.execute(delete(vaults).where(vaults.c.id == vault_id))
             return result.rowcount == 1
@@ -243,6 +246,7 @@ class SqlStorage:
                         vaults.c.keyring,
                         vaults.c.keyring_version,
                         vaults.c.head,
+                        vaults.c.mark,
                         vaults.c.changed,
                     ).where(vaults.c.id == vault_id)
                 )
@@ -254,6 +258,7 @@ class SqlStorage:
             keyring=found.keyring,
             keyring_version=found.keyring_version,
             head=found.head,
+            mark=found.mark,
             rows=count or 0,
             changed=found.changed,
         )
@@ -304,11 +309,15 @@ class SqlStorage:
         vault_id: VaultId,
         since: int,
         limit: int,
+        at: int | None = None,
     ) -> PullResult:
-        async with self.engine.connect() as conn:
-            # Read the head first and only rows up to it: a push committing meanwhile only adds
-            # rows above it, which the next pull fetches.
-            head = await self._head(conn, vault_id)
+        async with self._snapshot() as conn:
+            vault = (
+                await conn.execute(
+                    select(vaults.c.head, vaults.c.mark).where(vaults.c.id == vault_id)
+                )
+            ).one()
+            head = vault.head
             found = (
                 await conn.execute(
                     select(
@@ -325,41 +334,86 @@ class SqlStorage:
                     .limit(limit + 1)
                 )
             ).all()
-        more = len(found) > limit
-        page = [
-            Row(
-                key=r.key,
-                seq=r.seq,
-                data=r.data,
+            more = len(found) > limit
+            page = [
+                Row(
+                    key=r.key,
+                    seq=r.seq,
+                    data=r.data,
+                )
+                for r in found[:limit]
+            ]
+            cursor = page[-1].seq if more else head
+            return PullResult(
+                rows=page,
+                cursor=cursor,
+                more=more,
+                head=head,
+                at_mark=None if at is None else await self._mark_at(conn, vault_id, at, vault),
+                mark=await self._mark_at(conn, vault_id, cursor, vault),
             )
-            for r in found[:limit]
-        ]
-        return PullResult(
-            rows=page,
-            cursor=page[-1].seq if more else head,
-            more=more,
-            head=head,
-        )
+
+    @asynccontextmanager
+    async def _snapshot(self) -> AsyncGenerator[AsyncConnection]:
+        """A connection whose reads all see the database as it was at one moment."""
+        async with self.engine.connect() as conn:
+            if self.engine.dialect.name == "sqlite":
+                # SQLite's driver begins transactions only for writes; a read one is a snapshot
+                await conn.exec_driver_sql("BEGIN")
+            else:
+                await conn.execution_options(isolation_level="REPEATABLE READ")
+            yield conn  # closing it rolls back
 
     async def push(
         self,
         vault_id: VaultId,
         base: int,
+        base_mark: str | None,
         new_rows: list[tuple[str, str]],
+        new_mark: str,
+        history: int,
         now: int,
     ) -> WriteResult:
+        head = base + len(new_rows)
         async with self.engine.begin() as conn:
-            # Claim the numbers base+1 .. base+n, only if nobody has pushed since `base`.
-            claimed = await conn.execute(
-                update(vaults)
-                .where(vaults.c.id == vault_id, vaults.c.head == base)
-                .values(
-                    head=vaults.c.head + len(new_rows),
-                    changed=now,
+            # Claim the numbers base+1 .. base+n, only if nobody has pushed since `base`, in this
+            # history.
+            number = (
+                await conn.execute(
+                    update(vaults)
+                    .where(
+                        vaults.c.id == vault_id,
+                        vaults.c.head == base,
+                        vaults.c.mark.is_(None)
+                        if base_mark is None
+                        else vaults.c.mark == base_mark,
+                    )
+                    .values(
+                        head=head,
+                        mark=new_mark,
+                        pushes=vaults.c.pushes + 1,
+                        changed=now,
+                    )
+                    .returning(vaults.c.pushes)
+                )
+            ).scalar_one_or_none()
+            if number is None:
+                return WriteResult(Outcome.BEHIND, await self._head(conn, vault_id))
+            await conn.execute(
+                insert(pushes).values(
+                    vault_id=vault_id,
+                    number=number,
+                    base=base,
+                    head=head,
+                    mark=new_mark,
                 )
             )
-            if claimed.rowcount != 1:
-                return WriteResult(Outcome.BEHIND, await self._head(conn, vault_id))
+            await conn.execute(
+                delete(pushes).where(
+                    pushes.c.vault_id == vault_id,
+                    pushes.c.number <= number - history,
+                )
+            )
             keys = [key for key, _ in new_rows]
             await conn.execute(
                 delete(rows).where(rows.c.vault_id == vault_id, rows.c.key.in_(keys))
@@ -374,7 +428,37 @@ class SqlStorage:
                     )
                 ],
             )
-            return WriteResult(Outcome.OK, base + len(new_rows))
+            return WriteResult(Outcome.OK, head, new_mark)
+
+    async def _mark_at(
+        self,
+        conn: AsyncConnection,
+        vault_id: VaultId,
+        seq: int,
+        vault: Any,
+    ) -> str | None:
+        """
+        The mark of the push that wrote row number `seq`, if it's remembered. `vault` has the
+        vault's head and latest mark, so the head, the most common case, needs no lookup.
+        """
+        if seq == vault.head:
+            return vault.mark
+        if seq == 0 or seq > vault.head:
+            return None
+        return await self._find_mark(conn, vault_id, seq)
+
+    @staticmethod
+    async def _find_mark(conn: AsyncConnection, vault_id: VaultId, seq: int) -> str | None:
+        """The mark of the push that wrote row number `seq`, looked up in the pushes."""
+        found = (
+            await conn.execute(
+                select(pushes.c.base, pushes.c.mark)
+                .where(pushes.c.vault_id == vault_id, pushes.c.head >= seq)
+                .order_by(pushes.c.head)
+                .limit(1)
+            )
+        ).one_or_none()
+        return found.mark if found is not None and found.base < seq else None
 
     @staticmethod
     async def _head(conn: AsyncConnection, vault_id: VaultId) -> int:

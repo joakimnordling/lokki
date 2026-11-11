@@ -17,18 +17,26 @@ def test_a_new_vault_is_empty(
 
 def test_status_counts_rows_and_head(client: TestClient, writer: dict[str, str]) -> None:
     rows = [{"key": key(n), "data": f"v1.{n}"} for n in range(3)]
-    client.post("/v1/vault/rows", headers=writer, json={"base": 0, "rows": rows})
-    client.post("/v1/vault/rows", headers=writer, json={"base": 3, "rows": rows[:1]})
+    first = client.post(
+        "/v1/vault/rows", headers=writer, json={"base": 0, "mark": None, "rows": rows}
+    )
+    client.post(
+        "/v1/vault/rows",
+        headers=writer,
+        json={"base": 3, "mark": first.json()["mark"], "rows": rows[:1]},
+    )
 
     vault = client.get("/v1/vault", headers=writer).json()
 
-    assert (vault["rows"], vault["head"]) == (3, 4)
+    assert (vault["rows"], vault["head"], vault["mark"]) == (3, 4, "mark2")
 
 
 def test_deleting_the_vault_removes_it_and_its_tokens(client: TestClient, vault: Tokens) -> None:
     write, read = bearer(vault["write"]), bearer(vault["read"])
     client.post(
-        "/v1/vault/rows", headers=write, json={"base": 0, "rows": [{"key": key(1), "data": "v1.x"}]}
+        "/v1/vault/rows",
+        headers=write,
+        json={"base": 0, "mark": None, "rows": [{"key": key(1), "data": "v1.x"}]},
     )
 
     response = client.delete("/v1/vault", headers=write)

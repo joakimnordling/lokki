@@ -9,7 +9,8 @@
      pending(bit)                    local records the server lacks (never live entries of deleted metrics)
      clearBit(bit)                   forget what this server has (a different or restored server)
      all()                           every local record
-   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, keyringVersion}. */
+   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion}.
+   `mark` is the mark of the push that wrote row number `cursor` (section 7.4). */
 import { APP, DamagedRowError, decryptRow, encryptRow, FormatError, rowKey, verifyKeyring } from "./crypto.js";
 import { ServerError } from "./http.js";
 import { compareRecords } from "./merge.js";
@@ -37,21 +38,22 @@ export async function syncRound({ server, device, keys, http }) {
   if (vault.head < server.cursor) forget(server, device); // restored from an older state (section 7.4)
   vault = await syncKeyring({ server, device, keys, http, vault, report });
 
-  let head = await pullAll({ server, device, keys, http, report });
+  let { head, mark } = await pullAll({ server, device, keys, http, report });
   await repair({ server, device, keys, report });
   for (let conflicts = 0; ; ) {
     const pending = device.pending(server.bit);
     if (!pending.length) break;
     const batch = await encryptBatch(keys, pending, info.limits);
     try {
-      head = (await http.push(head, batch.rows)).head;
+      ({ head, mark } = await http.push(head, mark, batch.rows));
     } catch (e) {
       if (!(e instanceof ServerError && e.status === 409) || ++conflicts > MAX_CONFLICTS) throw e;
-      head = await pullAll({ server, device, keys, http, report });
+      ({ head, mark } = await pullAll({ server, device, keys, http, report }));
       continue;
     }
     for (const r of batch.records) device.markHas(r.kind, r.id, server.bit);
     server.cursor = head;
+    server.mark = mark;
     report.pushed += batch.records.length;
   }
   return report;
@@ -84,6 +86,7 @@ export async function syncAll({ device, keys, links, maxPasses = 3 }) {
 function forget(server, device) {
   device.clearBit(server.bit);
   server.cursor = 0;
+  server.mark = null;
   server.keyringVersion = 0;
 }
 
@@ -119,8 +122,26 @@ async function syncKeyring({ server, device, keys, http, vault, report }) {
 }
 
 async function pullAll({ server, device, keys, http, report }) {
+  let since = server.cursor;
+  let mark = server.mark ?? null;
+  let start; // the vault's head and its mark when this device started pulling without marks
   for (;;) {
-    const page = await http.pull(server.cursor);
+    // The server checks every page (section 7.4): that the push with `mark` wrote the last row this device has; or,
+    // while its pages come without marks, as when pulling everything, that nothing changed up to the head it started at
+    if (!(since && mark) && start === undefined) {
+      const vault = await http.vault();
+      start = vault.head && vault.mark ? { at: vault.head, mark: vault.mark } : null;
+    }
+    let page;
+    try {
+      page = await http.pull(since, since && mark ? { mark } : (start ?? {}));
+    } catch (e) {
+      if (!(e instanceof ServerError && e.code === "history_changed")) throw e;
+      // Not the history this device pulled from, or the server doesn't remember it: start over
+      forget(server, device);
+      [since, mark, start] = [0, null, undefined];
+      continue;
+    }
     const winners = [];
     for (const row of page.rows) {
       report.pulled++;
@@ -143,8 +164,13 @@ async function pullAll({ server, device, keys, http, report }) {
       await device.apply(winners, server.bit);
       report.applied += winners.length;
     }
-    server.cursor = page.cursor;
-    if (!page.more) return page.head;
+    [since, mark] = [page.cursor, page.mark ?? null];
+    // Kept only with a mark: a cursor the server can't vouch for later would mean starting over
+    if (page.mark || !page.cursor) {
+      server.cursor = page.cursor;
+      server.mark = page.mark ?? null;
+    }
+    if (!page.more) return { head: page.head, mark: page.mark ?? null };
   }
 }
 

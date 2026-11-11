@@ -18,6 +18,7 @@ from lokki_server.models import (
     InfoLimits,
     KeyringPut,
     KeyringVersion,
+    Mark,
     Pull,
     Push,
     RowOut,
@@ -100,6 +101,7 @@ async def vault(token: Token, store: Store) -> Vault:
         keyring=keyring,
         keyring_version=status.keyring_version,
         head=status.head,
+        mark=status.mark,
         rows=status.rows,
         changed=iso(status.changed),
     )
@@ -178,6 +180,7 @@ async def put_keyring(
     responses=documented(
         errors.invalid_request("since: Input should be greater than or equal to 0"),
         errors.unauthorized(),
+        errors.history_changed(),
     ),
 )
 async def pull(
@@ -192,6 +195,26 @@ async def pull(
             examples=[1040],
         ),
     ] = 0,
+    mark: Annotated[
+        Mark | None,
+        Query(
+            description="The `mark` that came with row `at`: by default `since`, as `cursor` and "
+            "`mark` of the last pull. If that row wasn't written by the push with this mark, the "
+            "vault's history changed: `409 history_changed`. Leave it out to pull without "
+            "checking.",
+            examples=["Xq3vT0bK9mWc1sPa"],
+        ),
+    ] = None,
+    at: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description="Which row `mark` is for, if not `since`: e.g. the vault's `head` and "
+            "`mark` when the device started pulling everything, while its pages have no marks "
+            "of their own (protocol 7.4)",
+            examples=[16977],
+        ),
+    ] = None,
     limit: Annotated[
         int | None,
         Query(
@@ -202,14 +225,22 @@ async def pull(
 ) -> Pull:
     """
     Rows written after `since`, oldest first. While `more` is true, continue with `cursor` as
-    `since` (protocol 5.3, 7.2).
+    `since` and `mark` as `mark` (protocol 5.3, 7.2, 7.4).
     """
+    if at is not None and mark is None:
+        raise errors.invalid_request("at: Only with a mark")
+    if mark is not None and at is None and since == 0:
+        raise errors.invalid_request("mark: Only with a since above 0, or an at")
     most = config.limits.pull if limit is None else min(limit, config.limits.pull)
     result = await store.pull(
         token.vault_id,
         since,
         most,
+        None if mark is None else since if at is None else at,
     )
+    # The mark comes from the same snapshot as the rows, so they're checked together
+    if mark is not None and result.at_mark != mark:
+        raise errors.history_changed()
     return Pull(
         rows=[
             RowOut(
@@ -222,6 +253,7 @@ async def pull(
         cursor=result.cursor,
         more=result.more,
         head=result.head,
+        mark=result.mark,
     )
 
 
@@ -246,7 +278,8 @@ async def push(
 ) -> Head:
     """
     Adds the rows, replacing any with the same key, all or none, and only if `base` is still the
-    vault's `head`. Otherwise nothing is written: `409 behind`, so pull first (protocol 5.3, 7.3).
+    vault's `head` and `mark` the latest push's. Otherwise nothing is written: `409 behind`, so pull
+    first (protocol 5.3, 7.3, 7.4).
     """
     limits = config.limits
     if len(body.rows) > limits.push:
@@ -256,15 +289,27 @@ async def push(
     keys = [r.key for r in body.rows]
     if len(set(keys)) != len(keys):
         raise errors.invalid_request("A push can't contain the same key twice.")
+    mark = new_mark()
     result = await store.push(
         token.vault_id,
         body.base,
+        body.mark,
         [(r.key, r.data) for r in body.rows],
+        mark,
+        config.history,
         now_ms(),
     )
     if result.outcome is Outcome.BEHIND:
         raise errors.behind(result.version)
-    return Head(head=result.version)
+    return Head(
+        head=result.version,
+        mark=mark,
+    )
+
+
+def new_mark() -> str:
+    """A push's mark: random, so another history can't come up with the same one (protocol 7.4)."""
+    return secrets.token_urlsafe(12)
 
 
 @test_router.post(

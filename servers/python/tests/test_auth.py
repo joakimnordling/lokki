@@ -37,7 +37,9 @@ def test_a_token_only_reaches_its_own_vault(
     row = {"key": "AAAAAAAAAAAAAAAAAAAAAA", "data": "v1.alice"}
     assert (
         client.post(
-            "/v1/vault/rows", headers=bearer(alice["write"]), json={"base": 0, "rows": [row]}
+            "/v1/vault/rows",
+            headers=bearer(alice["write"]),
+            json={"base": 0, "mark": None, "rows": [row]},
         ).status_code
         == 200
     )
@@ -54,7 +56,7 @@ def test_a_token_only_reaches_its_own_vault(
         (
             "POST",
             "/v1/vault/rows",
-            {"base": 0, "rows": [{"key": "AAAAAAAAAAAAAAAAAAAAAA", "data": "v1.x"}]},
+            {"base": 0, "mark": None, "rows": [{"key": "AAAAAAAAAAAAAAAAAAAAAA", "data": "v1.x"}]},
         ),
         ("PUT", "/v1/vault/keyring", {"base": 0, "keyring": {}}),
         ("DELETE", "/v1/vault", None),

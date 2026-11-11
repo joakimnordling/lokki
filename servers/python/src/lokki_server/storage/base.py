@@ -29,11 +29,15 @@ class Token:
     slots=True,
 )
 class VaultStatus:
-    """A vault's keyring and counters. Times are milliseconds since 1970 (UTC)."""
+    """
+    A vault's keyring and counters, and the latest push's mark (None before the first). Times are
+    milliseconds since 1970 (UTC).
+    """
 
     keyring: str | None
     keyring_version: int
     head: int
+    mark: str | None
     rows: int
     changed: int
 
@@ -55,12 +59,21 @@ class Row:
     slots=True,
 )
 class PullResult:
-    """Rows after a sequence number, and where to continue."""
+    """
+    Rows after a sequence number, and where to continue.
+
+    `at_mark` is the mark of the push that wrote row number `at` (None when no `at` was asked
+    for), and `mark` that of the push that wrote row number `cursor`: None for 0, or when the
+    server doesn't know (it has forgotten that push, or never had it). All are read from one
+    snapshot of the database, so the marks belong to the same history as the rows.
+    """
 
     rows: list[Row]
     cursor: int
     more: bool
     head: int
+    at_mark: str | None
+    mark: str | None
 
 
 class Outcome(Enum):
@@ -76,10 +89,11 @@ class Outcome(Enum):
     slots=True,
 )
 class WriteResult:
-    """The outcome of a conditional write, and the counter after it."""
+    """The outcome of a conditional write, and the counter after it (for a push, also its mark)."""
 
     outcome: Outcome
     version: int
+    mark: str | None = None
 
 
 class NameTaken(Exception):
@@ -124,6 +138,12 @@ class Storage(Protocol):
     Every write that the protocol makes conditional (`put_keyring`, `push`) must be atomic: check
     the counter and write in one transaction, so two devices can never both succeed from the same
     `base`.
+
+    Each push gets a mark, a random ID, which tells this vault's history apart from another one
+    that reached the same numbers, e.g. after the database was restored from a backup and devices
+    pushed again (protocol 7.4). The storage remembers the marks of the latest `history` pushes,
+    together with the rows each wrote (`base` + 1 to its `head`), and forgets older ones in the same
+    transaction as a push.
     """
 
     async def server_id(self) -> str:
@@ -201,16 +221,27 @@ class Storage(Protocol):
         vault_id: VaultId,
         since: int,
         limit: int,
+        at: int | None = None,
     ) -> PullResult:
-        """Rows written after `since`, oldest first, at most `limit`."""
+        """
+        Rows written after `since`, oldest first, at most `limit`, and the mark of row `at` if
+        asked for, all as the database was at one moment.
+        """
         ...
 
     async def push(
         self,
         vault_id: VaultId,
         base: int,
+        base_mark: str | None,
         new_rows: list[tuple[str, str]],
+        new_mark: str,
+        history: int,
         now: int,
     ) -> WriteResult:
-        """Write `(key, data)` rows with the next sequence numbers if `base` is the current head."""
+        """
+        Write `(key, data)` rows with the next sequence numbers if `base` is the current head and
+        `base_mark` the mark of the latest push (None before the first). Records the push with
+        `new_mark`, keeping the marks of the latest `history` pushes.
+        """
         ...

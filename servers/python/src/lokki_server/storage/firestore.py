@@ -6,10 +6,11 @@ write is one transaction, as the protocol needs):
 
     lokki_server/id                {value}: the server's ID
     lokki_names/{vault name}       {vault}: which vault document has this name; keeps names unique
-    lokki_vaults/{vault id}        {name, head, keyring, keyring_vault_id, keyring_version, created,
-                                    changed}
+    lokki_vaults/{vault id}        {name, head, mark, pushes, keyring, keyring_vault_id,
+                                    keyring_version, created, changed}
         rows/r{key}                {seq, data}; the "r" keeps a row key from looking like one of
                                    Firestore's reserved IDs (__...__)
+        pushes/p{number}           {base, head, mark}: the latest pushes (protocol 7.4)
         labels/{sha256 of label}   {token}: keeps a vault's token labels unique, whatever their text
     lokki_tokens/{sha256 of token} {vault, label, scope, created, last_used}
 
@@ -143,6 +144,8 @@ class FirestoreStorage:
                 {
                     "name": name,
                     "head": 0,
+                    "mark": None,
+                    "pushes": 0,
                     "keyring": None,
                     "keyring_vault_id": None,
                     "keyring_version": 0,
@@ -290,7 +293,7 @@ class FirestoreStorage:
             transaction.delete(vault_ref)
 
         await remove(self._transaction())
-        await self.client.recursive_delete(vault_ref)  # its rows and labels
+        await self.client.recursive_delete(vault_ref)  # its rows, pushes and labels
         return True
 
     # the vault
@@ -302,6 +305,7 @@ class FirestoreStorage:
             keyring=doc["keyring"],
             keyring_version=doc["keyring_version"],
             head=doc["head"],
+            mark=doc.get("mark"),
             rows=await _count(vault_ref.collection("rows")),
             changed=doc["changed"],
         )
@@ -342,69 +346,131 @@ class FirestoreStorage:
         vault_id: VaultId,
         since: int,
         limit: int,
+        at: int | None = None,
     ) -> PullResult:
         vault_ref = self._vault(vault_id)
-        # The head first, then only rows up to it: a push committing meanwhile only adds rows above
-        # it, which the next pull fetches.
-        head: int = _data(await vault_ref.get())["head"]
+
+        # A read-only transaction: every read sees the database as it was at one moment
+        @async_transactional
+        async def pull(transaction: Any) -> PullResult:
+            vault = _data(await vault_ref.get(transaction=transaction))
+            head: int = vault["head"]
+            query = (
+                vault_ref.collection("rows")
+                .where(
+                    filter=FieldFilter(
+                        "seq",
+                        ">",
+                        since,
+                    )
+                )
+                .where(
+                    filter=FieldFilter(
+                        "seq",
+                        "<=",
+                        head,
+                    )
+                )
+                .order_by("seq")
+                .limit(limit + 1)
+            )
+            found = [
+                Row(
+                    key=row.id[1:],
+                    seq=_data(row)["seq"],
+                    data=_data(row)["data"],
+                )
+                async for row in await transaction.get(query)
+            ]
+            more = len(found) > limit
+            page = found[:limit]
+            cursor = page[-1].seq if more else head
+
+            async def mark_at(seq: int) -> str | None:
+                """The mark of the push that wrote row `seq`; the head's is in the vault."""
+                if seq == head:
+                    return vault.get("mark")  # .get(): vaults made before marks have none
+                if seq == 0 or seq > head:
+                    return None
+                return await self._find_mark(vault_ref, seq, transaction)
+
+            return PullResult(
+                rows=page,
+                cursor=cursor,
+                more=more,
+                head=head,
+                at_mark=None if at is None else await mark_at(at),
+                mark=await mark_at(cursor),
+            )
+
+        return await pull(self.client.transaction(read_only=True))
+
+    @staticmethod
+    async def _find_mark(vault_ref: Any, seq: int, transaction: Any) -> str | None:
+        """The mark of the push that wrote row number `seq`, if it's remembered."""
         query = (
-            vault_ref.collection("rows")
+            vault_ref.collection("pushes")
             .where(
                 filter=FieldFilter(
-                    "seq",
-                    ">",
-                    since,
+                    "head",
+                    ">=",
+                    seq,
                 )
             )
-            .where(
-                filter=FieldFilter(
-                    "seq",
-                    "<=",
-                    head,
-                )
-            )
-            .order_by("seq")
-            .limit(limit + 1)
+            .order_by("head")
+            .limit(1)
         )
-        found = [
-            Row(
-                key=row.id[1:],
-                seq=_data(row)["seq"],
-                data=_data(row)["data"],
-            )
-            async for row in query.stream()
-        ]
-        more = len(found) > limit
-        page = found[:limit]
-        return PullResult(
-            rows=page,
-            cursor=page[-1].seq if more else head,
-            more=more,
-            head=head,
-        )
+        found = [_data(p) async for p in await transaction.get(query)]
+        return found[0]["mark"] if found and found[0]["base"] < seq else None
 
     async def push(
         self,
         vault_id: VaultId,
         base: int,
+        base_mark: str | None,
         new_rows: list[tuple[str, str]],
+        new_mark: str,
+        history: int,
         now: int,
     ) -> WriteResult:
         vault_ref = self._vault(vault_id)
         rows = vault_ref.collection("rows")
+        pushes = vault_ref.collection("pushes")
+        head = base + len(new_rows)
 
         @async_transactional
         async def push(transaction: Any) -> WriteResult:
-            head: int = _data(await vault_ref.get(transaction=transaction))["head"]
-            if head != base:
-                return WriteResult(Outcome.BEHIND, head)
+            vault = _data(await vault_ref.get(transaction=transaction))
+            # .get(): vaults made before marks existed have neither field
+            if vault["head"] != base or vault.get("mark") != base_mark:
+                return WriteResult(Outcome.BEHIND, vault["head"])
+            number = vault.get("pushes", 0) + 1
+            # Pushes to forget: normally one; a smaller `history` setting trims the rest over
+            # the next pushes, as a transaction can only write so much.
+            forget = pushes.where(
+                filter=FieldFilter(
+                    "number",
+                    "<=",
+                    number - history,
+                )
+            ).limit(100)
+            old = [p.reference async for p in await transaction.get(forget)]
             for seq, (key, data) in enumerate(
                 new_rows,
                 start=base + 1,
             ):
                 transaction.set(rows.document(f"r{key}"), {"seq": seq, "data": data})
-            transaction.update(vault_ref, {"head": base + len(new_rows), "changed": now})
-            return WriteResult(Outcome.OK, base + len(new_rows))
+            transaction.create(
+                pushes.document(f"p{number}"),
+                {"number": number, "base": base, "head": head, "mark": new_mark},
+            )
+            for ref in old:
+                transaction.delete(ref)
+            transaction.update(
+                vault_ref,
+                {"head": head, "mark": new_mark, "pushes": number, "changed": now},
+            )
+            return WriteResult(Outcome.OK, head, new_mark)
 
         return await push(self._transaction())
 

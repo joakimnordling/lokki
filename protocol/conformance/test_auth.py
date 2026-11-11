@@ -27,7 +27,7 @@ def test_a_read_token_can_read_but_not_write(http: httpx2.Client, vault: Tokens)
         http.post(
             "/v1/vault/rows",
             headers=read,
-            json={"base": 0, "rows": [{"key": key(1), "data": "v1.x"}]},
+            json={"base": 0, "mark": None, "rows": [{"key": key(1), "data": "v1.x"}]},
         ),
         http.put("/v1/vault/keyring", headers=read, json={"base": 0, "keyring": keyring()}),
         http.delete("/v1/vault", headers=read),
@@ -40,7 +40,7 @@ def test_vaults_are_separate(http: httpx2.Client, vault: Tokens, writer: dict[st
     http.post(
         "/v1/vault/rows",
         headers=writer,
-        json={"base": 0, "rows": [{"key": key(1), "data": "v1.x"}]},
+        json={"base": 0, "mark": None, "rows": [{"key": key(1), "data": "v1.x"}]},
     )
 
     other = http.get("/v1/vault/rows", headers=bearer(vault["read"])).json()

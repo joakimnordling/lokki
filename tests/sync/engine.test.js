@@ -37,11 +37,12 @@ const metric = (id, extra = {}) => ({
 const value = (device, id) => device.get("entry", id)?.v;
 
 let servers = [];
+let forgetful; // remembers the marks of only the latest two pushes
 before(async () => {
-  servers = await Promise.all([startServer(), startServer()]);
+  [forgetful, ...servers] = await Promise.all([startServer({ history: 2 }), startServer(), startServer()]);
 });
 after(async () => {
-  await Promise.all(servers.map((s) => s.stop()));
+  await Promise.all([forgetful, ...servers].map((s) => s.stop()));
 });
 
 /** A vault: its keyring and the passphrase-derived keys every device of it ends up with. */
@@ -267,11 +268,11 @@ describe("damaged, unknown and missing data", () => {
     a.put(metric("running"));
     a.put(entry("e1", 1));
     await sync(a);
-    let { head } = await http.vault();
+    let { head, mark } = await http.pull(0);
     const damagedKey = await rowKey(vault.keys, "entry", "e1");
     const swapped = await encryptRow(vault.keys, entry("e2", 2)); // a valid row under the wrong key
     head = (
-      await http.push(head, [
+      await http.push(head, mark, [
         { key: damagedKey, data: swapped.data },
         { key: "AAAAAAAAAAAAAAAAAAAAAA", data: "v9.from-a-newer-app" },
       ])
@@ -305,6 +306,165 @@ describe("damaged, unknown and missing data", () => {
     assert.equal((await sync(a))[0].pushed, 2);
     assert.equal(link.server.id, (await link.http.info()).id);
     assert.equal(link.server.cursor, (await link.http.vault()).head);
+  });
+});
+
+describe("a server's history", () => {
+  it("notices a server that lost changes, even after another device pushed past them", async () => {
+    const vault = await newVault();
+    const [before, restored] = await Promise.all([servers[0].vault(), servers[0].vault()]);
+    const laptop = device(vault, [servers[0], before.write]);
+    laptop.put(metric("running"));
+    laptop.put(entry("e1", 1));
+    await sync(laptop);
+    const link = laptop.links[0];
+    assert.equal(link.server.cursor, 2);
+
+    // The same server, restored from before the laptop's push; then the phone, which hadn't seen it, pushed three
+    // records. The head is past the laptop's cursor again, but rows 1 and 2 aren't what the laptop pulled.
+    const phone = device(vault, [servers[0], restored.write]);
+    phone.put(metric("walking"));
+    phone.put(entry("w1", 5, { metric: "walking" }));
+    phone.put(entry("w2", 6, { metric: "walking" }));
+    await sync(phone);
+    link.http = new ServerClient(servers[0].url, restored.write);
+    assert.ok((await link.http.vault()).head > link.server.cursor);
+
+    const [report] = await sync(laptop);
+    assert.equal(report.pulled, 3, "everything the phone pushed");
+    assert.equal(report.pushed, 2, "what the server lost");
+    assert.deepEqual([value(laptop, "w1"), value(laptop, "w2")], [5, 6]);
+    await sync(phone);
+    assert.deepEqual(visible(phone), visible(laptop));
+  });
+
+  it("notices a server that went back in time between two pages of one pull", async () => {
+    const vault = await newVault();
+    const [before, restored] = await Promise.all([servers[0].vault(), servers[0].vault()]);
+    const phone = device(vault, [servers[0], before.write]);
+    phone.put(metric("running"));
+    phone.put(entry("e1", 1));
+    await sync(phone);
+    // Restored from before the phone's push; then the tablet, which hadn't seen it, pushed three records
+    const tablet = device(vault, [servers[0], restored.write]);
+    tablet.put(metric("walking"));
+    tablet.put(entry("w1", 5, { metric: "walking" }));
+    tablet.put(entry("w2", 6, { metric: "walking" }));
+    await sync(tablet);
+
+    // A new laptop pulls one row per page: the first page from the server as it was, the rest as restored
+    const laptop = device(vault, [servers[0], before.write]);
+    const [was, now] = [before, restored].map((v) => new ServerClient(servers[0].url, v.write));
+    let pages = 0;
+    laptop.links[0].http = Object.assign(Object.create(now), {
+      info: () => now.info(),
+      vault: () => (pages ? now : was).vault(),
+      pull: (since, check) => (pages++ ? now : was).pull(since, check, 1),
+    });
+    await sync(laptop);
+
+    assert.equal(pages > 3, true, "it started over");
+    assert.deepEqual(
+      ["walking", "w1", "w2"].map((id) => !!laptop.get(id === "walking" ? "metric" : "entry", id)),
+      [true, true, true],
+      "everything in the restored history",
+    );
+    assert.ok(laptop.get("metric", "running"), "and the row it pulled before the server went back");
+    await sync(tablet);
+    assert.deepEqual(visible(tablet), visible(laptop), "which the server got back");
+  });
+
+  // A vault on the forgetful server with more pushes than it remembers: its first rows' pages come without marks
+  const busyVault = async (vault, write, entries = 3) => {
+    const phone = device(vault, [forgetful, write]);
+    phone.put(metric("running"));
+    await sync(phone);
+    for (let n = 1; n <= entries; n++) {
+      phone.put(entry(`e${n}`, n));
+      await sync(phone); // one push each
+    }
+    return phone;
+  };
+  // The laptop pulls one row per page; `after(pages)` runs after each page, and `pick(pages)` chooses the client
+  const pullingSlowly = (laptop, pick, after = async () => {}) => {
+    let pages = 0;
+    const pull = async (since, check) => {
+      const page = await pick(pages).pull(since, check, 1);
+      await after(++pages);
+      return page;
+    };
+    laptop.links[0].http = new Proxy(
+      {},
+      { get: (_, name) => (name === "pull" ? pull : (...args) => pick(pages)[name](...args)) },
+    );
+    return () => pages;
+  };
+
+  it("notices a server that went back in time while a device pulled everything, before any page had a mark", async () => {
+    const vault = await newVault();
+    const [before, restored] = await Promise.all([forgetful.vault(), forgetful.vault()]);
+    await busyVault(vault, before.write);
+    const tablet = device(vault, [forgetful, restored.write]);
+    tablet.put(metric("walking"));
+    tablet.put(entry("w1", 5, { metric: "walking" }));
+    await sync(tablet);
+
+    // A new laptop: its first page from the server as it was, then the server is restored to an older state
+    const laptop = device(vault, [forgetful, before.write]);
+    const [was, now] = [before, restored].map((v) => new ServerClient(forgetful.url, v.write));
+    pullingSlowly(laptop, (pages) => (pages ? now : was));
+    await sync(laptop);
+
+    assert.ok(laptop.get("metric", "walking"), "the row it would have missed below its cursor");
+    assert.ok(laptop.get("metric", "running"), "and the row it pulled before");
+    await sync(tablet);
+    assert.deepEqual(visible(tablet), visible(laptop));
+  });
+
+  it("a device pulling everything starts over when the server gets more pushes meanwhile than it remembers", async () => {
+    const vault = await newVault();
+    const { write } = await forgetful.vault();
+    const phone = await busyVault(vault, write);
+    const laptop = device(vault, [forgetful, write]);
+    const client = new ServerClient(forgetful.url, write);
+    const pages = pullingSlowly(
+      laptop,
+      () => client,
+      async (n) => {
+        if (n !== 1) return;
+        for (const id of ["x1", "x2", "x3"]) {
+          phone.put(entry(id, 9));
+          await sync(phone);
+        }
+      },
+    );
+
+    await sync(laptop);
+
+    assert.ok(pages() > 7, "it started over");
+    assert.deepEqual(visible(laptop), visible(phone));
+  });
+
+  it("a device away for longer than the server remembers pulls everything once", async () => {
+    const vault = await newVault();
+    const { write } = await forgetful.vault();
+    const [a, b] = [device(vault, [forgetful, write]), device(vault, [forgetful, write])];
+    a.put(metric("running"));
+    a.put(entry("e1", 1));
+    await sync(a);
+    for (let n = 2; n <= 4; n++) {
+      await sync(b);
+      b.put(entry(`e${n}`, n));
+      await sync(b); // one push each
+    }
+
+    const [report] = await sync(a);
+    assert.equal(report.pulled, 5, "every row, not only the three new ones");
+    assert.equal(report.pushed, 0, "the server lost nothing");
+    assert.deepEqual(visible(a), visible(b));
+    b.put(entry("e5", 5));
+    await sync(b);
+    assert.equal((await sync(a))[0].pulled, 1, "and then only what's new again");
   });
 });
 

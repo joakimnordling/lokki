@@ -65,6 +65,18 @@ vaults = Table(
         nullable=False,
         default=0,
     ),
+    # the latest push: its mark (None before the first) and number, counting from 1
+    Column(
+        "mark",
+        String(32),
+        nullable=True,
+    ),
+    Column(
+        "pushes",
+        BigInteger,
+        nullable=False,
+        default=0,
+    ),
     # the keyring exactly as last written, the vault ID inside it (made by the devices, unrelated
     # to `id`), and how many times it was written
     Column(
@@ -170,6 +182,46 @@ rows = Table(
         None,
         "vault_id",
         "seq",
+        unique=True,
+    ),
+)
+
+# The latest pushes of each vault (as many as the `history` setting): which rows each wrote,
+# base + 1 to head, and its mark (protocol 7.4)
+pushes = Table(
+    "pushes",
+    metadata,
+    Column(
+        "vault_id",
+        Integer,
+        ForeignKey("vaults.id"),
+        nullable=False,
+    ),
+    Column(
+        "number",
+        BigInteger,
+        nullable=False,
+    ),
+    Column(
+        "base",
+        BigInteger,
+        nullable=False,
+    ),
+    Column(
+        "head",
+        BigInteger,
+        nullable=False,
+    ),
+    Column(
+        "mark",
+        String(32),
+        nullable=False,
+    ),
+    PrimaryKeyConstraint("vault_id", "number"),
+    Index(
+        None,
+        "vault_id",
+        "head",
         unique=True,
     ),
 )

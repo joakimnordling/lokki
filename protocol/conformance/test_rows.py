@@ -1,5 +1,6 @@
-"""Section 5.3: GET and POST /v1/vault/rows, and section 7.3: up to date to push."""
+"""Section 5.3: GET and POST /v1/vault/rows; 7.3: up to date to push; 7.4: marks of pushes."""
 
+import re
 from typing import Any
 
 import httpx2
@@ -7,15 +8,21 @@ import pytest
 
 from conformance.helpers import key
 
+MARK = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+
 
 def push(
-    http: httpx2.Client, headers: dict[str, str], base: int, *rows: tuple[int, str]
+    http: httpx2.Client,
+    headers: dict[str, str],
+    base: int,
+    *rows: tuple[int, str],
+    mark: str | None = None,
 ) -> httpx2.Response:
-    body = {"base": base, "rows": [{"key": key(n), "data": data} for n, data in rows]}
+    body = {"base": base, "mark": mark, "rows": [{"key": key(n), "data": data} for n, data in rows]}
     return http.post("/v1/vault/rows", headers=headers, json=body)
 
 
-def pull(http: httpx2.Client, headers: dict[str, str], **params: int) -> dict[str, Any]:
+def pull(http: httpx2.Client, headers: dict[str, str], **params: int | str) -> dict[str, Any]:
     response = http.get("/v1/vault/rows", headers=headers, params=params)
     assert response.status_code == 200
     result: dict[str, Any] = response.json()
@@ -38,7 +45,10 @@ def pull_all(
 
 
 def test_push_and_pull(http: httpx2.Client, writer: dict[str, str]) -> None:
-    assert push(http, writer, 0, (1, "v1.one"), (2, "v1.two")).json() == {"head": 2}
+    pushed = push(http, writer, 0, (1, "v1.one"), (2, "v1.two")).json()
+    assert set(pushed) == {"head", "mark"}
+    assert pushed["head"] == 2
+    assert MARK.match(pushed["mark"])
 
     page = pull(http, writer)
 
@@ -50,6 +60,7 @@ def test_push_and_pull(http: httpx2.Client, writer: dict[str, str]) -> None:
         "cursor": 2,
         "more": False,
         "head": 2,
+        "mark": pushed["mark"],
     }
 
 
@@ -61,8 +72,8 @@ def test_data_is_stored_exactly(http: httpx2.Client, writer: dict[str, str]) -> 
 
 
 def test_a_new_version_replaces_the_row(http: httpx2.Client, writer: dict[str, str]) -> None:
-    push(http, writer, 0, (1, "v1.a"), (2, "v1.b"))
-    push(http, writer, 2, (1, "v1.a2"))
+    mark = push(http, writer, 0, (1, "v1.a"), (2, "v1.b")).json()["mark"]
+    push(http, writer, 2, (1, "v1.a2"), mark=mark)
 
     rows, _ = pull_all(http, writer)
 
@@ -86,6 +97,65 @@ def test_a_push_that_isnt_up_to_date_writes_nothing(
     assert pull(http, writer)["head"] == 1
 
 
+def test_a_push_from_another_history_writes_nothing(
+    http: httpx2.Client, writer: dict[str, str]
+) -> None:
+    """The right `base`, but not the push the device pulled up to: e.g. a restored server."""
+    mark = push(http, writer, 0, (1, "v1.a")).json()["mark"]
+
+    for other in (None, "x" + mark[1:] if mark[0] != "x" else "y" + mark[1:]):
+        stale = push(http, writer, 1, (2, "v1.b"), mark=other)
+        assert stale.status_code == 409
+        assert stale.json()["error"] == "behind"
+    assert push(http, writer, 1, (2, "v1.b"), mark=mark).status_code == 200
+
+
+def test_marks_go_with_the_cursor(http: httpx2.Client, writer: dict[str, str]) -> None:
+    first = push(http, writer, 0, (1, "v1.a"), (2, "v1.b")).json()["mark"]
+    second = push(http, writer, 2, (3, "v1.c"), mark=first).json()["mark"]
+    assert first != second
+
+    page = pull(http, writer, limit=1)
+    assert (page["cursor"], page["mark"]) == (1, first)
+    page = pull(http, writer, since=1, mark=first, limit=1)
+    assert (page["cursor"], page["mark"]) == (2, first)
+    page = pull(http, writer, since=2, mark=first)
+    assert (page["cursor"], page["mark"]) == (3, second)
+    assert pull(http, writer, since=3, mark=second)["rows"] == []
+
+
+def test_a_pull_from_another_history_is_refused(
+    http: httpx2.Client, writer: dict[str, str]
+) -> None:
+    """Section 7.4: row `since` wasn't written by the push with this mark, or never at all."""
+    first = push(http, writer, 0, (1, "v1.a"), (2, "v1.b")).json()["mark"]
+    second = push(http, writer, 2, (3, "v1.c"), mark=first).json()["mark"]
+
+    for since, mark in ((2, second), (3, first), (50, second)):
+        response = http.get("/v1/vault/rows", headers=writer, params={"since": since, "mark": mark})
+        assert response.status_code == 409
+        assert response.json()["error"] == "history_changed"
+        assert isinstance(response.json()["message"], str)
+
+
+def test_a_pull_can_be_checked_against_another_row(
+    http: httpx2.Client, writer: dict[str, str]
+) -> None:
+    """Section 7.4: while its pages have no marks, a device checks the head it started from."""
+    first = push(http, writer, 0, (1, "v1.a"), (2, "v1.b")).json()["mark"]
+    second = push(http, writer, 2, (3, "v1.c"), mark=first).json()["mark"]
+    assert http.get("/v1/vault", headers=writer).json()["mark"] == second
+
+    def status(**params: int | str) -> int:
+        return http.get("/v1/vault/rows", headers=writer, params=params).status_code
+
+    assert status(since=0, at=3, mark=second) == 200
+    assert status(since=1, at=3, mark=second, limit=1) == 200
+    assert status(since=0, at=2, mark=first) == 200
+    assert status(since=0, at=3, mark=first) == 409
+    assert status(since=0, at=3) == 400, "at only with a mark"
+
+
 def test_paging(http: httpx2.Client, writer: dict[str, str]) -> None:
     push(http, writer, 0, *((n, f"v1.{n}") for n in range(1, 8)))
 
@@ -96,14 +166,20 @@ def test_paging(http: httpx2.Client, writer: dict[str, str]) -> None:
 
 
 def test_paging_over_replaced_rows(http: httpx2.Client, writer: dict[str, str]) -> None:
-    push(http, writer, 0, *((n, "v1.old") for n in range(1, 6)))
-    push(http, writer, 5, (2, "v1.new"), (4, "v1.new"))
+    mark = push(http, writer, 0, *((n, "v1.old") for n in range(1, 6))).json()["mark"]
+    mark = push(http, writer, 5, (2, "v1.new"), (4, "v1.new"), mark=mark).json()["mark"]
 
     rows, cursor = pull_all(http, writer, since=0, limit=2)
 
     assert sorted(r["key"] for r in rows) == sorted(key(n) for n in range(1, 6))
     assert cursor == 7
-    assert pull(http, writer, since=7) == {"rows": [], "cursor": 7, "more": False, "head": 7}
+    assert pull(http, writer, since=7) == {
+        "rows": [],
+        "cursor": 7,
+        "more": False,
+        "head": 7,
+        "mark": mark,
+    }
 
 
 def test_limit_is_an_upper_bound(
@@ -137,12 +213,18 @@ def test_limits_are_enforced(
 @pytest.mark.parametrize(
     "body",
     [
-        {"base": 0, "rows": []},
-        {"base": -1, "rows": [{"key": key(1), "data": "v1.x"}]},
-        {"base": 0, "rows": [{"key": "too-short", "data": "v1.x"}]},
-        {"base": 0, "rows": [{"key": key(1), "data": ""}]},
-        {"base": 0, "rows": [{"key": key(1), "data": "v1.a"}, {"key": key(1), "data": "v1.b"}]},
+        {"base": 0, "mark": None, "rows": []},
+        {"base": -1, "mark": None, "rows": [{"key": key(1), "data": "v1.x"}]},
+        {"base": 0, "mark": None, "rows": [{"key": "too-short", "data": "v1.x"}]},
+        {"base": 0, "mark": None, "rows": [{"key": key(1), "data": ""}]},
+        {
+            "base": 0,
+            "mark": None,
+            "rows": [{"key": key(1), "data": "v1.a"}, {"key": key(1), "data": "v1.b"}],
+        },
         {"rows": [{"key": key(1), "data": "v1.x"}]},
+        {"base": 0, "rows": [{"key": key(1), "data": "v1.x"}]},
+        {"base": 0, "mark": "has spaces", "rows": [{"key": key(1), "data": "v1.x"}]},
     ],
 )
 def test_invalid_pushes(http: httpx2.Client, writer: dict[str, str], body: dict[str, Any]) -> None:
