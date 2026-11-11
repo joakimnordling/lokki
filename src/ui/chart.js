@@ -131,14 +131,21 @@ export function drawChart(ser) {
     g.lineWidth = 1;
     g.font = `${Math.round(10 * textScale())}px ${css.getPropertyValue("--font")}`;
     g.textAlign = "center";
+    // Each label centred under its tick, but moved inwards at the plot's edges so it isn't cut off; one that would
+    // then run into the label before it is left out
+    let lastRight = -Infinity;
     for (const [i, txt] of labels) {
       const x = xOf(i) - off;
-      if (x < -60 || x > W + 60) continue;
+      if (x < 0 || x > W - AX) continue;
       g.beginPath();
       g.moveTo(Math.round(x) + 0.5, bot);
       g.lineTo(Math.round(x) + 0.5, bot + 4);
       g.stroke();
-      g.fillText(txt, x, H - 6);
+      const half = g.measureText(txt).width / 2;
+      const tx = Math.min(Math.max(x, half + 2), W - AX - half - 2);
+      if (tx - half < lastRight + 6) continue;
+      g.fillText(txt, tx, H - 6);
+      lastRight = tx + half;
     }
     g.restore();
     g.fillStyle = col.fg;
