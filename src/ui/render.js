@@ -10,6 +10,7 @@ import { detailRender, loadView } from "./detail.js";
 import { $ } from "./dom.js";
 import { entriesRender } from "./entries.js";
 import { ICON } from "./icons.js";
+import { pickFiles } from "./importer.js";
 import { openSettings } from "./settings.js";
 import { openEntrySheet, openMetricSheet, openTypeFilter } from "./sheets.js";
 
@@ -68,7 +69,7 @@ function listHTML() {
     h += `<div class="note">Saved on this device only. Back up from Preferences now and then, or set up sync.</div>`;
   if (!metrics.size)
     h += `<div class="state"><b>No metrics yet</b><button class="create mid" id="cCreate">${ICON.add}Create New Metric</button>
-      <p>You can also import CSV files from Preferences.</p>${
+      <p>Kept logs in a spreadsheet or another app?</p><button class="plain trydemo" id="cImport">Import from File</button>${
         DEMO
           ? ""
           : `<b class="new">New to Lokki?</b><button class="plain trydemo" id="cDemo">Try with Demo Data</button>
@@ -82,6 +83,8 @@ function listHTML() {
 function bindList() {
   const c = $("#cCreate");
   if (c) c.onclick = () => openMetricSheet(null);
+  const imp = $("#cImport");
+  if (imp) imp.onclick = () => pickFiles();
   const demo = $("#cDemo");
   if (demo) demo.onclick = () => location.assign("?demo");
   const again = $("#dAgain");

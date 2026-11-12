@@ -308,6 +308,95 @@ main {
   color: var(--fg);
 }
 
+/* Import: one card per metric found, with a few of its values, then what's left out and the button */
+.import-sheet .field {
+  border-bottom-color: var(--line);
+}
+.import-sheet .field select {
+  color: var(--fg);
+}
+.import-sheet .field select option {
+  color: initial;
+}
+.iorder {
+  margin-bottom: 6px;
+}
+.import-sheet .tpick select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.icard {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.iname {
+  width: 100%;
+  padding: 2px 0 6px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+.iname:focus {
+  outline: none;
+  border-bottom-color: var(--fg);
+}
+.imeta {
+  margin-top: 8px;
+}
+.istatus {
+  color: var(--fg-dim);
+  font-size: 0.9rem;
+}
+.ierr {
+  color: var(--fg);
+  font-weight: 600;
+}
+.iprev {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.iprev li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+.iprev li.more {
+  justify-content: center;
+  color: var(--fg-dim);
+  padding: 0;
+}
+.ileft {
+  margin-top: 16px;
+  color: var(--fg-dim);
+  font-size: 0.9rem;
+}
+.ileft summary {
+  cursor: pointer;
+}
+.ileft ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.import-sheet #iGo {
+  margin-top: 18px;
+}
+.import-sheet #iGo:disabled {
+  opacity: 0.45;
+}
+
 /* Create Metric: on the app's own colour, your own metric on top and suggestions below */
 .create-sheet .field {
   border-bottom-color: var(--line);

@@ -12,3 +12,4 @@ extend-ignore-re = [
 
 [default.extend-words]
 ser = "ser" # a chart series
+nd = "nd" # 2nd, in a date pattern
