@@ -12,9 +12,9 @@ A personal life-logging app: log values (a swim, your weight, anything you count
 averages per day, week or month, with rankings, distributions, correlations and day-of-week patterns.
 
 Lokki is a web app that keeps its data on your device (IndexedDB) and can sync it between devices. It is the
-successor to _Loggr – Graph Your Life_, an iOS app that is no longer available. It imports CSV files: that app's
-exports, its own, and ordinary spreadsheets saved as CSV (a date column and a column of numbers per metric), showing
-what it found before adding anything.
+successor to _Loggr – Graph Your Life_, an iOS app that is no longer available. It imports that app's CSV exports,
+its own, and ordinary spreadsheets (.xlsx, .ods or CSV, with a date column and a column of numbers per metric),
+showing what it found before adding anything.
 
 ## Status
 

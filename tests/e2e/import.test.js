@@ -120,7 +120,46 @@ describe("import", () => {
   it("says why a file can't be imported", async () => {
     const f = await file("people.csv", "Name,Age\nAnna,4\n");
     await choose([f]);
-    assert.match(await toastText(P, /Nothing to import/), /people: no column of dates found/);
+    assert.match(await toastText(P, /Nothing to import/), /people\.csv: no column of dates found/);
+  });
+
+  it("reads spreadsheets: every sheet with dates, and says what it left out", async () => {
+    for (const name of ["libreoffice.xlsx", "libreoffice.ods"]) {
+      await choose([join(import.meta.dirname, "..", "fixtures", "sheets", name)]);
+      assert.deepEqual(
+        (await cards()).map((c) => [c.name, c.meta]),
+        [
+          ["Weight", "3 entries · Nov 2026"],
+          ["Steps", "2 entries · Nov 2026"],
+          ["Mood", "2 entries · Nov 2026"],
+        ],
+      );
+      assert.deepEqual((await cards())[0].preview, [
+        "Nov 2 2026 - 07:30 79,4",
+        "Nov 3 2026 - 07:45 79,1",
+        "Nov 4 2026 - 20:05 78,9",
+      ]);
+      await P.click(".ileft summary");
+      const left = await P.$$eval(".ileft li", (ls) => ls.map((l) => l.textContent));
+      assert.deepEqual(left, [
+        `${name} › Notes: no column of dates found`,
+        `“Note” in ${name} › Log: text, not numbers`,
+      ]);
+      await P.click("#sCancel");
+    }
+  });
+
+  it("says what to do with files it can't read, and reads CSV files in Excel's Windows encoding", async () => {
+    const xls = await file("old.xls", Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+    await choose([xls]);
+    assert.match(await toastText(P, /Nothing to import/), /old\.xls: an old Excel file: save it as \.xlsx or CSV/);
+    const ansi = await file(
+      "vikt.csv",
+      Buffer.from("Datum;Vikt\r\n2.11.2026;79,4\r\n13.11.2026;78,8\r\n".replace("Vikt", "Väkt"), "latin1"),
+    );
+    await choose([ansi]);
+    assert.equal((await cards())[0].name, "Väkt");
+    await P.click("#sCancel");
   });
 
   it("logged no errors", () => assert.deepEqual(h.errors, []));

@@ -78,8 +78,8 @@ export async function zipOne(name, bytes, d = new Date()) {
   ]);
   return new Blob([loc.buffer, nm, data, cen.buffer, nm, end.buffer], { type: "application/zip" });
 }
-// Reads the first .jsonl (or only) file from a .zip; checks its CRC so a damaged file is refused.
-export async function unzipFirst(b) {
+// A .zip's files: [{name, method, crc, csize, size, off}], from its central directory.
+export function zipEntries(b) {
   const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
   let e = -1;
   for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--)
@@ -88,27 +88,40 @@ export async function unzipFirst(b) {
       break;
     }
   if (e < 0) throw new Error("not a zip");
-  const n = v.getUint16(e + 10, true);
-  let o = v.getUint32(e + 16, true),
-    pick = null;
+  const n = v.getUint16(e + 10, true),
+    out = [];
+  let o = v.getUint32(e + 16, true);
   for (let k = 0; k < n; k++) {
     if (v.getUint32(o, true) !== 0x02014b50) throw new Error("bad zip");
-    const ent = {
+    out.push({
       method: v.getUint16(o + 10, true),
       crc: v.getUint32(o + 16, true),
       csize: v.getUint32(o + 20, true),
       size: v.getUint32(o + 24, true),
       off: v.getUint32(o + 42, true),
       name: new TextDecoder().decode(b.subarray(o + 46, o + 46 + v.getUint16(o + 28, true))),
-    };
-    if (!pick || (/\.jsonl$/i.test(ent.name) && !/\.jsonl$/i.test(pick.name))) pick = ent;
+    });
     o += 46 + v.getUint16(o + 28, true) + v.getUint16(o + 30, true) + v.getUint16(o + 32, true);
   }
-  if (!pick || v.getUint32(pick.off, true) !== 0x04034b50) throw new Error("bad zip");
-  const start = pick.off + 30 + v.getUint16(pick.off + 26, true) + v.getUint16(pick.off + 28, true),
-    raw = b.subarray(start, start + pick.csize);
-  const out =
-    pick.method === 0 ? raw : pick.method === 8 ? await pipeBytes(raw, new DecompressionStream("deflate-raw")) : null;
-  if (!out || out.length !== pick.size || crc32(out) !== pick.crc) throw new Error("damaged");
   return out;
+}
+// One file out of a .zip, checked against its CRC so a damaged one is refused. `max`: the most bytes to unpack.
+export async function unzipEntry(b, ent, max = 64 * 1024 * 1024) {
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  if (v.getUint32(ent.off, true) !== 0x04034b50) throw new Error("bad zip");
+  if (ent.size > max) throw new Error("too big");
+  const start = ent.off + 30 + v.getUint16(ent.off + 26, true) + v.getUint16(ent.off + 28, true),
+    raw = b.subarray(start, start + ent.csize);
+  const out =
+    ent.method === 0 ? raw : ent.method === 8 ? await pipeBytes(raw, new DecompressionStream("deflate-raw")) : null;
+  if (!out || out.length !== ent.size || crc32(out) !== ent.crc) throw new Error("damaged");
+  return out;
+}
+// Reads the first .jsonl (or only) file from a .zip.
+export async function unzipFirst(b) {
+  let pick = null;
+  for (const ent of zipEntries(b))
+    if (!pick || (/\.jsonl$/i.test(ent.name) && !/\.jsonl$/i.test(pick.name))) pick = ent;
+  if (!pick) throw new Error("bad zip");
+  return unzipEntry(b, pick, Number.POSITIVE_INFINITY);
 }
