@@ -91,7 +91,7 @@ describe("CSV and names", () => {
     await home(A);
     await A.click("#cCreate");
     await A.fill("#mName", "Café");
-    await A.click("#sDone");
+    await A.click("#mAdd");
     assert.match(await A.textContent("#mErr"), /already have/);
     await A.click("#sCancel");
   });
@@ -99,7 +99,7 @@ describe("CSV and names", () => {
   it("cleans up names, and makes export file names safe", async () => {
     await A.click("#cCreate");
     await A.fill("#mName", "  Walk/Run​  ");
-    await A.click("#sDone");
+    await A.click("#mAdd");
     await A.waitForTimeout(300);
     assert.ok(await A.evaluate(() => [...window.__lokki.metricAll.values()].some((m) => m.name === "Walk/Run")));
     await A.click("text=Walk/Run");

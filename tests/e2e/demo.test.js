@@ -1,4 +1,4 @@
-// The demo (?demo): a year of made-up logs in a database of its own, never synced, made afresh on every open and
+// The demo (?demo): a year of made-up logs in a database of its own, never synced, reset on every open and
 // wiped on closing, while the person's own logs and settings stay as they were.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
@@ -61,7 +61,7 @@ describe("demo", () => {
     assert.equal(await P.$("#sShowDemo"), null);
   });
 
-  it("changes in the demo stay in the demo, and Start Over makes it afresh", async () => {
+  it("changes in the demo stay in the demo, and Start Over resets it", async () => {
     await home(P);
     const before = (await counts(P)).live;
     await P.click('[data-add="coffee"]');
@@ -95,7 +95,8 @@ describe("demo", () => {
   it("a device with logs keeps them, and offers the demo from Preferences in a new tab", async () => {
     await P.click("#cCreate");
     await P.fill("#mName", "Reading");
-    await P.click("#sDone");
+    await P.click("#mAdd");
+    await home(P);
     await P.click("[data-add]");
     await P.fill("#eVal", "30");
     await P.click("#sDone");

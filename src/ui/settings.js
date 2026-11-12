@@ -42,7 +42,7 @@ export function openSettings() {
     <button class="setrow" id="sUpd"><span>Check for Updates<small>Lokki also checks by itself when you open it.</small></span><span>›</span></button>
     <button class="setrow" id="sPriv"><span>Privacy<small>Where your logs are kept, and who can see them.</small></span><span>›</span></button>
     <button class="setrow" id="sClr"><span>Clear Data<small>Removes your logs and settings from this device.</small></span><span>›</span></button>
-    ${DEMO ? "" : `<button class="setrow" id="sShowDemo"><span>Show Demo Data<small>A year of made-up logs to try things on, in a new tab. Your own logs aren't touched.</small></span><span>›</span></button>`}
+    ${DEMO ? "" : `<button class="setrow" id="sShowDemo"><span>Show Demo Data<small>A year of made-up logs to try things on, in a new tab. Your own logs and preferences aren't touched.</small></span><span>›</span></button>`}
     <div class="preview" style="padding-top:14px">${metrics.size} metrics · ${fmt(total)} entries. ${sync.vault ? "Saved on this device and synced, end-to-end encrypted." : "Saved on this device only."}</div>
     <div class="preview version">${versionLine()}</div>`,
     { cancel: "Done" },

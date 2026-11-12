@@ -3,9 +3,11 @@ import { evalExpr } from "../core/expr.js";
 import { esc, fmt, parseLocal, toLocalStr } from "../core/format.js";
 import { uuid4 } from "../core/ids.js";
 import { normName, sameName } from "../core/names.js";
-import { store } from "../core/prefs.js";
+import { setView, store } from "../core/prefs.js";
+import { SUGGESTIONS } from "../core/suggestions.js";
 import { addEntry, deleteMetric, editEntry, saveMetric } from "../data/records.js";
 import { entriesOf, metrics, ui } from "../data/state.js";
+import { loadView } from "./detail.js";
 import { $ } from "./dom.js";
 import { TYPE_ICON, TYPES } from "./icons.js";
 import { render } from "./render.js";
@@ -108,34 +110,105 @@ export function openEntrySheet(mid, entry) {
       inp.focus();
     };
 }
+// A metric's name: none taken already (by another metric than `mid`), or the message saying what's wrong
+function nameProblem(name, mid) {
+  if (!name) return "Give the metric a name.";
+  if ([...metrics.entries()].some(([id, x]) => id !== mid && sameName(x.name, name)))
+    return "You already have a metric with that name.";
+  return "";
+}
+const typeIcon = (t) => `<svg viewBox="0 0 24 24" aria-hidden="true">${TYPE_ICON[t] || TYPE_ICON[""]}</svg>`;
+const has = (name) => [...metrics.values()].some((x) => sameName(x.name, name));
+
 export function openMetricSheet(mid) {
-  const m = mid ? metrics.get(mid) : null;
+  if (!mid) return openCreateSheet();
+  const m = metrics.get(mid);
   sheet(
-    m ? "Edit Log" : "Custom Metric",
-    `<div class="field"><input class="big" id="mName" placeholder="Custom Metric Name" value="${m ? esc(m.name) : ""}" autocomplete="off"></div>
-    <div class="field"><label for="mType">Log Type</label><select id="mType"><option value="">Optional</option>${TYPES.map((t) => `<option ${m && m.type === t ? "selected" : ""}>${t}</option>`).join("")}</select></div><div class="err" id="mErr"></div>`,
+    "Edit Log",
+    `<div class="field"><input class="big" id="mName" placeholder="Metric Name" value="${esc(m.name)}" autocomplete="off"></div>
+    <div class="field"><label for="mType">Log Type</label><select id="mType"><option value="">Optional</option>${TYPES.map((t) => `<option ${m.type === t ? "selected" : ""}>${t}</option>`).join("")}</select></div><div class="err" id="mErr"></div>`,
     {
       done: () => {
         const name = normName($("#mName").value);
-        if (!name) {
-          $("#mErr").textContent = "Give the metric a name.";
+        const problem = nameProblem(name, mid);
+        if (problem) {
+          $("#mErr").textContent = problem;
           return false;
         }
-        const dup = [...metrics.entries()].find(([id, x]) => id !== mid && sameName(x.name, name));
-        if (dup) {
-          $("#mErr").textContent = "You already have a metric with that name.";
-          return false;
-        }
-        const type = $("#mType").value;
-        if (m) saveMetric(mid, { ...m, name, type });
-        else {
-          saveMetric(uuid4(), { name, type, created: toLocalStr(new Date()) });
-          toast(`Created ${name}`);
-        }
+        saveMetric(mid, { ...m, name, type: $("#mType").value });
       },
     },
   );
   $("#mName").focus();
+}
+
+// Create Metric: your own at the top, ready-made ones below. A suggestion is added with one tap and starts in the
+// chart view that suits it (src/core/suggestions.js); one you already have, by name, shows as added.
+function openCreateSheet() {
+  const close = sheet(
+    "Create Metric",
+    `<h4 class="ctitle">Add Your Own</h4>
+    <div class="field"><input id="mName" placeholder="Name" autocomplete="off" aria-label="Name"></div>
+    <div class="field"><label for="mType">Type</label><span class="ticon" id="mIcon">${typeIcon("")}</span><select id="mType"><option value="">None</option>${TYPES.map((t) => `<option>${t}</option>`).join("")}</select></div>
+    <div class="err" id="mErr"></div>
+    <button class="create" id="mAdd" disabled>Add</button>
+    <h4 class="ctitle sugg">Suggestions</h4>
+    ${SUGGESTIONS.map(
+      ([type, items]) =>
+        `<div class="sgroup"><h5>${typeIcon(type)}${esc(type)}</h5>${items
+          .map(
+            ([name], i) =>
+              `<div class="srow"><span>${esc(name)}</span><button class="sadd" data-sugg="${esc(type)}:${i}">Add</button></div>`,
+          )
+          .join("")}</div>`,
+    ).join("")}`,
+    { cancel: "Close", cls: "tint create-sheet" },
+  );
+  const name = $("#mName"),
+    type = $("#mType"),
+    add = $("#mAdd");
+  name.oninput = () => {
+    add.disabled = !normName(name.value);
+    $("#mErr").textContent = "";
+  };
+  type.onchange = () => {
+    $("#mIcon").innerHTML = typeIcon(type.value);
+  };
+  add.onclick = () => {
+    const n = normName(name.value);
+    const problem = nameProblem(n);
+    if (problem) {
+      $("#mErr").textContent = problem;
+      return;
+    }
+    const id = uuid4();
+    close();
+    saveMetric(id, { name: n, type: type.value, created: toLocalStr(new Date()) }); // in memory at once, then saved
+    // straight to the new metric, so its first entry is a tap away
+    ui.view = "detail";
+    ui.mid = id;
+    loadView(id);
+    ui.sel = null;
+    render();
+    window.scrollTo(0, 0);
+  };
+  const mark = (b) => {
+    b.textContent = "✓ Added";
+    b.disabled = true;
+  };
+  for (const b of document.querySelectorAll("[data-sugg]")) {
+    const [t, i] = b.dataset.sugg.split(":");
+    const [n, mode, gran] = SUGGESTIONS.find(([x]) => x === t)[1][+i];
+    if (has(n)) mark(b);
+    b.onclick = () => {
+      if (has(n)) return mark(b);
+      const id = uuid4();
+      setView(id, { mode, gran });
+      saveMetric(id, { name: n, type: t, created: toLocalStr(new Date()) });
+      mark(b);
+      toast(`Added ${n}`);
+    };
+  }
 }
 export function openTypeFilter() {
   const counts = { "": metrics.size };

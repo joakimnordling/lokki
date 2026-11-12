@@ -58,7 +58,8 @@ describe("standalone sync", () => {
   it("is off until set up, with the reminder to back up", async () => {
     await A.click("#cCreate");
     await A.fill("#mName", "Running");
-    await A.click("#sDone");
+    await A.click("#mAdd");
+    await home(A);
     for (const v of [5, 7]) {
       await A.click("[data-add]");
       await A.fill("#eVal", String(v));

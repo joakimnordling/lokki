@@ -144,7 +144,7 @@ describe("backup and restore", () => {
     await home(A);
     await A.click("#cCreate");
     await A.fill("#mName", "Walk/Run");
-    await A.click("#sDone");
+    await A.click("#mAdd");
     const id = await A.evaluate(() => [...window.__lokki.metricAll].find(([, m]) => m.name === "Walk/Run")[0]);
     assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4/, "new metrics get a UUIDv4");
     await A.evaluate((id) => window.__test.add(id, "2026-11-07T12:00:00", 5, ""), id);

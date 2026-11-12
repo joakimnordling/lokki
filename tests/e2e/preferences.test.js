@@ -54,7 +54,8 @@ describe("preferences", () => {
     await home(P);
     await P.click("#cCreate");
     await P.fill("#mName", "Reading");
-    await P.click("#sDone");
+    await P.click("#mAdd");
+    await home(P);
     await P.click("[data-add]");
     await P.fill("#eVal", "30");
     await P.click("#sDone");

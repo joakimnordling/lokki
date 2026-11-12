@@ -1,7 +1,7 @@
 // The rank list's left edge.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { startHarness } from "./harness.js";
+import { home, startHarness } from "./harness.js";
 
 describe("rank list", () => {
   let h, P;
@@ -15,7 +15,8 @@ describe("rank list", () => {
   it("starts at the left edge like the other lists, with the positions' column as wide as needed", async () => {
     await P.click("#cCreate");
     await P.fill("#mName", "Reading");
-    await P.click("#sDone");
+    await P.click("#mAdd");
+    await home(P);
     const mid = await P.evaluate(() => [...window.__lokki.metricAll.keys()][0]);
     for (let m = 1; m <= 12; m++)
       await P.evaluate(

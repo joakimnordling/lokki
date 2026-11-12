@@ -279,8 +279,116 @@ main {
 .state .trydemo {
   display: block;
   width: fit-content;
-  margin: 18px auto 0;
+  margin: 10px auto 0;
   color: var(--fg);
+}
+.state p {
+  margin: 8px auto 0;
+  max-width: 34ch;
+  font-size: 0.9rem;
+}
+.state b.new {
+  margin-top: 34px;
+  font-size: 1rem;
+}
+.create svg {
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 6px;
+  vertical-align: -0.18em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.state .create.mid {
+  width: fit-content;
+  margin: 14px auto 0;
+  padding-inline: 26px;
+  color: var(--fg);
+}
+
+/* Create Metric: on the app's own colour, your own metric on top and suggestions below */
+.create-sheet .field {
+  border-bottom-color: var(--line);
+}
+.create-sheet .field input,
+.create-sheet .field select {
+  color: var(--fg);
+}
+.create-sheet .field input::placeholder {
+  color: var(--fg-dim);
+}
+.create-sheet .field input {
+  text-align: left;
+}
+.create-sheet .field select option {
+  color: initial;
+}
+.create-sheet .create {
+  margin-block: 14px 6px;
+}
+.create-sheet .create:disabled {
+  opacity: 0.45;
+}
+.ctitle {
+  margin: 18px 0 2px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.ctitle.sugg {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.ticon svg,
+.sgroup h5 svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ticon {
+  display: flex;
+  margin-left: auto;
+}
+.create-sheet .field select {
+  flex: 0 1 auto;
+}
+.sgroup h5 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 2px;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+.srow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0 9px 32px;
+  border-bottom: 1px solid var(--line);
+}
+.srow .sadd {
+  flex: 0 0 auto;
+  padding: 5px 16px;
+  border: 1.5px solid var(--fg);
+  border-radius: 999px;
+  font-size: 0.9rem;
+  color: var(--fg);
+}
+.srow .sadd:disabled {
+  border-color: transparent;
+  color: var(--fg-dim);
+  padding-inline: 0;
 }
 
 /* detail */
