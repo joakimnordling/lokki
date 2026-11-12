@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { csvq, decodeLoggrName, parseCSVLine, parseDate, readCSV } from "../../src/core/csv.js";
+import { csvq, decodeLoggrName, parseDate } from "../../src/core/csv.js";
 import { evalExpr } from "../../src/core/expr.js";
 import { ago, clock, dayLabel, fmt, periodLabel, timeLabel, toLocalStr } from "../../src/core/format.js";
 import { uuid4, uuid5 } from "../../src/core/ids.js";
@@ -124,28 +124,12 @@ describe("csv", () => {
     assert.equal(csvq('say "hi", ok'), '"say ""hi"", ok"');
     assert.equal(csvq(null), "");
   });
-  it("splits lines with quoted fields", () => {
-    assert.deepEqual(parseCSVLine('a,"b,c","d ""e"""'), ["a", "b,c", 'd "e"']);
-  });
   it("reads Lokki and old Loggr dates", () => {
     assert.equal(parseDate("2026-01-15 07:30:00"), "2026-01-15T07:30:00");
     assert.equal(parseDate("2026-1-15 7:30"), "2026-01-15T07:30:00");
     assert.equal(parseDate("2026-11-2 8:00:00 PM"), "2026-11-02T20:00:00");
     assert.equal(parseDate("2026-11-2 12:15:00 AM"), "2026-11-02T00:15:00");
     assert.equal(parseDate("7.11.2026"), null);
-  });
-  it("reads files with and without a header", () => {
-    const all = readCSV('Metric,Date,Value,Note\nRunning,2026-01-15 07:30:00,2.5,"long, slow"\nBad,,x,\n', "ignored");
-    assert.deepEqual(all, { rows: [{ name: "Running", s: "2026-01-15T07:30:00", v: 2.5, n: "long, slow" }], bad: 1 });
-    const old = readCSV("2026-11-2 8:00:00 AM, 3\n2026-11-3 8:00:00 AM, 2,5\n", "Café");
-    assert.deepEqual(
-      old.rows.map((r) => [r.name, r.s, r.v]),
-      [
-        ["Café", "2026-11-02T08:00:00", 3],
-        ["Café", "2026-11-03T08:00:00", 2],
-      ],
-    );
-    assert.equal(readCSV("Metric,Date,Value\nA,2026-01-01 10:00,1\nB,2026-01-01 10:00,2\n", "", "b").rows.length, 1);
   });
   it("decodes old Loggr file names", () => {
     assert.equal(decodeLoggrName("Caf#U00e9.csv"), "Café");

@@ -1,15 +1,11 @@
-// CSV export and import, and saving files.
-import { csvq, decodeLoggrName, readCSV } from "../core/csv.js";
+// CSV export, and saving files. Importing is in importer.js.
+import { csvq } from "../core/csv.js";
 import { esc, fileStamp } from "../core/format.js";
-import { uuid4, uuid5 } from "../core/ids.js";
 import { safeFile } from "../core/names.js";
-import { commitRecs, fail, nextU, saveMetric } from "../data/records.js";
-import { entriesOf, findMetricByName, metrics, rebuild, recs, ui } from "../data/state.js";
+import { entriesOf, metrics, ui } from "../data/state.js";
 import { $ } from "./dom.js";
-import { render } from "./render.js";
+import { pickFiles } from "./importer.js";
 import { toast } from "./sheets.js";
-
-let importTarget = null;
 
 const MIME = { zip: "application/zip", csv: "text/csv", txt: "text/plain" };
 // The share sheet where it can take files (iPhone: Save to Files), otherwise an ordinary download.
@@ -64,7 +60,7 @@ export function openMetricCSV() {
     n = entriesOf(mid).length;
   const L = $("#layer");
   L.innerHTML = `<div class="scrim gut" id="scrim"><div class="actions" role="dialog" aria-modal="true" aria-label="Import or export ${esc(m.name)}">
-    <div class="grp"><small>${esc(m.name)} · ${n} entries</small><button id="aImp">Import From CSV</button><button id="aExp">Export To CSV</button></div>
+    <div class="grp"><small>${esc(m.name)} · ${n} entries</small><button id="aImp">Import From File</button><button id="aExp">Export To CSV</button></div>
     <button class="cancel" id="aCan">Cancel</button></div></div>`;
   const close = () => {
     L.innerHTML = "";
@@ -79,71 +75,6 @@ export function openMetricCSV() {
   };
   $("#aImp").onclick = () => {
     close();
-    importTarget = mid;
-    const f = $("#fileIn");
-    f.value = "";
-    f.click();
+    pickFiles(mid);
   };
-}
-export async function importCSVFiles(ev) {
-  const target = importTarget && metrics.get(importTarget);
-  importTarget = null;
-  const files = [...ev.target.files];
-  if (!files.length) return;
-  const byName = new Map();
-  let bad = 0;
-  for (const f of files) {
-    const fname = target ? target.name : decodeLoggrName(f.name);
-    const r = readCSV(await f.text(), fname, target?.name);
-    bad += r.bad;
-    for (const row of r.rows) {
-      const name = target ? target.name : row.name;
-      const k = name.toLowerCase();
-      if (!byName.has(k)) byName.set(k, { name, list: [] });
-      byName.get(k).list.push(row);
-    }
-  }
-  if (!byName.size) {
-    toast("No entries found in those files.");
-    return;
-  }
-  let added = 0;
-  toast("Importing…");
-  try {
-    const fresh = [];
-    for (const { name, list } of byName.values()) {
-      let mid = target
-        ? importTarget || [...metrics.entries()].find(([, m]) => m === target)?.[0]
-        : findMetricByName(name);
-      if (!mid) {
-        mid = uuid4();
-        await saveMetric(mid, { name, type: "", created: list.reduce((a, r) => (a && a < r.s ? a : r.s), "") });
-      }
-      const have = new Map();
-      for (const e of entriesOf(mid)) {
-        const k = `${e.s}|${String(e.v)}`;
-        have.set(k, (have.get(k) || 0) + 1);
-      }
-      const occ = new Map();
-      list.sort((a, b) => (a.s < b.s ? -1 : a.s > b.s ? 1 : 0));
-      for (const r of list) {
-        const k = `${r.s}|${String(r.v)}`,
-          i = occ.get(k) || 0;
-        occ.set(k, i + 1);
-        if (i < (have.get(k) || 0)) continue; // already have this one
-        const id = await uuid5(`${mid}|${r.s}|${String(r.v)}|${i}`);
-        if (recs.has(id)) continue; // known here (maybe since edited or deleted): a CSV never overrides that
-        fresh.push({ id, m: mid, y: +r.s.slice(0, 4), t: r.s, v: r.v, ...(r.n ? { n: r.n } : {}), u: nextU() });
-        added++;
-      }
-    }
-    if (fresh.length) await commitRecs(fresh);
-    toast(
-      `${added ? `Imported ${added} ${added === 1 ? "entry" : "entries"}` : "Nothing new to import"}${bad ? ` · skipped ${bad} unreadable ${bad === 1 ? "line" : "lines"}` : ""}`,
-    );
-  } catch (e) {
-    rebuild();
-    render();
-    fail(e);
-  }
 }

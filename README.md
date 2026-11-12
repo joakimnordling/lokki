@@ -12,8 +12,9 @@ A personal life-logging app: log values (a swim, your weight, anything you count
 averages per day, week or month, with rankings, distributions, correlations and day-of-week patterns.
 
 Lokki is a web app that keeps its data on your device (IndexedDB) and can sync it between devices. It is the
-successor to _Loggr – Graph Your Life_, an iOS app that is no longer available, and it can import that app's CSV
-exports.
+successor to _Loggr – Graph Your Life_, an iOS app that is no longer available. It imports CSV files: that app's
+exports, its own, and ordinary spreadsheets saved as CSV (a date column and a column of numbers per metric), showing
+what it found before adding anything.
 
 ## Status
 
@@ -32,7 +33,7 @@ The demo keeps its data apart from yours, never syncs, and is wiped when you clo
 ```
 index.html          the page; loads src/app.js as an ES module (no build step needed)
 public/             static files: styles, the Jost font, icons, web app manifest
-src/core/           pure functions: formatting, periods, statistics, ids, CSV, zip, backup format
+src/core/           pure functions: formatting, periods, statistics, ids, CSV and tables, zip, backup format
 src/data/           this device's copy: state, IndexedDB, local changes, backups
 src/sync/           syncing: encryption, merge rules and the sync engine for Lokki servers
 src/ui/             rendering, sheets, chart, entry list, preferences, files

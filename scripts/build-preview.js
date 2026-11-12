@@ -27,7 +27,7 @@ const icon = (await readFile(join(site, "icons", "favicon.svg"))).toString("base
 
 const swap = (from, to) => {
   if (!html.includes(from)) throw new Error(`index.html: ${from} not found`);
-  html = html.replace(from, to);
+  html = html.replace(from, () => to); // a function, so "$" in the script is never read as a pattern
 };
 swap(`<link rel="stylesheet" href="assets/${cssName}">`, `<style>\n${css}\n</style>`);
 swap(`<script type="module" src="assets/${jsName}"></script>`, `<script type="module">\n${js}\n</script>`);

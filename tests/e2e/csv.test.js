@@ -25,6 +25,9 @@ describe("CSV and names", () => {
     }
     const [chooser] = await Promise.all([pg.waitForEvent("filechooser"), pg.click(viaMetric ? "#aImp" : "#sImp")]);
     await chooser.setFiles(files);
+    // the check screen, unless there's nothing new
+    await pg.waitForSelector("#iGo, .toast");
+    if (await pg.$("#iGo")) await pg.click("#iGo");
     return toastText(pg, /Imported|Nothing new|No entries/);
   }
   const content = (pg) =>
