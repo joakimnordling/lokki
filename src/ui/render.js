@@ -57,7 +57,8 @@ function listHTML() {
   });
   if (ui.filter) ms = ms.filter((m) => m.type === ui.filter);
   ms.sort((a, b) => (b.last ? b.last.t : -1) - (a.last ? a.last.t : -1) || a.name.localeCompare(b.name));
-  let h = `<button class="create" id="cCreate">${ICON.add}Create Metric</button>`;
+  // One button for it: at the top once there are metrics, in the middle of the empty screen before that
+  let h = metrics.size ? `<button class="create" id="cCreate">${ICON.add}Create New Metric</button>` : "";
   if (ui.filter)
     h += `<div class="filterbar"><span>Showing ${esc(ui.filter)}</span><button id="clrF">Show all</button></div>`;
   if (DEMO)
@@ -66,7 +67,7 @@ function listHTML() {
   else if (metrics.size && !sync.vault)
     h += `<div class="note">Saved on this device only. Back up from Preferences now and then, or set up sync.</div>`;
   if (!metrics.size)
-    h += `<div class="state"><b>No metrics yet</b><button class="create mid" id="cCreate2">${ICON.add}Create Metric</button>
+    h += `<div class="state"><b>No metrics yet</b><button class="create mid" id="cCreate">${ICON.add}Create New Metric</button>
       <p>You can also import CSV files from Preferences.</p>${
         DEMO
           ? ""
@@ -76,13 +77,11 @@ function listHTML() {
   else if (!ms.length) h += `<div class="state">No metrics with this log type.</div>`;
   for (const m of ms)
     h += `<div class="row"><button class="name" data-open="${esc(m.id)}">${esc(m.name)}<span class="ago">${m.last ? ago(m.last.t) : "No Entries"}</span></button><button class="pill" data-add="${esc(m.id)}" aria-label="Add ${esc(m.name)} entry">${m.last ? fmt(m.last.v) : "+"}</button></div>`;
-  return `${h}<div style="border-top:1px solid var(--line)"></div>`;
+  return ms.length ? `${h}<div style="border-top:1px solid var(--line)"></div>` : h;
 }
 function bindList() {
   const c = $("#cCreate");
   if (c) c.onclick = () => openMetricSheet(null);
-  const c2 = $("#cCreate2");
-  if (c2) c2.onclick = () => openMetricSheet(null);
   const demo = $("#cDemo");
   if (demo) demo.onclick = () => location.assign("?demo");
   const again = $("#dAgain");

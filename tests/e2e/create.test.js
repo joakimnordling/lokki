@@ -13,9 +13,11 @@ describe("create metric", () => {
   });
   after(() => h.close());
 
-  it("the empty screen offers it in the middle too", async () => {
+  it("the empty screen has the button in its middle, and no other", async () => {
     assert.match(await P.textContent("#main"), /No metrics yet/);
-    await P.click("#cCreate2");
+    assert.equal(await P.locator("button.create").count(), 1);
+    assert.ok(await P.$(".state #cCreate"));
+    await P.click("#cCreate");
     assert.equal(await P.textContent(".sheet h3"), "Create Metric");
     await P.click("#sCancel");
   });
@@ -31,6 +33,12 @@ describe("create metric", () => {
     assert.equal(await P.textContent("#hdr h1"), "Plank Seconds");
     const m = await P.evaluate(() => [...window.__lokki.metricAll.values()].find((x) => x.name === "Plank Seconds"));
     assert.equal(m.type, "Fitness");
+  });
+
+  it("once there are metrics, the button is at the top", async () => {
+    await home(P);
+    assert.equal(await P.locator("button.create").count(), 1);
+    assert.equal(await P.$(".state #cCreate"), null);
   });
 
   it("adds suggestions with one tap each, in a view that suits them, and shows the ones you have", async () => {
