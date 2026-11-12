@@ -12,6 +12,26 @@ import { $ } from "./dom.js";
 import { ICON, TYPE_ICON, TYPES } from "./icons.js";
 import { render } from "./render.js";
 
+// While a sheet or action list is open, the page behind it stays put: a swipe on the sheet (or around it) scrolls the
+// sheet or nothing, never the list underneath. Phones let a swipe on something that can't scroll itself pass through
+// to the page, so the page is pinned where it is, and put back at the same place when the last sheet closes.
+export function lockPageUnderSheets() {
+  const L = $("#layer"),
+    b = document.body;
+  let y = null;
+  new MutationObserver(() => {
+    const open = L.childElementCount > 0;
+    if (open && y == null) {
+      y = window.scrollY;
+      Object.assign(b.style, { position: "fixed", top: `-${y}px`, left: "0", right: "0" });
+    } else if (!open && y != null) {
+      Object.assign(b.style, { position: "", top: "", left: "", right: "" });
+      window.scrollTo(0, y);
+      y = null;
+    }
+  }).observe(L, { childList: true });
+}
+
 export function sheet(title, body, { done, doneLabel = "Done", cancel = "Cancel", cls = "" } = {}) {
   const L = $("#layer");
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet gut ${cls}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
