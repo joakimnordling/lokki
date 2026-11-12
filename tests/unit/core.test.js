@@ -43,9 +43,9 @@ describe("periods", () => {
   });
   it("labels periods", () => {
     assert.equal(periodLabel(local("2026-11-01T00:00:00"), "monthly"), "Nov 2026");
-    assert.equal(periodLabel(local("2026-11-02T00:00:00"), "weekly"), "Nov 02 - Nov 08 2026");
-    assert.equal(periodLabel(local("2026-12-28T00:00:00"), "weekly"), "Dec 28 2026 - Jan 03 2027");
-    assert.equal(periodLabel(local("2026-11-05T00:00:00"), "daily"), "Nov 05 2026");
+    assert.equal(periodLabel(local("2026-11-02T00:00:00"), "weekly"), "Nov 2 - Nov 8 2026");
+    assert.equal(periodLabel(local("2026-12-28T00:00:00"), "weekly"), "Dec 28 2026 - Jan 3 2027");
+    assert.equal(periodLabel(local("2026-11-05T00:00:00"), "daily"), "Nov 5 2026");
     assert.equal(dayLabel(local("2026-11-05T08:00:00")), "Nov 5 2026");
   });
 });
@@ -61,7 +61,7 @@ describe("format", () => {
     try {
       prefs.h24 = true;
       assert.equal(clock(t), "15:04");
-      assert.equal(timeLabel(t), "Nov 05 2026 - 15:04");
+      assert.equal(timeLabel(t), "Nov 5 2026 - 15:04");
       prefs.h24 = false;
       assert.equal(clock(t), "3:04 PM");
       assert.equal(clock(local("2026-11-05T00:30:00")), "12:30 AM");

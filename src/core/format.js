@@ -14,7 +14,7 @@ export const fileStamp = (d = new Date()) => toLocalStr(d).slice(0, 16).replace(
 export const parseLocal = (s) => new Date(s.length === 16 ? `${s}:00` : s);
 
 export function md(d) {
-  return `${MON[d.getMonth()]} ${p2(d.getDate())}`;
+  return `${MON[d.getMonth()]} ${d.getDate()}`;
 }
 export function clock(t) {
   const d = new Date(t);
