@@ -39,7 +39,7 @@ export function openSettings() {
     <button class="setrow" id="sBak"><span>Back Up<small>Saves everything, including log types, view settings and deletions, to a Lokki backup file (.zip).</small></span><span>›</span></button>
     <button class="setrow" id="sRes"><span>Restore from Backup<small>Merges a Lokki backup into the app. Shows what will change before anything does.</small></span><span>›</span></button>
     <button class="setrow" id="sExp"><span>Export CSV<small>Every entry as metric, date, value and note, for spreadsheets.</small></span><span>›</span></button>
-    <button class="setrow" id="sImp"><span>Import from File<small>Adds entries from CSV files, such as a spreadsheet's or the old Loggr app's. Shows what it found before adding anything.</small></span><span>›</span></button>
+    <button class="setrow" id="sImp"><span>Import from File<small>Adds entries from spreadsheets (.xlsx, .ods) and CSV files, including the old Loggr app's. Shows what it found before adding anything.</small></span><span>›</span></button>
     <button class="setrow" id="sUpd"><span>Check for Updates<small>Lokki also checks by itself when you open it.</small></span><span>›</span></button>
     <button class="setrow" id="sPriv"><span>Privacy<small>Where your logs are kept, and who can see them.</small></span><span>›</span></button>
     <button class="setrow" id="sClr"><span>Clear Data<small>Removes your logs and settings from this device.</small></span><span>›</span></button>

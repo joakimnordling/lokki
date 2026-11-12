@@ -1,9 +1,10 @@
-// Importing files: read them, show what was understood (metrics, counts, a few values, how dates were read), and add
+// Importing files (CSV, .xlsx, .ods): read them, show what was understood (metrics, counts, a few values, how dates were read), and add
 // the entries only when the person says so. Entries already here are skipped, so importing a file twice adds nothing.
 import { decodeLoggrName } from "../core/csv.js";
 import { dayLabel, esc, fmt, MON, parseLocal, timeLabel } from "../core/format.js";
 import { uuid4, uuid5 } from "../core/ids.js";
 import { normName } from "../core/names.js";
+import { readSheets, sheetKind } from "../core/sheets.js";
 import { csvRows, readTable } from "../core/table.js";
 import { commitRecs, fail, nextU, saveMetric } from "../data/records.js";
 import { entriesOf, findMetricByName, metrics, rebuild, recs } from "../data/state.js";
@@ -43,9 +44,36 @@ const WHY = {
   novalues: "no numbers found next to the dates",
 };
 
-// A file's tables: CSV for now
+// What can't be read, and what to do instead
+const KINDS = {
+  xls: "an old Excel file: save it as .xlsx or CSV",
+  numbers: "a Numbers file: export it as .xlsx or CSV",
+  zip: "not a spreadsheet",
+  unknown: "couldn't be read",
+};
+// A file's tables, as {rows, name (for metrics without a header), label (for messages)}: each sheet of a spreadsheet,
+// or a CSV file's one
 async function tablesOf(file) {
-  return [{ rows: csvRows(await file.text()), name: decodeLoggrName(file.name) }];
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const base = file.name.replace(/\.[a-z0-9]+$/i, "");
+  const kind = sheetKind(bytes);
+  if (kind === "xlsx" || kind === "ods") {
+    const sheets = (await readSheets(bytes)).filter((s) => s.rows.some((r) => r.some((c) => c !== "")));
+    return sheets.map((s) =>
+      sheets.length > 1
+        ? { rows: s.rows, name: s.name, label: `${file.name} › ${s.name}` }
+        : { rows: s.rows, name: base, label: file.name },
+    );
+  }
+  if (kind) throw new Error(KINDS[kind]);
+  // Text: UTF-8, or else the Windows encoding Excel uses for CSV files
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    text = new TextDecoder("windows-1252").decode(bytes);
+  }
+  return [{ rows: csvRows(text), name: decodeLoggrName(file.name), label: file.name }];
 }
 
 // Which of `list` (entries {s, v, n?}) metric `mid` doesn't have yet, as records ready to save. An entry is the same
@@ -85,8 +113,8 @@ export async function importFiles(ev) {
   for (const f of files) {
     try {
       for (const t of await tablesOf(f)) sources.push(t);
-    } catch {
-      failed.push(`${f.name}: couldn't be read`);
+    } catch (e) {
+      failed.push(`${f.name}: ${Object.values(KINDS).includes(e?.message) ? e.message : KINDS.unknown}`);
     }
   }
   openCheck(sources, failed, into);
@@ -101,13 +129,13 @@ function openCheck(sources, failed, into) {
       const r = readTable(src.rows, { name: src.name, order, locale: navigator.language });
       if (r.example) out.example ||= r.example;
       if (r.error) {
-        out.failed.push(`${src.name}: ${WHY[r.error]}`);
+        out.failed.push(`${src.label}: ${WHY[r.error]}`);
         continue;
       }
       if (!r.settled || (order && r.example)) out.unsettled = true; // once asked, the question stays
       out.order = r.order;
       out.skipped += r.skipped;
-      for (const u of r.unused) out.unused.push(`“${u}” in ${src.name}`);
+      for (const u of r.unused) out.unused.push(`“${u}” in ${src.label}`);
       for (const g of r.groups) {
         const k = g.name.toLowerCase();
         if (!out.groups.has(k)) out.groups.set(k, { name: g.name, entries: [], bad: 0 });
