@@ -741,6 +741,7 @@ main {
   position: fixed;
   inset: 0;
   z-index: 40;
+  overscroll-behavior: contain;
   background: rgba(30, 12, 4, 0.45);
   display: flex;
   align-items: flex-end;
@@ -751,8 +752,9 @@ main {
   color: var(--sheet-fg);
   width: 100%;
   max-width: 560px;
-  max-height: 88vh;
+  max-height: 88dvh; /* the visible height, so the end of a long sheet isn't under the browser's toolbar */
   overflow: auto;
+  overscroll-behavior: contain;
   border-radius: 14px 14px 0 0;
   padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }

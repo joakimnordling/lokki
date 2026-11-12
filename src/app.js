@@ -21,7 +21,7 @@ import { openMetricCSV } from "./ui/files.js";
 import { ICON } from "./ui/icons.js";
 import { importFiles } from "./ui/importer.js";
 import { render } from "./ui/render.js";
-import { openDeleteMetric, openEntrySheet, toast } from "./ui/sheets.js";
+import { lockPageUnderSheets, openDeleteMetric, openEntrySheet, toast } from "./ui/sheets.js";
 import { watchForUpdates } from "./ui/update.js";
 
 applyLook(store.get("look"));
@@ -71,6 +71,7 @@ render();
   // 2. then sync (never in the demo), and notice new versions of the app
   if (!DEMO) sync.start();
   watchForUpdates();
+  lockPageUnderSheets();
   setInterval(() => {
     if (listShown()) render();
   }, 60000);
