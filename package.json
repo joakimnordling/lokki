@@ -15,6 +15,7 @@
     "test": "node --test \"tests/unit/**/*.test.js\"",
     "test:e2e": "node scripts/build-site.js && node --test --test-concurrency=1 \"tests/e2e/**/*.test.js\"",
     "build:site": "node scripts/build-site.js",
+    "build:preview": "node scripts/build-preview.js",
     "test:sync": "node --test \"tests/sync/**/*.test.js\"",
     "screenshots": "node scripts/screenshots.js"
   },

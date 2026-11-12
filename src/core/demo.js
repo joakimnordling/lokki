@@ -28,7 +28,7 @@ export const DEMO_METRICS = [
   { id: "swimming", name: "Swimming", type: "Fitness" },
   { id: "steps", name: "Steps", type: "Health" },
   { id: "sleep", name: "Sleep", type: "Health" },
-  { id: "coffee", name: "Coffee", type: "Food & Drink" },
+  { id: "coffee", name: "Coffee", type: "Diet" },
   { id: "reading", name: "Reading", type: "Hobbies" },
   { id: "meditation", name: "Meditation", type: "Health" },
 ];

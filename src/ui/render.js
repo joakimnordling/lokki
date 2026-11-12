@@ -57,21 +57,27 @@ function listHTML() {
   });
   if (ui.filter) ms = ms.filter((m) => m.type === ui.filter);
   ms.sort((a, b) => (b.last ? b.last.t : -1) - (a.last ? a.last.t : -1) || a.name.localeCompare(b.name));
-  let h = `<button class="create" id="cCreate">Create Custom Metric</button>`;
+  // One button for it: at the top once there are metrics, in the middle of the empty screen before that
+  let h = metrics.size ? `<button class="create" id="cCreate">${ICON.add}Create New Metric</button>` : "";
   if (ui.filter)
     h += `<div class="filterbar"><span>Showing ${esc(ui.filter)}</span><button id="clrF">Show all</button></div>`;
   if (DEMO)
-    h += `<div class="note demo">Demo: a year of made-up logs, made afresh each time. Your own logs are untouched.
+    h += `<div class="note demo">Demo: a year of made-up logs. Your own logs and preferences aren't touched.
       <span class="demobtns"><button id="dAgain">Start Over</button><button id="dClose">Close Demo</button></span></div>`;
   else if (metrics.size && !sync.vault)
     h += `<div class="note">Saved on this device only. Back up from Preferences now and then, or set up sync.</div>`;
-  if (!ms.length)
-    h += `<div class="state"><b>No metrics yet</b>Create a metric, or import CSV files from Preferences.${
-      DEMO ? "" : `<button class="plain trydemo" id="cDemo">Try with Demo Data</button>`
-    }</div>`;
+  if (!metrics.size)
+    h += `<div class="state"><b>No metrics yet</b><button class="create mid" id="cCreate">${ICON.add}Create New Metric</button>
+      <p>You can also import CSV files from Preferences.</p>${
+        DEMO
+          ? ""
+          : `<b class="new">New to Lokki?</b><button class="plain trydemo" id="cDemo">Try with Demo Data</button>
+      <p>The made-up logs and preferences are kept separate from yours and reset every time you open the demo.</p>`
+      }</div>`;
+  else if (!ms.length) h += `<div class="state">No metrics with this log type.</div>`;
   for (const m of ms)
     h += `<div class="row"><button class="name" data-open="${esc(m.id)}">${esc(m.name)}<span class="ago">${m.last ? ago(m.last.t) : "No Entries"}</span></button><button class="pill" data-add="${esc(m.id)}" aria-label="Add ${esc(m.name)} entry">${m.last ? fmt(m.last.v) : "+"}</button></div>`;
-  return `${h}<div style="border-top:1px solid var(--line)"></div>`;
+  return ms.length ? `${h}<div style="border-top:1px solid var(--line)"></div>` : h;
 }
 function bindList() {
   const c = $("#cCreate");

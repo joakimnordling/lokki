@@ -33,7 +33,8 @@ describe("standalone site", () => {
   it("logs entries and keeps them across reloads", async () => {
     await P.click("#cCreate");
     await P.fill("#mName", "Running");
-    await P.click("#sDone");
+    await P.click("#mAdd");
+    await home(P);
     await P.click("[data-add]");
     await P.fill("#eVal", "2+0,5");
     await P.click("#sDone");

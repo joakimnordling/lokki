@@ -1,4 +1,4 @@
-/* The demo (?demo): made-up logs in a database of their own, made afresh every time the demo opens. Sync is off, and
+/* The demo (?demo): made-up logs in a separate database, regenerated every time the demo opens. Sync is off, and
    the real database and settings are never opened, so nothing done here can reach your own logs. */
 import { DEMO, demoData } from "../core/demo.js";
 import { PREFIX } from "../core/prefs.js";

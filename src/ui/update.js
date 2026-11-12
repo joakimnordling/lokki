@@ -44,7 +44,7 @@ export async function checkForUpdate({ asked = false } = {}) {
   return "new";
 }
 
-/** Get the new version: let the service worker fetch it, then load the page anew. */
+/** Get the new version: let the service worker fetch it, then reload the page. */
 export async function update() {
   try {
     const reg = await navigator.serviceWorker?.getRegistration();

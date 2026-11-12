@@ -24,7 +24,7 @@ in Preferences → Sync with a server's URL and a token from its operator. To ru
 
 On an iPhone, open the site in Safari and choose Share → Add to Home Screen. It works offline once opened.
 
-To look around first, open <https://lokki.jocke.fi/?demo>: a year of made-up logs, ending now, made afresh each time.
+To look around first, open <https://lokki.jocke.fi/?demo>: a year of made-up logs, ending now, reset every time you open it.
 The demo keeps its data apart from yours, never syncs, and is wiped when you close it.
 
 ## Layout
