@@ -1,6 +1,7 @@
 // Builds a preview of the app as one self-contained page, dist/preview/lokki-preview.html: the built site's script,
-// stylesheet and fonts inlined, and always the demo (?demo), so it shows made-up logs only. For trying a change out
-// as a claude.ai artifact before it's merged; it has no service worker, so it doesn't work offline or update itself.
+// stylesheet and fonts inlined. It opens in the demo (?demo); Close Demo shows the app as a new user sees it, empty.
+// For trying a change out as a claude.ai artifact before it's merged; it has no service worker, so it doesn't work
+// offline or update itself.
 //   npm run build:preview
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -31,8 +32,9 @@ const swap = (from, to) => {
 swap(`<link rel="stylesheet" href="assets/${cssName}">`, `<style>\n${css}\n</style>`);
 swap(
   `<script type="module" src="assets/${jsName}"></script>`,
-  // Always the demo: the preview's address gets ?demo before the app reads it
-  `<script>if(!new URLSearchParams(location.search).has("demo"))history.replaceState(null,"","?demo")</script>
+  // Opens in the demo: on a tab's first load the address gets ?demo before the app reads it. Close Demo then leads to
+  // the app as a new user sees it, with this preview's own (empty) storage.
+  `<script>try{if(!sessionStorage.getItem("lokki-preview")){sessionStorage.setItem("lokki-preview","1");history.replaceState(null,"","?demo")}}catch(e){}</script>
 <script type="module">\n${js}\n</script>`,
 );
 html = html.replace(/<script>if\("serviceWorker"[^<]*<\/script>\n?/, "");

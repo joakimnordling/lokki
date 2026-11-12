@@ -354,12 +354,40 @@ main {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* The type picker: icon, name and a down arrow, with the real (invisible) select on top to open the list */
+.tpick {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 1.05rem;
+}
+.tpick > svg {
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  transform: rotate(90deg);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .ticon {
   display: flex;
-  margin-left: auto;
 }
-.create-sheet .field select {
-  flex: 0 1 auto;
+.create-sheet .tpick select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.create-sheet .field:has(select:focus-visible) .tpick {
+  outline: 2px solid var(--fg);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 .sgroup h5 {
   display: flex;

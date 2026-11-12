@@ -9,7 +9,7 @@ import { addEntry, deleteMetric, editEntry, saveMetric } from "../data/records.j
 import { entriesOf, metrics, ui } from "../data/state.js";
 import { loadView } from "./detail.js";
 import { $ } from "./dom.js";
-import { TYPE_ICON, TYPES } from "./icons.js";
+import { ICON, TYPE_ICON, TYPES } from "./icons.js";
 import { render } from "./render.js";
 
 export function sheet(title, body, { done, doneLabel = "Done", cancel = "Cancel", cls = "" } = {}) {
@@ -149,7 +149,7 @@ function openCreateSheet() {
     "Create Metric",
     `<h4 class="ctitle">Add Your Own</h4>
     <div class="field"><input id="mName" placeholder="Name" autocomplete="off" aria-label="Name"></div>
-    <div class="field"><label for="mType">Type</label><span class="ticon" id="mIcon">${typeIcon("")}</span><select id="mType"><option value="">None</option>${TYPES.map((t) => `<option>${t}</option>`).join("")}</select></div>
+    <div class="field"><label for="mType">Type</label><span class="tpick"><span class="ticon" id="mIcon">${typeIcon("")}</span><span id="mTypeName">None</span>${ICON.r}<select id="mType"><option value="">None</option>${TYPES.map((t) => `<option>${t}</option>`).join("")}</select></span></div>
     <div class="err" id="mErr"></div>
     <button class="create" id="mAdd" disabled>Add</button>
     <h4 class="ctitle sugg">Suggestions</h4>
@@ -173,6 +173,7 @@ function openCreateSheet() {
   };
   type.onchange = () => {
     $("#mIcon").innerHTML = typeIcon(type.value);
+    $("#mTypeName").textContent = type.value || "None";
   };
   add.onclick = () => {
     const n = normName(name.value);
