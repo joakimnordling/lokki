@@ -57,7 +57,7 @@ describe("create metric", () => {
         return JSON.parse(localStorage.getItem(`lokki:view:${id}`));
       }, name);
     assert.deepEqual(await view("Running"), { mode: "totals", gran: "daily" });
-    assert.deepEqual(await view("Body Weight"), { mode: "all", gran: "daily" });
+    assert.deepEqual(await view("Body Weight"), { mode: "avg", gran: "daily" });
     // matched by name: renamed, the suggestion can be added again
     await P.click('[data-open]:has-text("Running")');
     await P.click("#hEdit");

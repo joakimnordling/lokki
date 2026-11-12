@@ -1,7 +1,8 @@
 /* Ready-made metrics to start from (Create Metric → Suggestions), by log type. Each starts in the chart view that
    suits it best while it has only a few entries: most things you do on some days and not others show as daily
-   totals, so two entries on two days already make two bars; things you measure (weight, blood pressure) show every
-   value, so the second one already draws a line. The view is only where a metric starts: its pills change it. */
+   totals, so two entries on two days already make two bars; things you measure about once a day (weight, sleep,
+   mood) show daily averages, one point a day however often you log; readings where each one matters on its own
+   (blood pressure, blood sugar) show every value. The view is only where a metric starts: its pills change it. */
 
 /** [type, [[name, mode, gran], ...]], in the order they're listed. */
 export const SUGGESTIONS = [
@@ -20,10 +21,10 @@ export const SUGGESTIONS = [
   [
     "Health",
     [
-      ["Body Weight", "all", "daily"],
+      ["Body Weight", "avg", "daily"],
       ["Steps", "totals", "daily"],
       ["Sleep Hours", "avg", "daily"],
-      ["Resting Heart Rate", "all", "daily"],
+      ["Resting Heart Rate", "avg", "daily"],
     ],
   ],
   [
@@ -54,7 +55,7 @@ export const SUGGESTIONS = [
   [
     "Life",
     [
-      ["Mood (1–10)", "all", "daily"],
+      ["Mood (1–10)", "avg", "daily"],
       ["Screen Time Hours", "totals", "daily"],
     ],
   ],
