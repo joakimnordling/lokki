@@ -63,9 +63,12 @@ function device(vault, ...links) {
   return d;
 }
 
-/** Sync with every server of the device; the reports of the last pass, or the first error. `reads`: as if updated. */
-async function sync(d, reads) {
-  const results = await syncAll({ device: d, keys: d.keys, links: d.links, ...(reads ? { reads } : {}) });
+/**
+ * Sync with every server of the device; the reports of the last pass, or the first error. `rowFormat`: the newest row
+ * format the device reads, as if it had been updated.
+ */
+async function sync(d, rowFormat) {
+  const results = await syncAll({ device: d, keys: d.keys, links: d.links, ...(rowFormat ? { rowFormat } : {}) });
   const failed = results.find((r) => r.error);
   if (failed) throw failed.error;
   return results.map((r) => r.report);
@@ -325,7 +328,7 @@ describe("damaged, unknown and missing data", () => {
     // Updated to read a newer format: everything is pulled again (the newer row is still beyond it here)
     const [again] = await sync(a, 2);
     assert.equal(again.pulled, 3, "metric, e1 and e2: from the start");
-    assert.equal(a.links[0].server.reads, 2);
+    assert.equal(a.links[0].server.pulledUsingRowFormat, 2);
     assert.equal(await newer.now(), newer.data);
 
     // A server that's removed or replaced takes its marks with it

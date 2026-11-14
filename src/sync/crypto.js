@@ -10,7 +10,7 @@ const random = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
 
 export const ROW_VERSION = "v1";
 /** The newest row format this code reads (v1). When a release reads a newer one, devices pull everything again. */
-export const READS = 1;
+export const READABLE_ROW_FORMAT = 1;
 const MIN_PADDED = 192;
 const PAD_STEP = 64;
 export const DEFAULT_KDF = { name: "argon2id", m: 65536, t: 3, p: 1 };

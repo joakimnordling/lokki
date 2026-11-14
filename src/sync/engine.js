@@ -12,10 +12,21 @@
      markUnreadable(key, bit)          newer app's. Kept per row name, not per record, since this device may not have
      clearUnreadable(key, bit)         the record yet. Nothing is pushed to a server over such a row (section 7.5).
      all()                           every local record
-   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion, reads}.
-   `reads` is the newest row format this device could read when it last pulled from the server (section 7.5).
+   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion,
+   pulledUsingRowFormat}.
+   `pulledUsingRowFormat` is the newest row format this device's code could read when it last pulled from the
+   server (section 7.5).
    `mark` is the mark of the push that wrote row number `cursor` (section 7.4). */
-import { APP, DamagedRowError, decryptRow, encryptRow, FormatError, READS, rowKey, verifyKeyring } from "./crypto.js";
+import {
+  APP,
+  DamagedRowError,
+  decryptRow,
+  encryptRow,
+  FormatError,
+  READABLE_ROW_FORMAT,
+  rowKey,
+  verifyKeyring,
+} from "./crypto.js";
 import { ServerError } from "./http.js";
 import { compareRecords } from "./merge.js";
 
@@ -32,9 +43,9 @@ export class OtherAppError extends Error {}
  * Returns a report: {pulled, applied, pushed, unknownFormat, held, damaged, repaired, keyring}. `held`: records
  * waiting for an update, because this server has their rows in a format this device can't read.
  * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token), DifferentVaultError and OtherAppError.
- * `reads`: the newest row format this code reads; only tests set it.
+ * `rowFormat`: the newest row format this code reads; only tests set it, to act as an updated app.
  */
-export async function syncRound({ server, device, keys, http, reads = READS }) {
+export async function syncRound({ server, device, keys, http, rowFormat = READABLE_ROW_FORMAT }) {
   const report = {
     pulled: 0,
     applied: 0,
@@ -51,8 +62,8 @@ export async function syncRound({ server, device, keys, http, reads = READS }) {
 
   // This code reads a newer row format than when it last pulled from here: pull everything again, so the rows it
   // skipped are merged now (section 7.5). A server without the field was last pulled by code reading this format.
-  if ((server.reads ?? reads) < reads) forget(server, device);
-  server.reads = reads;
+  if ((server.pulledUsingRowFormat ?? rowFormat) < rowFormat) forget(server, device);
+  server.pulledUsingRowFormat = rowFormat;
 
   let vault = await http.vault();
   if (vault.head < server.cursor) forget(server, device); // restored from an older state (section 7.4)
@@ -86,14 +97,14 @@ export async function syncRound({ server, device, keys, http, reads = READS }) {
  * to the others in the same call: after a pass that brought something new, the servers that came before it get
  * another round. Returns [{server, report}] or [{server, error}] for each server, from the last pass.
  */
-export async function syncAll({ device, keys, links, maxPasses = 3, reads = READS }) {
+export async function syncAll({ device, keys, links, maxPasses = 3, rowFormat = READABLE_ROW_FORMAT }) {
   let results = [];
   for (let pass = 0; pass < maxPasses; pass++) {
     results = [];
     let applied = 0;
     for (const { server, http } of links) {
       try {
-        const report = await syncRound({ server, device, keys, http, reads });
+        const report = await syncRound({ server, device, keys, http, rowFormat });
         applied += report.applied;
         results.push({ server, report });
       } catch (error) {
