@@ -331,7 +331,7 @@ describe("damaged, unknown and missing data", () => {
     assert.equal(a.links[0].server.pulledUsingRowFormat, 2);
     assert.equal(await newer.now(), newer.data);
 
-    // A server that's removed or replaced takes its marks with it
+    // A server that's removed or replaced takes its unreadable bits with it
     a.clearBit(0);
     assert.equal(a.unreadable(newer.key), 0);
   });
