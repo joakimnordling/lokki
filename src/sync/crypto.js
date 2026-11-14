@@ -52,7 +52,10 @@ export async function rowKey(keys, kind, id) {
   // A record's row name never changes for the same keys, so each is computed once: pushing many records, skipping
   // held ones batch after batch, and finding damaged rows' records then cost a lookup. About 80 bytes per record.
   let names = rowNameCache.get(keys);
-  if (!names) rowNameCache.set(keys, (names = new Map()));
+  if (!names) {
+    names = new Map();
+    rowNameCache.set(keys, names);
+  }
   const name = `${kind}:${id}`;
   let key = names.get(name);
   if (key === undefined) {
