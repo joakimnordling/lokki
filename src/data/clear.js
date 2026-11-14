@@ -18,6 +18,11 @@ export async function clearEverything() {
 /** servers: the standalone sync's servers, whose state is reset so the next sync downloads everything. */
 export async function clearCopy(servers = []) {
   await idb.clear(["recs", "metrics"]);
-  await idb.write(servers.map((s) => ["sync", "put", { ...s, cursor: 0, mark: null, keyringVersion: 0, last: null }]));
+  // rows a server holds in a format this device can't read are found again by the full download
+  const unreadable = (await idb.all("sync")).filter((r) => r.k.startsWith("unreadable:"));
+  await idb.write([
+    ...unreadable.map((r) => ["sync", "delete", r.k]),
+    ...servers.map((s) => ["sync", "put", { ...s, cursor: 0, mark: null, keyringVersion: 0, last: null }]),
+  ]);
   reload();
 }

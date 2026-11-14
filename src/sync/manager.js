@@ -38,6 +38,7 @@ export const sync = {
         refreshMetrics();
         rebuild();
       },
+      rows.filter((r) => r.k.startsWith("unreadable:")),
     );
   },
 
@@ -146,7 +147,9 @@ export const sync = {
     await this.removeServer(bit);
   },
   async saveServer(server) {
-    await idb.write([["sync", "put", { ...server }]]);
+    // With the device's bits: during a sync the server's cursor may already be past a row whose unreadable bit is
+    // still only in memory, and saving one without the other could lose it (protocol 7.1)
+    await this.device.persist([["sync", "put", { ...server }]]);
     this.notify();
   },
 
@@ -168,7 +171,6 @@ export const sync = {
     try {
       const links = this.servers.map((server) => ({ server, http: this.client(server.url, server.token) }));
       const results = await syncAll({ device: this.device, keys: this.vault.keys, links });
-      await this.device.persist();
       let retry = null;
       for (const { server, report, error } of results) {
         if (error?.passing && (server.tries || 0) < this.retryDelays.length) {
@@ -187,7 +189,8 @@ export const sync = {
         };
       }
       if (retry !== null) this.soon(retry);
-      await idb.write(this.servers.map((s) => ["sync", "put", { ...s }]));
+      // The records' bits and the rows this device can't read are saved with the servers' cursors, in one transaction
+      await this.device.persist(this.servers.map((s) => ["sync", "put", { ...s }]));
       hooks.render();
     } finally {
       this.running = false;
@@ -243,6 +246,7 @@ const summary = (r) => ({
   applied: r.applied,
   pushed: r.pushed,
   unknownFormat: r.unknownFormat,
+  held: r.held,
   damaged: r.damaged.length,
   repaired: r.repaired,
 });

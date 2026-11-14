@@ -31,6 +31,26 @@ describe("test vectors", () => {
   it("derives the same row keys", async () => {
     for (const r of V.row_keys) assert.equal(await rowKey(keys, r.kind, r.id), r.key);
   });
+  it("remembers row keys per set of keys, each computed once", async () => {
+    const fresh = await deriveKeys(fromHex(V.data_key)); // the same vault's keys, as after unlocking again
+    let signed = 0;
+    const counting = { ...fresh, rowNames: fresh.rowNames };
+    const sign = crypto.subtle.sign.bind(crypto.subtle);
+    crypto.subtle.sign = (...args) => {
+      signed++;
+      return sign(...args);
+    };
+    try {
+      const r = V.row_keys[0];
+      assert.equal(await rowKey(counting, r.kind, r.id), r.key);
+      assert.equal(await rowKey(counting, r.kind, r.id), r.key);
+      assert.equal(signed, 1, "the second time is a lookup");
+      const other = await deriveKeys(new Uint8Array(32).fill(7)); // another vault: its own names
+      assert.notEqual(await rowKey(other, r.kind, r.id), r.key);
+    } finally {
+      crypto.subtle.sign = sign;
+    }
+  });
   it("encrypts records into exactly the same rows", async () => {
     for (const row of V.rows) {
       assert.equal(JSON.stringify(row.record), row.plaintext);

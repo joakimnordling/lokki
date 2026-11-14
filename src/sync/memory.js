@@ -6,6 +6,7 @@ const id = (kind, recordId) => `${kind}:${recordId}`;
 export class MemoryDevice {
   constructor() {
     this.records = new Map(); // "kind:id" -> {record, bits}
+    this.unreadableRows = new Map(); // row name -> bits of servers holding it in a format this device can't read
     this.ring = null;
   }
 
@@ -40,6 +41,18 @@ export class MemoryDevice {
   }
   clearBit(bit) {
     for (const found of this.records.values()) found.bits &= ~(1 << bit);
+    for (const key of [...this.unreadableRows.keys()]) this.clearUnreadable(key, bit);
+  }
+  unreadable(key) {
+    return this.unreadableRows.get(key) ?? 0;
+  }
+  markUnreadable(key, bit) {
+    this.unreadableRows.set(key, this.unreadable(key) | (1 << bit));
+  }
+  clearUnreadable(key, bit) {
+    const left = this.unreadable(key) & ~(1 << bit);
+    if (left) this.unreadableRows.set(key, left);
+    else this.unreadableRows.delete(key);
   }
   all() {
     return [...this.records.values()].map((r) => r.record);

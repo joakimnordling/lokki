@@ -1,5 +1,7 @@
 /* The app's data as a device for the sync engine (engine.js): converts between the app's records and the protocol's,
-   and keeps each record's server bits (sb) in IndexedDB. */
+   and keeps each record's server bits (sb) in IndexedDB. Rows that servers hold in a format this device can't read (a
+   newer Lokki's) are kept by row name in the sync store, "unreadable:<key>" -> {bits}, so nothing is pushed over them
+   (protocol 7.5). */
 import { idb } from "../data/idb.js";
 import { metricAll, recs } from "../data/state.js";
 
@@ -42,11 +44,15 @@ const toMetric = (rec) =>
     : { name: rec.name, type: rec.type || "", created: rec.created || "", u: rec.u, g: rec.g || 0 };
 
 export class AppDevice {
-  /** vault: {keyring, save(keyring)}; changed(): called after pulled records were stored. */
-  constructor(vault, changed) {
+  /**
+   * vault: {keyring, save(keyring)}; changed(): called after pulled records were stored; unreadable: the sync store's
+   * "unreadable:<key>" rows.
+   */
+  constructor(vault, changed, unreadable = []) {
     this.vault = vault;
     this.changed = changed;
-    this.dirty = new Set(); // "e:id" / "m:id" whose bits changed and must be saved
+    this.dirty = new Set(); // "e:id" / "m:id" / "u:key" whose bits changed and must be saved
+    this.unreadableRows = new Map(unreadable.map((r) => [r.k.slice("unreadable:".length), r.bits]));
   }
 
   keyring() {
@@ -131,16 +137,48 @@ export class AppDevice {
   clearBit(bit) {
     for (const id of metricAll.keys()) this.#bits("metric", id, (b) => b & ~(1 << bit));
     for (const r of recs.values()) this.#bits("entry", r.id, (b) => b & ~(1 << bit));
+    for (const key of [...this.unreadableRows.keys()]) this.clearUnreadable(key, bit);
+  }
+  unreadable(key) {
+    return this.unreadableRows.get(key) ?? 0;
+  }
+  markUnreadable(key, bit) {
+    const bits = this.unreadable(key) | (1 << bit);
+    if (bits === this.unreadable(key)) return;
+    this.unreadableRows.set(key, bits);
+    this.dirty.add(`u:${key}`);
+  }
+  clearUnreadable(key, bit) {
+    const before = this.unreadable(key);
+    if (!(before & (1 << bit))) return;
+    const left = before & ~(1 << bit);
+    if (left) this.unreadableRows.set(key, left);
+    else this.unreadableRows.delete(key);
+    this.dirty.add(`u:${key}`);
+  }
+  /** How many rows some server holds in a format this device can't read. */
+  get unreadableCount() {
+    return this.unreadableRows.size;
   }
   all() {
     return [...[...metricAll].map(([id, m]) => metricRecord(id, m)), ...[...recs.values()].map(entryRecord)];
   }
   /** Save the bits changed since the last call. */
-  async persist() {
+  async persist(also = []) {
+    await idb.write([...this.ops(), ...also]);
+  }
+  /**
+   * The writes that save the bits changed since the last call, to make in one transaction with the servers' state:
+   * a row's unreadable bit must never be lost while the server's cursor is saved past it.
+   */
+  ops() {
     const ops = [];
     for (const k of this.dirty) {
       const id = k.slice(2);
-      if (k[0] === "e") {
+      if (k[0] === "u") {
+        const bits = this.unreadableRows.get(id);
+        ops.push(bits ? ["sync", "put", { k: `unreadable:${id}`, bits }] : ["sync", "delete", `unreadable:${id}`]);
+      } else if (k[0] === "e") {
         const r = recs.get(id);
         if (r) ops.push(["recs", "put", r]);
       } else {
@@ -149,6 +187,6 @@ export class AppDevice {
       }
     }
     this.dirty.clear();
-    await idb.write(ops);
+    return ops;
   }
 }

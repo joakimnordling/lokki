@@ -7,11 +7,26 @@
      markHas(kind, id, bit)          the server has the current version
      markLacks(kind, id, bit)        it doesn't: push it there
      pending(bit)                    local records the server lacks (never live entries of deleted metrics)
-     clearBit(bit)                   forget what this server has (a different or restored server)
+     clearBit(bit)                   forget what this server has (a different or restored server), and its unreadable bits
+     unreadable(key)                 bits of the servers holding row `key` in a format this device can't read: a
+     markUnreadable(key, bit)          newer app's. Kept per row name, not per record, since this device may not have
+     clearUnreadable(key, bit)         the record yet. Nothing is pushed to a server over such a row (section 7.5).
      all()                           every local record
-   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion}.
+   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion,
+   pulledUsingRowFormat}.
+   `pulledUsingRowFormat` is the newest row format this device's code could decrypt and parse when it last pulled
+   from the server (section 7.5).
    `mark` is the mark of the push that wrote row number `cursor` (section 7.4). */
-import { APP, DamagedRowError, decryptRow, encryptRow, FormatError, rowKey, verifyKeyring } from "./crypto.js";
+import {
+  APP,
+  DamagedRowError,
+  decryptRow,
+  encryptRow,
+  FormatError,
+  READABLE_ROW_FORMAT,
+  rowKey,
+  verifyKeyring,
+} from "./crypto.js";
 import { ServerError } from "./http.js";
 import { compareRecords } from "./merge.js";
 
@@ -25,14 +40,31 @@ export class OtherAppError extends Error {}
 
 /**
  * Pull everything new from a server, merge it, and push what it lacks.
- * Returns a report: {pulled, applied, pushed, unknownFormat, damaged, repaired, keyring}.
+ * Returns a report: {pulled, applied, pushed, unknownFormat, held, damaged, repaired, keyring}. `held`: records
+ * waiting for an update, because this server has their rows in a format this device can't read.
  * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token), DifferentVaultError and OtherAppError.
+ * `rowFormat`: the newest row format this code can decrypt and parse; only tests set it, to act as an updated app.
  */
-export async function syncRound({ server, device, keys, http }) {
-  const report = { pulled: 0, applied: 0, pushed: 0, unknownFormat: 0, damaged: [], repaired: 0, keyring: "same" };
+export async function syncRound({ server, device, keys, http, rowFormat = READABLE_ROW_FORMAT }) {
+  const report = {
+    pulled: 0,
+    applied: 0,
+    pushed: 0,
+    unknownFormat: 0,
+    held: 0,
+    damaged: [],
+    repaired: 0,
+    keyring: "same",
+  };
   const info = await http.info();
   if (server.id && server.id !== info.id) forget(server, device); // a different server at this URL
   server.id = info.id;
+
+  // This code can decrypt and parse a newer row format than when it last pulled from here: pull everything again, so
+  // the rows it skipped are merged now (section 7.5). A server without the field was last pulled by code that could
+  // decrypt and parse this format.
+  if ((server.pulledUsingRowFormat ?? rowFormat) < rowFormat) forget(server, device);
+  server.pulledUsingRowFormat = rowFormat;
 
   let vault = await http.vault();
   if (vault.head < server.cursor) forget(server, device); // restored from an older state (section 7.4)
@@ -43,7 +75,9 @@ export async function syncRound({ server, device, keys, http }) {
   for (let conflicts = 0; ; ) {
     const pending = device.pending(server.bit);
     if (!pending.length) break;
-    const batch = await encryptBatch(keys, pending, info.limits);
+    const batch = await encryptBatch({ keys, pending, limits: info.limits, device, bit: server.bit });
+    report.held = batch.held;
+    if (!batch.rows.length) break; // all that's left waits for an update that reads this server's newer rows
     try {
       ({ head, mark } = await http.push(head, mark, batch.rows));
     } catch (e) {
@@ -64,14 +98,14 @@ export async function syncRound({ server, device, keys, http }) {
  * to the others in the same call: after a pass that brought something new, the servers that came before it get
  * another round. Returns [{server, report}] or [{server, error}] for each server, from the last pass.
  */
-export async function syncAll({ device, keys, links, maxPasses = 3 }) {
+export async function syncAll({ device, keys, links, maxPasses = 3, rowFormat = READABLE_ROW_FORMAT }) {
   let results = [];
   for (let pass = 0; pass < maxPasses; pass++) {
     results = [];
     let applied = 0;
     for (const { server, http } of links) {
       try {
-        const report = await syncRound({ server, device, keys, http });
+        const report = await syncRound({ server, device, keys, http, rowFormat });
         applied += report.applied;
         results.push({ server, report });
       } catch (error) {
@@ -149,11 +183,17 @@ async function pullAll({ server, device, keys, http, report }) {
       try {
         record = await decryptRow(keys, row.key, row.data);
       } catch (e) {
-        if (e instanceof FormatError) report.unknownFormat++;
-        else if (e instanceof DamagedRowError) report.damaged.push(row.key);
-        else throw e;
+        if (e instanceof FormatError) {
+          // A newer app's version: never push over it from here (section 7.5)
+          report.unknownFormat++;
+          device.markUnreadable(row.key, server.bit);
+        } else if (e instanceof DamagedRowError) {
+          report.damaged.push(row.key);
+          device.clearUnreadable(row.key, server.bit); // not a newer version: repairing it is fine
+        } else throw e;
         continue;
       }
+      device.clearUnreadable(row.key, server.bit); // this server's row is one this device reads now
       const local = device.get(record.kind, record.id);
       const order = local ? compareRecords(record, local) : 1;
       if (order > 0) winners.push(record);
@@ -188,16 +228,30 @@ async function repair({ server, device, keys, report }) {
   }
 }
 
-async function encryptBatch(keys, pending, limits) {
+// The next batch for a server: up to `limits.push` rows, leaving out records whose row there is one this device
+// can't read (`held`, counted) and records too large for the server (they stay pending, and are reported once
+// nothing else is left). Held records are skipped before the batch is cut, so they never take the place of others.
+async function encryptBatch({ keys, pending, limits, device, bit }) {
   const rows = [];
   const records = [];
-  for (const record of pending.slice(0, limits.push)) {
+  let held = 0,
+    large = 0;
+  for (const record of pending) {
+    if (rows.length >= limits.push) break;
+    // checked by name before encrypting: held records stay pending, so every batch passes them again
+    if (device.unreadable(await rowKey(keys, record.kind, record.id)) & (1 << bit)) {
+      held++;
+      continue;
+    }
     const row = await encryptRow(keys, record);
-    if (row.data.length > limits.row_bytes) continue; // too large for this server: stays pending, reported by the caller
+    if (row.data.length > limits.row_bytes) {
+      large++;
+      continue;
+    }
     rows.push(row);
     records.push(record);
   }
-  if (!rows.length)
+  if (!rows.length && large)
     throw new ServerError(413, { error: "too_large", message: "A record is too large for this server." });
-  return { rows, records };
+  return { rows, records, held };
 }

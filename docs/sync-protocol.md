@@ -451,14 +451,15 @@ deleted.
 
 Per server:
 
-| Field             | Meaning                                        |
-| ----------------- | ---------------------------------------------- |
-| `url`, `token`    | Where and how to sign in                       |
-| `id`              | The server's ID from `/v1/info`                |
-| `bit`             | This server's bit number on this device (0–31) |
-| `cursor`          | Pulled up to this `seq`                        |
-| `mark`            | The mark that came with `cursor` (7.4)         |
-| `keyring_version` | Last keyring version seen                      |
+| Field                     | Meaning                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `url`, `token`            | Where and how to sign in                                                                                   |
+| `id`                      | The server's ID from `/v1/info`                                                                            |
+| `bit`                     | This server's bit number on this device (0–31)                                                             |
+| `cursor`                  | Pulled up to this `seq`                                                                                    |
+| `mark`                    | The mark that came with `cursor` (7.4)                                                                     |
+| `keyring_version`         | Last keyring version seen                                                                                  |
+| `pulled_using_row_format` | The newest row format this device's code could decrypt and parse when it last pulled from the server (7.5) |
 
 Per record: a number whose bits say which servers have the record's current version. Bit `b` is set when server
 `b` is known to have exactly this version.
@@ -473,6 +474,11 @@ Per record: a number whose bits say which servers have the record's current vers
 | Server `b` is removed, or turns out to be a different server | bit `b` cleared everywhere                                 |
 
 This costs a few bytes per record however many servers there are.
+
+Per row name: rows that some server holds in a format this device can't read (7.5), each with a number whose bit `b`
+is set for server `b`. They're kept by row name rather than per record, since the device may not have the record at
+all, and saved together with the servers' `cursor`, so a bit is never lost while the cursor has moved past its row.
+Usually there are none; while a newer app's rows are about, one per such row, however many servers hold it.
 
 ### 7.2 A sync round
 
@@ -529,8 +535,15 @@ would keep a new device from finishing, which `history` should be large enough t
 
 ### 7.5 Rows a device can't read
 
-- **Unknown format** (a `data` prefix other than `v1.`): written by a newer app. The device leaves the row alone,
-  never overwrites it, and asks you to update Lokki.
+- **Unknown format** (a `data` prefix other than `v1.`): written by a newer app. The device asks you to update Lokki,
+  and never overwrites the row:
+  - The device notes the row's name with that server's bit, whether or not it has the record, since it may get it
+    later: from another server, or by making it with the same ID. It never pushes a record to a server holding its
+    row in such a format, even after changing it here, and still pushes it to the others. The bit goes again when
+    that server sends a row with that name that the device reads or finds damaged, and when the server is removed or
+    turns out to be a different or restored server.
+  - When an update lets the device decrypt and parse a newer format than `pulled_using_row_format` says, it pulls
+    everything from each server again (from `cursor` 0, as in 7.4), so the rows it skipped are merged now.
 - **Damaged** (a known prefix that fails to decrypt, or a record whose `kind` and `id` don't give the row's `key`):
   - If the key belongs to a local record, the device pushes its own version, repairing the server.
   - Otherwise the device can't repair it and leaves it.
@@ -603,7 +616,8 @@ metrics and which are entries. The keyring isn't encrypted, so a server also see
 
 - The API version is in the path (`/v1/`); `GET /v1/info` lists the versions a server supports.
 - The encryption scheme is in each row's `data` prefix (`v1.`), bound into its additional data, and in the keyring's
-  `version`.
+  `version`. Devices never overwrite a row in a format they don't read, and pull everything again once an update
+  lets them read it (7.5).
 - Unknown fields in records and keyrings are ignored and kept, so newer clients can add fields.
 
 ## 14. Later

@@ -63,9 +63,12 @@ function device(vault, ...links) {
   return d;
 }
 
-/** Sync with every server of the device; the reports of the last pass, or the first error. */
-async function sync(d) {
-  const results = await syncAll({ device: d, keys: d.keys, links: d.links });
+/**
+ * Sync with every server of the device; the reports of the last pass, or the first error. `rowFormat`: the newest row
+ * format the device reads, as if it had been updated.
+ */
+async function sync(d, rowFormat) {
+  const results = await syncAll({ device: d, keys: d.keys, links: d.links, ...(rowFormat ? { rowFormat } : {}) });
   const failed = results.find((r) => r.error);
   if (failed) throw failed.error;
   return results.map((r) => r.report);
@@ -107,6 +110,7 @@ describe("two devices, one server", () => {
       applied: 0,
       pushed: 0,
       unknownFormat: 0,
+      held: 0,
       damaged: [],
       repaired: 0,
       keyring: "same",
@@ -285,6 +289,120 @@ describe("damaged, unknown and missing data", () => {
     const b = device(vault, [servers[0], write]);
     const [fresh] = await sync(b);
     assert.deepEqual([fresh.damaged, fresh.unknownFormat], [[], 1]);
+    assert.equal(value(b, "e1"), 1);
+  });
+
+  // A newer Lokki's row for a record: written straight to a server, in a row format this code doesn't read
+  async function newerRow(vault, srv, token, kind, id) {
+    const http = new ServerClient(srv.url, token);
+    const row = { key: await rowKey(vault.keys, kind, id), data: `v2.from-a-newer-lokki-${id}` };
+    const { head, mark } = await http.pull(0);
+    await http.push(head, mark, [row]);
+    return { ...row, now: async () => (await http.pull(0)).rows.find((r) => r.key === row.key)?.data };
+  }
+
+  it("never pushes over a newer app's version, and pulls everything again once it can read more", async () => {
+    const vault = await newVault();
+    const [s0, s1] = [await servers[0].vault(), await servers[1].vault()];
+    const a = device(vault, [servers[0], s0.write], [servers[1], s1.write]);
+    a.put(metric("running"));
+    a.put(entry("e1", 1));
+    a.put(entry("e2", 2));
+    await sync(a);
+    const newer = await newerRow(vault, servers[0], s0.write, "entry", "e1");
+
+    // This device edits e1 and e2: e2 goes everywhere, e1 only where there's no newer version
+    a.put(entry("e1", 10));
+    a.put(entry("e2", 20));
+    const [r0] = await sync(a);
+    assert.deepEqual([r0.unknownFormat, r0.held], [1, 1]);
+    assert.equal(await newer.now(), newer.data, "the newer version is still there");
+    assert.equal(a.unreadable(newer.key), 1);
+    const elsewhere = device(vault, [servers[1], s1.write]);
+    await sync(elsewhere);
+    assert.deepEqual([value(elsewhere, "e1"), value(elsewhere, "e2")], [10, 20], "the other server got both");
+    const onFirst = device(vault, [servers[0], s0.write]);
+    await sync(onFirst);
+    assert.equal(value(onFirst, "e2"), 20);
+
+    // Updated to read a newer format: everything is pulled again (the newer row is still beyond it here)
+    const [again] = await sync(a, 2);
+    assert.equal(again.pulled, 3, "metric, e1 and e2: from the start");
+    assert.equal(a.links[0].server.pulledUsingRowFormat, 2);
+    assert.equal(await newer.now(), newer.data);
+
+    // A server that's removed or replaced takes its unreadable bits with it
+    a.clearBit(0);
+    assert.equal(a.unreadable(newer.key), 0);
+  });
+
+  it("doesn't push a record over a newer row even when it gets the record only later", async () => {
+    const vault = await newVault();
+    const [s0, s1] = [await servers[0].vault(), await servers[1].vault()];
+    const a = device(vault, [servers[0], s0.write], [servers[1], s1.write]);
+    a.put(metric("running"));
+    a.put(entry("e1", 1));
+    await sync(a);
+    const newer = await newerRow(vault, servers[0], s0.write, "entry", "e1");
+    // A new device pulls the newer row first, then the older version from the other server
+    const fresh = device(vault, [servers[0], s0.write], [servers[1], s1.write]);
+    await sync(fresh);
+    assert.equal(value(fresh, "e1"), 1);
+    assert.equal(await newer.now(), newer.data);
+    // A device that makes a record with the same ID (an import's IDs come from the content)
+    const imported = await newerRow(vault, servers[0], s0.write, "entry", "imported");
+    const b = device(vault, [servers[0], s0.write]);
+    await sync(b);
+    b.put(entry("imported", 7));
+    const [rb] = await sync(b);
+    assert.equal(rb.held, 1);
+    assert.equal(await imported.now(), imported.data);
+  });
+
+  it("held records never take the place of others in a batch", async () => {
+    const vault = await newVault();
+    const { write } = await servers[0].vault();
+    const a = device(vault, [servers[0], write]);
+    a.put(metric("running"));
+    await sync(a);
+    const rows = [];
+    for (const id of ["e1", "e2", "e3"]) rows.push(await newerRow(vault, servers[0], write, "entry", id));
+    await sync(a); // learns of the three newer rows
+    // Two per push: the three held records come first and must not fill the batches
+    const http = a.links[0].http;
+    const info = http.info.bind(http);
+    http.info = async () => {
+      const i = await info();
+      return { ...i, limits: { ...i.limits, push: 2 } };
+    };
+    for (const id of ["e1", "e2", "e3", "e4", "e5"]) a.put(entry(id, 1));
+    const [r] = await sync(a);
+    assert.deepEqual([r.pushed, r.held], [2, 3]);
+    for (const row of rows) assert.equal(await row.now(), row.data);
+    const b = device(vault, [servers[0], write]);
+    await sync(b);
+    assert.deepEqual([value(b, "e4"), value(b, "e5")], [1, 1]);
+  });
+
+  it("a damaged row where a newer one was can be repaired again", async () => {
+    const vault = await newVault();
+    const { write } = await servers[0].vault();
+    const a = device(vault, [servers[0], write]);
+    a.put(metric("running"));
+    a.put(entry("e1", 1));
+    await sync(a);
+    const newer = await newerRow(vault, servers[0], write, "entry", "e1");
+    await sync(a);
+    assert.equal(a.unreadable(newer.key), 1);
+    // The row is then damaged (a valid row of another record under its name)
+    const http = new ServerClient(servers[0].url, write);
+    const { head, mark } = await http.pull(0);
+    await http.push(head, mark, [{ key: newer.key, data: (await encryptRow(vault.keys, entry("e9", 9))).data }]);
+    const [r] = await sync(a);
+    assert.equal(r.repaired, 1);
+    assert.equal(a.unreadable(newer.key), 0);
+    const b = device(vault, [servers[0], write]);
+    await sync(b);
     assert.equal(value(b, "e1"), 1);
   });
 
