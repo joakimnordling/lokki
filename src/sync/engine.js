@@ -7,7 +7,7 @@
      markHas(kind, id, bit)          the server has the current version
      markLacks(kind, id, bit)        it doesn't: push it there
      pending(bit)                    local records the server lacks (never live entries of deleted metrics)
-     clearBit(bit)                   forget what this server has (a different or restored server), and its marks below
+     clearBit(bit)                   forget what this server has (a different or restored server), and its unreadable bits
      unreadable(key)                 bits of the servers holding row `key` in a format this device can't read: a
      markUnreadable(key, bit)          newer app's. Kept per row name, not per record, since this device may not have
      clearUnreadable(key, bit)         the record yet. Nothing is pushed to a server over such a row (section 7.5).

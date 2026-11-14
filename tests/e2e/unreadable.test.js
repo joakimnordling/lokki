@@ -43,5 +43,18 @@ describe("rows from a newer Lokki", () => {
     assert.deepEqual(await stored(), [["unreadable:rowA", 1]]);
   });
 
+  it("are saved when a server is renamed mid-sync, since its cursor is saved then too", async () => {
+    await P.evaluate(async () => {
+      const s = window.__lokki.sync;
+      s.servers.push({ k: "server:3", bit: 3, url: "https://sync.example.com", token: "t", cursor: 9, name: "Old" });
+      s.device.markUnreadable("rowD", 3); // only in memory, as during a sync
+      await s.updateServer(3, { name: "New" });
+    });
+    assert.deepEqual(
+      (await stored()).filter(([k]) => k === "unreadable:rowD"),
+      [["unreadable:rowD", 8]],
+    );
+  });
+
   it("logged no errors", () => assert.deepEqual(h.errors, []));
 });

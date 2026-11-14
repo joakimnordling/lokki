@@ -147,7 +147,9 @@ export const sync = {
     await this.removeServer(bit);
   },
   async saveServer(server) {
-    await idb.write([["sync", "put", { ...server }]]);
+    // With the device's bits: during a sync the server's cursor may already be past a row whose unreadable bit is
+    // still only in memory, and saving one without the other could lose it (protocol 7.1)
+    await this.device.persist([["sync", "put", { ...server }]]);
     this.notify();
   },
 

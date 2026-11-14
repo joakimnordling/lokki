@@ -477,7 +477,7 @@ This costs a few bytes per record however many servers there are.
 
 Per row name: rows that some server holds in a format this device can't read (7.5), each with a number whose bit `b`
 is set for server `b`. They're kept by row name rather than per record, since the device may not have the record at
-all, and saved together with the servers' `cursor`, so a mark is never lost while the cursor has moved past its row.
+all, and saved together with the servers' `cursor`, so a bit is never lost while the cursor has moved past its row.
 Usually there are none; while a newer app's rows are about, one per such row, however many servers hold it.
 
 ### 7.2 A sync round
