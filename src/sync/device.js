@@ -73,11 +73,11 @@ export class AppDevice {
     const ops = [];
     for (const rec of records) {
       if (rec.kind === "entry") {
-        const r = { ...toEntry(rec, recs.get(rec.id)), sb: 1 << bit };
+        const r = { ...toEntry(rec, recs.get(rec.id)), sb: bit == null ? 0 : 1 << bit };
         recs.set(r.id, r);
         ops.push(["recs", "put", r]);
       } else {
-        const m = { ...toMetric(rec), sb: 1 << bit };
+        const m = { ...toMetric(rec), sb: bit == null ? 0 : 1 << bit };
         metricAll.set(rec.id, m);
         ops.push(["metrics", "put", { id: rec.id, ...m }]);
       }

@@ -4,7 +4,7 @@
    passphrase nor the data key is ever stored.
 
    createSyncManager({app, store, makeDevice, words, onSynced}):
-     app            the app's settings for the engine: {name, kinds, compare} (engine.js)
+     app            the app's settings for the engine: {name, kinds, merge} (engine.js)
      store          the app's key-value store for the above: all() -> rows, write(ops) with ["put", row] / ["delete", k]
      makeDevice     (vault, unreadable) -> the device (engine.js); vault: {keyring, save(keyring)}, unreadable: the
                     store's "unreadable:<key>" rows. The device also has persist(ops): save its changes and `ops` (in

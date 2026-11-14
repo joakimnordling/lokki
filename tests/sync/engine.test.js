@@ -64,7 +64,7 @@ const held = (r, get) => r.kind === "entry" && !r.d && get("metric", r.metric)?.
 
 /** A device of a vault, with its own state per server. */
 function device(vault, ...links) {
-  const d = new MemoryDevice({ compare: LOKKI.compare, held });
+  const d = new MemoryDevice({ merge: LOKKI.merge, held });
   d.setKeyring(vault.keyring);
   d.keys = vault.keys;
   d.links = links.map(([srv, token], bit) => ({
@@ -284,43 +284,61 @@ describe("the keyring", () => {
     assert.equal((await http.vault()).head, 0, "nothing pushed");
   });
 
-  it("syncs another app's own kinds of records, under its own keys and names", async () => {
-    const OTHER = { name: "other-app", kinds: ["note"], compare: (a, b) => a.u - b.u };
+  it("syncs another app's own kinds of records, under its own keys and names, merged field by field", async () => {
+    // Notes whose text and colour each carry their own time: a merge takes the newer of each, so two devices'
+    // edits of different fields both survive, in a version neither of them had
+    const field = (r, l, name, at) => (r[at] > l[at] || (r[at] === l[at] && r[name] > l[name]) ? r : l);
+    const merge = (r, l) => {
+      const text = field(r, l, "text", "tu");
+      const colour = field(r, l, "colour", "cu");
+      if (text === colour) return text;
+      return { kind: "note", id: r.id, text: text.text, tu: text.tu, colour: colour.colour, cu: colour.cu };
+    };
+    const OTHER = { name: "other-app", kinds: ["note"], merge };
     const { keyring, dataKey } = await newKeyring(PASS, { app: OTHER.name, now: now(), kdf: SMALL });
     assert.equal(keyring.app, "other-app");
     const keys = await deriveKeys(dataKey, OTHER.name);
-    const { write } = await servers[0].vault();
-    const make = () => {
-      const d = new MemoryDevice({ compare: OTHER.compare });
+    const [one, two] = await Promise.all([servers[0].vault(), servers[1].vault()]);
+    const link = (srv, token, bit) => ({
+      server: { url: srv.url, token, bit, cursor: 0 },
+      http: new ServerClient(srv.url, token),
+    });
+    const make = (...links) => {
+      const d = new MemoryDevice({ merge });
       d.setKeyring(keyring);
+      d.links = links;
       return d;
     };
-    const links = () => [
-      {
-        server: { url: servers[0].url, token: write, bit: 0, cursor: 0 },
-        http: new ServerClient(servers[0].url, write),
-      },
-    ];
-    const a = make();
-    a.put({ kind: "note", id: "n1", text: "hello", u: now() });
-    const [ra] = await syncAll({ app: OTHER, device: a, keys, links: links() });
-    assert.equal(ra.error, undefined);
+    const run = async (d, k = keys) => {
+      const results = await syncAll({ app: OTHER, device: d, keys: k, links: d.links });
+      for (const r of results) assert.equal(r.error, undefined);
+      return results.map((r) => r.report);
+    };
+    const a = make(link(servers[0], one.write, 0));
+    a.put({ kind: "note", id: "n1", text: "hello", tu: now(), colour: "blue", cu: now() });
+    await run(a);
 
-    const b = make();
-    const [rb] = await syncAll({
-      app: OTHER,
-      device: b,
-      keys: await deriveKeys(await unlock(keyring, PASS, OTHER.name), OTHER.name),
-      links: links(),
-    });
-    assert.equal(rb.error, undefined);
+    // b unlocks with the passphrase, as a new device would, and also syncs with a second server
+    const b = make(link(servers[0], one.write, 0), link(servers[1], two.write, 1));
+    await run(b, await deriveKeys(await unlock(keyring, PASS, OTHER.name), OTHER.name));
     assert.equal(b.get("note", "n1")?.text, "hello");
+
+    a.put({ ...a.get("note", "n1"), text: "hello there", tu: now() });
+    b.put({ ...b.get("note", "n1"), colour: "green", cu: now() });
+    await run(a);
+    await run(b); // merges a's text with its own colour, and sends the result to both servers
+    await run(a);
+    const c = make(link(servers[1], two.write, 0)); // only on the second server
+    await run(c);
+    for (const d of [a, b, c])
+      assert.deepEqual([d.get("note", "n1").text, d.get("note", "n1").colour], ["hello there", "green"]);
+    assert.equal((await run(a))[0].applied, 0, "settled: nothing more to merge");
 
     // Lokki's labels give other keys: the same data key doesn't open the other app's keyring or rows
     await assert.rejects(unlock(keyring, PASS, "lokki"));
     const lokkiKeys = await deriveKeys(dataKey, "lokki");
     assert.notEqual(await rowKey(lokkiKeys, "note", "n1"), await rowKey(keys, "note", "n1"));
-    const lokki = device({ keyring, keys: lokkiKeys }, [servers[0], write]);
+    const lokki = device({ keyring, keys: lokkiKeys }, [servers[0], one.write]);
     await assert.rejects(sync(lokki), OtherAppError);
   });
 });

@@ -21,7 +21,7 @@ Argon2id.
 const APP = {
   name: "other-app", // in every key label and bound text, the keyring's `app` and pairing codes
   kinds: ["note"], // the kinds of records it syncs; a row with any other kind counts as damaged
-  compare: (a, b) => a.u - b.u, // which version of a record wins: positive a, negative b, 0 the same
+  merge: (remote, local) => (remote.u >= local.u ? remote : local), // the version to keep
 };
 ```
 
@@ -30,8 +30,12 @@ its own keys and row names, a device refuses a server whose keyring is for anoth
 pairing codes that start with its own name (`other-app:sync?url=…&token=…`, from `token add … --qr --app other-app`).
 Lokki's settings are in `src/sync/app.js`.
 
-`compare` must give the same answer on every device whatever order versions arrive in. Records are JSON objects with
-`kind` and `id`; everything else in them is the app's.
+`merge(remote, local)` gets a server's version of a record and this device's, and returns the record to keep. It can
+return one of the two, keeping a record whole (Lokki keeps the winner, `src/sync/merge.js`), or a new record with
+something from each, merging field by field. The engine tells these apart by value: the server's version is stored
+as that server's, this device's is pushed there, and a new record is stored as a change made here, which every server
+then gets. `merge` must give the same record on every device whatever order versions arrive in, and merging a record
+with itself must give it back. Records are JSON objects with `kind` and `id`; everything else in them is the app's.
 
 ## Using it
 
@@ -45,7 +49,7 @@ import { ServerClient } from "lokki-sync/http.js";
 import { MemoryDevice } from "lokki-sync/memory.js";
 
 const { keyring, dataKey } = await newKeyring(passphrase, { app: APP.name, now: Date.now() });
-const device = new MemoryDevice({ compare: APP.compare });
+const device = new MemoryDevice({ merge: APP.merge });
 device.setKeyring(keyring);
 const links = [{ server: { url, token, bit: 0, cursor: 0 }, http: new ServerClient(url, token) }];
 const results = await syncAll({ app: APP, device, keys: await deriveKeys(dataKey, APP.name), links });

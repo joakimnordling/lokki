@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { compareEntries, compareMetrics } from "../../src/sync/merge.js";
+import { compareEntries, compareMetrics, mergeRecords } from "../../src/sync/merge.js";
 
 const entry = (u, extra = {}) => ({
   kind: "entry",
@@ -61,5 +61,15 @@ describe("metrics", () => {
     ];
     const sorted = (list) => [...list].sort(compareMetrics).map((m) => JSON.stringify(m));
     assert.deepEqual(sorted(versions), sorted([...versions].reverse()));
+  });
+});
+
+describe("merging", () => {
+  it("keeps the winning version whole, and the server's when they're the same", () => {
+    const [older, newer] = [entry(1), entry(2)];
+    assert.equal(mergeRecords(newer, older), newer);
+    assert.equal(mergeRecords(older, newer), newer);
+    const [server, mine] = [metric(5, 5), metric(5, 5)];
+    assert.equal(mergeRecords(server, mine), server);
   });
 });

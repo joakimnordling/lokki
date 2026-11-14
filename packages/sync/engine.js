@@ -3,7 +3,8 @@
    The device is an adapter (see memory.js for the reference one):
      keyring() / setKeyring(k)       the vault keyring this device holds
      get(kind, id)                   the local record, in the protocol's shape, or null
-     apply(records, bit)             store pulled records that won; only `bit` set on them
+     apply(records, bit)             store records that won or were merged; only `bit` set on them, or no bits at all
+                                     for `bit` null (merged here: a change every server lacks)
      markHas(kind, id, bit)          the server has the current version
      markLacks(kind, id, bit)        it doesn't: push it there
      pending(bit)                    local records the server lacks, less any the app keeps back (Lokki: live entries
@@ -19,11 +20,15 @@
    from the server (section 7.5).
    `mark` is the mark of the push that wrote row number `cursor` (section 7.4).
 
-   `app` is the app's settings: {name, kinds, compare}. `name` is in every label and bound text
-   (crypto.js) and must match the keyring's `app`; a row holding a kind not in `kinds` counts as damaged; and
-   `compare(a, b)` says which of two versions of a record wins: positive a, negative b, 0 the same. It must give the
-   same answer on every device, whatever order versions arrive in. */
+   `app` is the app's settings: {name, kinds, merge}. `name` is in every label and bound text (crypto.js) and must
+   match the keyring's `app`; a row holding a kind not in `kinds` counts as damaged; and `merge(remote, local)` is the
+   record to keep when a server's version meets this device's: one of the two (whole-record rules, like Lokki's), or
+   a new record that takes something from each (field by field). The engine tells them apart by value: the server's
+   version is stored as the server's, this device's is pushed there, and a new one is stored as a change made here, for
+   every server. Merging must give the same record on every device whatever order versions arrive in, and merging a
+   record with itself must give it back. */
 import {
+  canonicalJson,
   DamagedRowError,
   decryptRow,
   encryptRow,
@@ -182,6 +187,7 @@ async function pullAll({ app, server, device, keys, http, report }) {
       continue;
     }
     const winners = [];
+    const merged = [];
     for (const row of page.rows) {
       report.pulled++;
       let record;
@@ -200,15 +206,16 @@ async function pullAll({ app, server, device, keys, http, report }) {
       }
       device.clearUnreadable(row.key, server.bit); // this server's row is one this device reads now
       const local = device.get(record.kind, record.id);
-      const order = local ? app.compare(record, local) : 1;
-      if (order > 0) winners.push(record);
-      else if (order === 0) device.markHas(record.kind, record.id, server.bit);
-      else device.markLacks(record.kind, record.id, server.bit);
+      const result = local ? app.merge(record, local) : record;
+      const isServers = same(result, record);
+      if (isServers && local && same(result, local)) device.markHas(record.kind, record.id, server.bit);
+      else if (isServers) winners.push(record);
+      else if (same(result, local)) device.markLacks(record.kind, record.id, server.bit);
+      else merged.push(result); // neither version: a change made here, for every server
     }
-    if (winners.length) {
-      await device.apply(winners, server.bit);
-      report.applied += winners.length;
-    }
+    if (winners.length) await device.apply(winners, server.bit);
+    if (merged.length) await device.apply(merged, null);
+    report.applied += winners.length + merged.length;
     [since, mark] = [page.cursor, page.mark ?? null];
     // Kept only with a mark: a cursor the server can't vouch for later would mean starting over
     if (page.mark || !page.cursor) {
@@ -218,6 +225,9 @@ async function pullAll({ app, server, device, keys, http, report }) {
     if (!page.more) return { head: page.head, mark: page.mark ?? null };
   }
 }
+
+// The same version of a record: the same object, or the same fields and values
+const same = (a, b) => a === b || (a != null && b != null && canonicalJson(a) === canonicalJson(b));
 
 // Damaged rows whose key belongs to a local record get this device's copy pushed over them (section 7.5).
 async function repair({ server, device, keys, report }) {

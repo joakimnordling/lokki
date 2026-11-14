@@ -27,3 +27,6 @@ export function compareMetrics(a, b) {
 }
 
 export const compareRecords = (a, b) => (a.kind === "metric" ? compareMetrics(a, b) : compareEntries(a, b));
+
+/** The version to keep when a server's meets this device's: Lokki keeps one whole, the winner; the server's on a tie. */
+export const mergeRecords = (remote, local) => (compareRecords(remote, local) >= 0 ? remote : local);
