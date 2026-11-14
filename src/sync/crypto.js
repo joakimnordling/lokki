@@ -49,8 +49,19 @@ const sign = async (key, text) => new Uint8Array(await subtle.sign("HMAC", key, 
 
 /** A record's row name: the first 16 bytes of HMAC-SHA256 over "kind:id" (section 4.2). */
 export async function rowKey(keys, kind, id) {
-  return toB64url((await sign(keys.rowNames, `${kind}:${id}`)).subarray(0, 16));
+  // A record's row name never changes for the same keys, so each is computed once: pushing many records, skipping
+  // held ones batch after batch, and finding damaged rows' records then cost a lookup. About 80 bytes per record.
+  let names = rowNameCache.get(keys);
+  if (!names) rowNameCache.set(keys, (names = new Map()));
+  const name = `${kind}:${id}`;
+  let key = names.get(name);
+  if (key === undefined) {
+    key = toB64url((await sign(keys.rowNames, name)).subarray(0, 16));
+    names.set(name, key);
+  }
+  return key;
 }
+const rowNameCache = new WeakMap(); // the keys -> "kind:id" -> row name; gone with the keys (another vault, cleared)
 
 /** UTF-8, then spaces up to at least 192 bytes and a multiple of 64 (section 4.3). */
 export function pad(text) {

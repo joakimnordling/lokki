@@ -226,11 +226,12 @@ async function encryptBatch({ keys, pending, limits, device, bit }) {
     large = 0;
   for (const record of pending) {
     if (rows.length >= limits.push) break;
-    const row = await encryptRow(keys, record);
-    if (device.unreadable(row.key) & (1 << bit)) {
+    // checked by name before encrypting: held records stay pending, so every batch passes them again
+    if (device.unreadable(await rowKey(keys, record.kind, record.id)) & (1 << bit)) {
       held++;
       continue;
     }
+    const row = await encryptRow(keys, record);
     if (row.data.length > limits.row_bytes) {
       large++;
       continue;
