@@ -1,7 +1,7 @@
 // The server client's errors: which may pass by trying again, and how long a server asked to wait.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ServerClient, ServerError } from "../../src/sync/http.js";
+import { ServerClient, ServerError } from "../../packages/sync/http.js";
 
 const answering = (status, headers = {}) =>
   new ServerClient("https://sync.example.com/", "lk_x", {

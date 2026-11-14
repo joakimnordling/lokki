@@ -163,9 +163,9 @@ export class AppDevice {
   all() {
     return [...[...metricAll].map(([id, m]) => metricRecord(id, m)), ...[...recs.values()].map(entryRecord)];
   }
-  /** Save the bits changed since the last call. */
+  /** Save the bits changed since the last call, with `also`: the sync store's ["put", row] / ["delete", k]. */
   async persist(also = []) {
-    await idb.write([...this.ops(), ...also]);
+    await idb.write([...this.ops(), ...also.map(([op, value]) => ["sync", op, value])]);
   }
   /**
    * The writes that save the bits changed since the last call, to make in one transaction with the servers' state:

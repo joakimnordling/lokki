@@ -1,3 +1,4 @@
+import pytest
 import segno
 
 from lokki_server.pairing import pairing_qr, pairing_text
@@ -10,6 +11,13 @@ TEXT = "lokki:sync?url=https%3A%2F%2Fsync1.example.com&token=lk_abc-DEF_123"
 
 def test_pairing_text() -> None:
     assert pairing_text(URL, TOKEN) == TEXT
+
+
+def test_pairing_text_for_another_app() -> None:
+    assert pairing_text(URL, TOKEN, "other-app") == TEXT.replace("lokki:", "other-app:")
+    for name in ["Lokki", "-x", "a/b", "x" * 33, ""]:
+        with pytest.raises(ValueError, match="app name"):
+            pairing_text(URL, TOKEN, name)
 
 
 def read_blocks(printed: str) -> list[list[int]]:

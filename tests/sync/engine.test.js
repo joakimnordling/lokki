@@ -1,10 +1,18 @@
 // The sync engine with in-memory devices against the real Python server: the scenarios of docs/sync-protocol.md.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { deriveKeys, encryptRow, newKeyring, rowKey, unlock, WrongPassphraseError } from "../../src/sync/crypto.js";
-import { DifferentVaultError, OtherAppError, syncAll } from "../../src/sync/engine.js";
-import { ServerClient, ServerError } from "../../src/sync/http.js";
-import { MemoryDevice } from "../../src/sync/memory.js";
+import {
+  deriveKeys,
+  encryptRow,
+  newKeyring,
+  rowKey,
+  unlock,
+  WrongPassphraseError,
+} from "../../packages/sync/crypto.js";
+import { DifferentVaultError, OtherAppError, syncAll } from "../../packages/sync/engine.js";
+import { ServerClient, ServerError } from "../../packages/sync/http.js";
+import { MemoryDevice } from "../../packages/sync/memory.js";
+import { LOKKI } from "../../src/sync/app.js";
 import { startServer } from "./server.js";
 
 const SMALL = { name: "argon2id", m: 64, t: 1, p: 1 }; // fast Argon2id, for tests only
@@ -47,13 +55,16 @@ after(async () => {
 
 /** A vault: its keyring and the passphrase-derived keys every device of it ends up with. */
 async function newVault() {
-  const { keyring, dataKey } = await newKeyring(PASS, { now: now(), kdf: SMALL });
-  return { keyring, keys: await deriveKeys(dataKey) };
+  const { keyring, dataKey } = await newKeyring(PASS, { app: "lokki", now: now(), kdf: SMALL });
+  return { keyring, keys: await deriveKeys(dataKey, "lokki") };
 }
+
+// Lokki keeps live entries of a deleted metric to itself
+const held = (r, get) => r.kind === "entry" && !r.d && get("metric", r.metric)?.deleted;
 
 /** A device of a vault, with its own state per server. */
 function device(vault, ...links) {
-  const d = new MemoryDevice();
+  const d = new MemoryDevice({ compare: LOKKI.compare, held });
   d.setKeyring(vault.keyring);
   d.keys = vault.keys;
   d.links = links.map(([srv, token], bit) => ({
@@ -68,7 +79,13 @@ function device(vault, ...links) {
  * format the device reads, as if it had been updated.
  */
 async function sync(d, rowFormat) {
-  const results = await syncAll({ device: d, keys: d.keys, links: d.links, ...(rowFormat ? { rowFormat } : {}) });
+  const results = await syncAll({
+    app: LOKKI,
+    device: d,
+    keys: d.keys,
+    links: d.links,
+    ...(rowFormat ? { rowFormat } : {}),
+  });
   const failed = results.find((r) => r.error);
   if (failed) throw failed.error;
   return results.map((r) => r.report);
@@ -95,8 +112,11 @@ describe("two devices, one server", () => {
     // a new device: reads the keyring from the server and unlocks it with the passphrase
     const http = new ServerClient(servers[0].url, write);
     const { keyring } = await http.vault();
-    const b = device({ keyring, keys: await deriveKeys(await unlock(keyring, PASS)) }, [servers[0], write]);
-    await assert.rejects(unlock(keyring, "not the passphrase"), WrongPassphraseError);
+    const b = device({ keyring, keys: await deriveKeys(await unlock(keyring, PASS, "lokki"), "lokki") }, [
+      servers[0],
+      write,
+    ]);
+    await assert.rejects(unlock(keyring, "not the passphrase", "lokki"), WrongPassphraseError);
     const [joined] = await sync(b);
     assert.equal(joined.applied, 3);
     assert.deepEqual(visible(b), visible(a));
@@ -214,24 +234,26 @@ describe("several servers", () => {
 
 describe("the keyring", () => {
   it("a passphrase change travels to every server, and only the new passphrase opens it", async () => {
-    const { keyring, dataKey } = await newKeyring(PASS, { now: now(), kdf: SMALL });
-    const vault = { keyring, keys: await deriveKeys(dataKey) };
+    const { keyring, dataKey } = await newKeyring(PASS, { app: "lokki", now: now(), kdf: SMALL });
+    const vault = { keyring, keys: await deriveKeys(dataKey, "lokki") };
     const [one, two] = await Promise.all([servers[0].vault(), servers[1].vault()]);
     const a = device(vault, [servers[0], one.write]);
     const b = device(vault, [servers[0], one.write], [servers[1], two.write]);
     await sync(a);
     await sync(b);
 
-    const { changePassphrase } = await import("../../src/sync/crypto.js");
-    a.setKeyring(await changePassphrase(keyring, dataKey, "the new passphrase", { now: now(), kdf: SMALL }));
+    const { changePassphrase } = await import("../../packages/sync/crypto.js");
+    a.setKeyring(
+      await changePassphrase(keyring, dataKey, "the new passphrase", { app: "lokki", now: now(), kdf: SMALL }),
+    );
     await sync(a);
     const [fromOne, toTwo] = await sync(b);
     assert.equal(fromOne.keyring, "updated");
     assert.equal(toTwo.keyring, "sent");
 
     const onTwo = (await new ServerClient(servers[1].url, two.read).vault()).keyring;
-    assert.deepEqual(await unlock(onTwo, "the new passphrase"), dataKey);
-    await assert.rejects(unlock(onTwo, PASS), WrongPassphraseError);
+    assert.deepEqual(await unlock(onTwo, "the new passphrase", "lokki"), dataKey);
+    await assert.rejects(unlock(onTwo, PASS, "lokki"), WrongPassphraseError);
   });
 
   it("a server's keyring changed without the keys is replaced, and another vault's is refused", async () => {
@@ -261,6 +283,46 @@ describe("the keyring", () => {
     assert.deepEqual((await http.vault()).keyring, theirs);
     assert.equal((await http.vault()).head, 0, "nothing pushed");
   });
+
+  it("syncs another app's own kinds of records, under its own keys and names", async () => {
+    const OTHER = { name: "other-app", kinds: ["note"], compare: (a, b) => a.u - b.u };
+    const { keyring, dataKey } = await newKeyring(PASS, { app: OTHER.name, now: now(), kdf: SMALL });
+    assert.equal(keyring.app, "other-app");
+    const keys = await deriveKeys(dataKey, OTHER.name);
+    const { write } = await servers[0].vault();
+    const make = () => {
+      const d = new MemoryDevice({ compare: OTHER.compare });
+      d.setKeyring(keyring);
+      return d;
+    };
+    const links = () => [
+      {
+        server: { url: servers[0].url, token: write, bit: 0, cursor: 0 },
+        http: new ServerClient(servers[0].url, write),
+      },
+    ];
+    const a = make();
+    a.put({ kind: "note", id: "n1", text: "hello", u: now() });
+    const [ra] = await syncAll({ app: OTHER, device: a, keys, links: links() });
+    assert.equal(ra.error, undefined);
+
+    const b = make();
+    const [rb] = await syncAll({
+      app: OTHER,
+      device: b,
+      keys: await deriveKeys(await unlock(keyring, PASS, OTHER.name), OTHER.name),
+      links: links(),
+    });
+    assert.equal(rb.error, undefined);
+    assert.equal(b.get("note", "n1")?.text, "hello");
+
+    // Lokki's labels give other keys: the same data key doesn't open the other app's keyring or rows
+    await assert.rejects(unlock(keyring, PASS, "lokki"));
+    const lokkiKeys = await deriveKeys(dataKey, "lokki");
+    assert.notEqual(await rowKey(lokkiKeys, "note", "n1"), await rowKey(keys, "note", "n1"));
+    const lokki = device({ keyring, keys: lokkiKeys }, [servers[0], write]);
+    await assert.rejects(sync(lokki), OtherAppError);
+  });
 });
 
 describe("damaged, unknown and missing data", () => {
@@ -274,7 +336,7 @@ describe("damaged, unknown and missing data", () => {
     await sync(a);
     let { head, mark } = await http.pull(0);
     const damagedKey = await rowKey(vault.keys, "entry", "e1");
-    const swapped = await encryptRow(vault.keys, entry("e2", 2)); // a valid row under the wrong key
+    const swapped = await encryptRow(vault.keys, entry("e2", 2), { app: "lokki" }); // a valid row under the wrong key
     head = (
       await http.push(head, mark, [
         { key: damagedKey, data: swapped.data },
@@ -397,7 +459,9 @@ describe("damaged, unknown and missing data", () => {
     // The row is then damaged (a valid row of another record under its name)
     const http = new ServerClient(servers[0].url, write);
     const { head, mark } = await http.pull(0);
-    await http.push(head, mark, [{ key: newer.key, data: (await encryptRow(vault.keys, entry("e9", 9))).data }]);
+    await http.push(head, mark, [
+      { key: newer.key, data: (await encryptRow(vault.keys, entry("e9", 9), { app: "lokki" })).data },
+    ]);
     const [r] = await sync(a);
     assert.equal(r.repaired, 1);
     assert.equal(a.unreadable(newer.key), 0);

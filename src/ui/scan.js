@@ -1,6 +1,7 @@
-// Scanning a server's QR code with the camera (see src/sync/pairing.js). The scanner, qr-scanner (MIT), is loaded
+// Scanning a server's QR code with the camera (see packages/sync/pairing.js). The scanner, qr-scanner (MIT), is loaded
 // only when needed, from vendor/ next to the app: it's not part of the app's script.
-import { parsePairing } from "../sync/pairing.js";
+import { parsePairing } from "../../packages/sync/pairing.js";
+import { LOKKI } from "../sync/app.js";
 import { toast } from "./sheets.js";
 
 export const canScan = () => !!navigator.mediaDevices?.getUserMedia;
@@ -28,7 +29,7 @@ export async function scanPairing() {
     const scanner = new QrScanner(
       box.querySelector("video"),
       (result) => {
-        const found = parsePairing(result.data);
+        const found = parsePairing(result.data, LOKKI.name);
         if (found) finish(found);
         else if (!hinted) {
           hinted = true;
