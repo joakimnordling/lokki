@@ -14,8 +14,8 @@
      all()                           every local record
    The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion,
    pulledUsingRowFormat}.
-   `pulledUsingRowFormat` is the newest row format this device's code could read when it last pulled from the
-   server (section 7.5).
+   `pulledUsingRowFormat` is the newest row format this device's code could decrypt and parse when it last pulled
+   from the server (section 7.5).
    `mark` is the mark of the push that wrote row number `cursor` (section 7.4). */
 import {
   APP,
@@ -43,7 +43,7 @@ export class OtherAppError extends Error {}
  * Returns a report: {pulled, applied, pushed, unknownFormat, held, damaged, repaired, keyring}. `held`: records
  * waiting for an update, because this server has their rows in a format this device can't read.
  * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token), DifferentVaultError and OtherAppError.
- * `rowFormat`: the newest row format this code reads; only tests set it, to act as an updated app.
+ * `rowFormat`: the newest row format this code can decrypt and parse; only tests set it, to act as an updated app.
  */
 export async function syncRound({ server, device, keys, http, rowFormat = READABLE_ROW_FORMAT }) {
   const report = {
@@ -60,8 +60,9 @@ export async function syncRound({ server, device, keys, http, rowFormat = READAB
   if (server.id && server.id !== info.id) forget(server, device); // a different server at this URL
   server.id = info.id;
 
-  // This code reads a newer row format than when it last pulled from here: pull everything again, so the rows it
-  // skipped are merged now (section 7.5). A server without the field was last pulled by code reading this format.
+  // This code can decrypt and parse a newer row format than when it last pulled from here: pull everything again, so
+  // the rows it skipped are merged now (section 7.5). A server without the field was last pulled by code that could
+  // decrypt and parse this format.
   if ((server.pulledUsingRowFormat ?? rowFormat) < rowFormat) forget(server, device);
   server.pulledUsingRowFormat = rowFormat;
 

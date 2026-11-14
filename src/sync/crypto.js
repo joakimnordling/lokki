@@ -9,7 +9,10 @@ const dec = new TextDecoder("utf-8", { fatal: true });
 const random = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
 
 export const ROW_VERSION = "v1";
-/** The newest row format this code reads (v1). When a release reads a newer one, devices pull everything again. */
+/**
+ * The newest row format this code can decrypt and parse (v1). When a release can decrypt and parse a newer one,
+ * devices pull everything again.
+ */
 export const READABLE_ROW_FORMAT = 1;
 const MIN_PADDED = 192;
 const PAD_STEP = 64;

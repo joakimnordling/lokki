@@ -451,15 +451,15 @@ deleted.
 
 Per server:
 
-| Field                     | Meaning                                                                                       |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| `url`, `token`            | Where and how to sign in                                                                      |
-| `id`                      | The server's ID from `/v1/info`                                                               |
-| `bit`                     | This server's bit number on this device (0–31)                                                |
-| `cursor`                  | Pulled up to this `seq`                                                                       |
-| `mark`                    | The mark that came with `cursor` (7.4)                                                        |
-| `keyring_version`         | Last keyring version seen                                                                     |
-| `pulled_using_row_format` | The newest row format this device's code could read when it last pulled from the server (7.5) |
+| Field                     | Meaning                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `url`, `token`            | Where and how to sign in                                                                                   |
+| `id`                      | The server's ID from `/v1/info`                                                                            |
+| `bit`                     | This server's bit number on this device (0–31)                                                             |
+| `cursor`                  | Pulled up to this `seq`                                                                                    |
+| `mark`                    | The mark that came with `cursor` (7.4)                                                                     |
+| `keyring_version`         | Last keyring version seen                                                                                  |
+| `pulled_using_row_format` | The newest row format this device's code could decrypt and parse when it last pulled from the server (7.5) |
 
 Per record: a number whose bits say which servers have the record's current version. Bit `b` is set when server
 `b` is known to have exactly this version.
@@ -542,8 +542,8 @@ would keep a new device from finishing, which `history` should be large enough t
     row in such a format, even after changing it here, and still pushes it to the others. The bit goes again when
     that server sends a row with that name that the device reads or finds damaged, and when the server is removed or
     turns out to be a different or restored server.
-  - When an update lets the device read a newer format than `pulled_using_row_format` says, it pulls everything from
-    each server again (from `cursor` 0, as in 7.4), so the rows it skipped are merged now.
+  - When an update lets the device decrypt and parse a newer format than `pulled_using_row_format` says, it pulls
+    everything from each server again (from `cursor` 0, as in 7.4), so the rows it skipped are merged now.
 - **Damaged** (a known prefix that fails to decrypt, or a record whose `kind` and `id` don't give the row's `key`):
   - If the key belongs to a local record, the device pushes its own version, repairing the server.
   - Otherwise the device can't repair it and leaves it.
