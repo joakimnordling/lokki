@@ -36,17 +36,6 @@ describe("deleting a metric", () => {
   });
 });
 
-describe("servers with a newer Lokki's version of a record", () => {
-  beforeEach(reset);
-  it("stay marked (ub) when the record changes here, so it isn't pushed over theirs", () => {
-    metricAll.set("run", { name: "Running", u: 1, sb: 3, ub: 2 });
-    recs.set("a", { ...live("a", "run", "2026-01-01T10:00:00", 5, 10), sb: 1, ub: 2 });
-    deleteMetricOps("run", 100);
-    assert.deepEqual([metricAll.get("run").sb, metricAll.get("run").ub], [0, 2]);
-    assert.deepEqual([recs.get("a").sb, recs.get("a").ub], [0, 2]);
-  });
-});
-
 describe("planning a restore", () => {
   beforeEach(reset);
   const backup = (metrics, entries) => ({

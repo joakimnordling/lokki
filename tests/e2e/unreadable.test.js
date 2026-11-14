@@ -1,49 +1,46 @@
-// Records a server has a newer Lokki's version of (ub, src/sync/device.js): editing them here keeps that mark, so
-// this device's version is never pushed over the newer one; a server that's removed takes its marks with it.
+// Rows a server holds in a format this device can't read (a newer Lokki's): kept by row name in the sync store, so
+// they survive a restart and nothing is pushed over them (protocol 7.5, src/sync/device.js).
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { startHarness } from "./harness.js";
 
-describe("records with a newer version on a server", () => {
+describe("rows from a newer Lokki", () => {
   let h, P;
   before(async () => {
     h = await startHarness();
     P = await h.device();
   });
   after(() => h.close());
+  const stored = () =>
+    P.evaluate(async () =>
+      (await window.__lokki.idb.all("sync")).filter((r) => r.k.startsWith("unreadable:")).map((r) => [r.k, r.bits]),
+    );
 
-  it("keep their mark through local changes, and aren't offered for pushing to that server", async () => {
-    const result = await P.evaluate(async () => {
-      const L = window.__lokki,
-        T = window.__test;
-      await L.idb.write([
-        ["metrics", "put", { id: "run", name: "Running", type: "", created: "", u: 1, g: 0, sb: 3, ub: 2 }],
-        ["recs", "put", { id: "a", m: "run", y: 2026, t: "2026-01-01T10:00:00", v: 5, u: 10, sb: 3, ub: 2 }],
-      ]);
-      L.metricAll.set("run", { name: "Running", type: "", created: "", u: 1, g: 0, sb: 3, ub: 2 });
-      L.recs.set("a", { id: "a", m: "run", y: 2026, t: "2026-01-01T10:00:00", v: 5, u: 10, sb: 3, ub: 2 });
-      await T.edit(L.recs.get("a"), "2026-01-01T10:00:00", 6);
-      const d = L.sync.device;
-      const pending = (bit) =>
-        d
-          .pending(bit)
-          .map((r) => r.id)
-          .sort();
-      const out = { edited: [L.recs.get("a").sb, L.recs.get("a").ub], to0: pending(0), to1: pending(1) };
-      d.markHas("entry", "a", 1); // that server now has a version this device reads
-      out.cleared = L.recs.get("a").ub ?? 0;
-      d.markUnreadable("entry", "a", 1);
-      d.clearBit(1); // the server is removed
-      out.removed = L.recs.get("a").ub ?? 0;
-      return out;
+  it("are saved with the servers' state, read back after a restart, and go with their server", async () => {
+    await P.evaluate(async () => {
+      const d = window.__lokki.sync.device;
+      d.markUnreadable("rowA", 0);
+      d.markUnreadable("rowA", 2);
+      d.markUnreadable("rowB", 1);
+      await d.persist();
     });
-    assert.deepEqual(result, {
-      edited: [0, 2],
-      to0: ["a"],
-      to1: [],
-      cleared: 0,
-      removed: 0,
+    assert.deepEqual((await stored()).sort(), [
+      ["unreadable:rowA", 5],
+      ["unreadable:rowB", 2],
+    ]);
+    await P.reload();
+    await P.waitForSelector("#cCreate");
+    assert.deepEqual(
+      await P.evaluate(() => ["rowA", "rowB", "rowC"].map((k) => window.__lokki.sync.device.unreadable(k))),
+      [5, 2, 0],
+    );
+    await P.evaluate(async () => {
+      const d = window.__lokki.sync.device;
+      d.clearUnreadable("rowB", 1); // that server sent a row this device reads
+      d.clearBit(2); // a server removed
+      await d.persist();
     });
+    assert.deepEqual(await stored(), [["unreadable:rowA", 1]]);
   });
 
   it("logged no errors", () => assert.deepEqual(h.errors, []));

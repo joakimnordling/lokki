@@ -462,8 +462,7 @@ Per server:
 | `reads`           | The newest row format this device's code read when it last pulled from the server (7.5) |
 
 Per record: a number whose bits say which servers have the record's current version. Bit `b` is set when server
-`b` is known to have exactly this version. A second number, usually 0, has bit `b` set when server `b` holds a
-version of the record that this device can't read (7.5): the record is never pushed there.
+`b` is known to have exactly this version.
 
 | Event                                                        | Bits                                                       |
 | ------------------------------------------------------------ | ---------------------------------------------------------- |
@@ -475,6 +474,11 @@ version of the record that this device can't read (7.5): the record is never pus
 | Server `b` is removed, or turns out to be a different server | bit `b` cleared everywhere                                 |
 
 This costs a few bytes per record however many servers there are.
+
+Per row name: rows that some server holds in a format this device can't read (7.5), each with a number whose bit `b`
+is set for server `b`. They're kept by row name rather than per record, since the device may not have the record at
+all, and saved together with the servers' `cursor`, so a mark is never lost while the cursor has moved past its row.
+Usually there are none; while a newer app's rows are about, one per such row, however many servers hold it.
 
 ### 7.2 A sync round
 
@@ -533,11 +537,11 @@ would keep a new device from finishing, which `history` should be large enough t
 
 - **Unknown format** (a `data` prefix other than `v1.`): written by a newer app. The device asks you to update Lokki,
   and never overwrites the row:
-  - If the row's key belongs to a local record, the device marks that server in the record's second number. It
-    doesn't push the record there, even after changing it here; it still goes to servers that don't have such a
-    version. The mark goes again when that server sends a version the device can read, and when the server is
-    removed or turns out to be a different or restored server.
-  - Otherwise the device has no version of that record, so there's nothing it could push over it.
+  - The device notes the row's name with that server's bit, whether or not it has the record, since it may get it
+    later: from another server, or by making it with the same ID. It never pushes a record to a server holding its
+    row in such a format, even after changing it here, and still pushes it to the others. The bit goes again when
+    that server sends a row with that name that the device reads or finds damaged, and when the server is removed or
+    turns out to be a different or restored server.
   - When an update lets the device read a newer format than `reads` says, it pulls everything from each server again
     (from `cursor` 0, as in 7.4), so the rows it skipped are merged now.
 - **Damaged** (a known prefix that fails to decrypt, or a record whose `kind` and `id` don't give the row's `key`):

@@ -182,7 +182,11 @@ function serverState(s, running) {
   if (running) return [ICON.syncing, "Syncing…", false];
   if (!s.last) return [ICON.sending, "Not synced yet", false];
   if (!s.last.ok) return [s.last.error?.startsWith("Can't reach") ? ICON.offline : ICON.failing, s.last.error, true];
-  if (s.lacks) return [ICON.sending, `${s.lacks === 1 ? "1 change" : `${s.lacks} changes`} to send`, false];
+  const held = s.last.report?.held || 0; // waiting for an update that reads this server's newer rows
+  const toSend = s.lacks - held;
+  if (toSend > 0) return [ICON.sending, `${toSend === 1 ? "1 change" : `${toSend} changes`} to send`, false];
+  if (held)
+    return [ICON.sending, `${held === 1 ? "1 change waits" : `${held} changes wait`} for a Lokki update`, false];
   return [ICON.synced, `Up to date · synced ${ago(s.last.at).toLowerCase()}`, false];
 }
 
@@ -228,7 +232,7 @@ function serverSheet(bit) {
   const s = sync.status().servers.find((x) => x.bit === bit);
   const report = s.last?.report;
   const detail = s.last
-    ? `Last sync ${ago(s.last.at).toLowerCase()}${report ? `: ${report.applied} received, ${report.pushed} sent` : ""}.${report?.damaged ? ` ${report.damaged} damaged rows found${report.repaired ? `, ${report.repaired} repaired from this device` : ""}.` : ""}${report?.unknownFormat ? ` ${report.unknownFormat} rows from a newer Lokki: update the app to read them.` : ""}`
+    ? `Last sync ${ago(s.last.at).toLowerCase()}${report ? `: ${report.applied} received, ${report.pushed} sent` : ""}.${report?.damaged ? ` ${report.damaged} damaged rows found${report.repaired ? `, ${report.repaired} repaired from this device` : ""}.` : ""}${report?.unknownFormat ? ` ${report.unknownFormat} rows from a newer Lokki: update the app to read them.` : ""}${report?.held ? ` ${report.held === 1 ? "1 change waits" : `${report.held} changes wait`} for the update, so as not to replace the newer versions.` : ""}`
     : "Not synced yet.";
   sheet(
     s.name,

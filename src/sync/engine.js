@@ -6,11 +6,11 @@
      apply(records, bit)             store pulled records that won; only `bit` set on them
      markHas(kind, id, bit)          the server has the current version
      markLacks(kind, id, bit)        it doesn't: push it there
-     markUnreadable(kind, id, bit)   the server has a version of it this device can't read (a newer app's): don't
-                                     push it there. apply, markHas and markLacks clear this again for that server.
-     pending(bit)                    local records the server lacks (never live entries of deleted metrics, nor
-                                     records it has a version of this device can't read)
-     clearBit(bit)                   forget what this server has (a different or restored server), readable or not
+     pending(bit)                    local records the server lacks (never live entries of deleted metrics)
+     clearBit(bit)                   forget what this server has (a different or restored server), and its marks below
+     unreadable(key)                 bits of the servers holding row `key` in a format this device can't read: a
+     markUnreadable(key, bit)          newer app's. Kept per row name, not per record, since this device may not have
+     clearUnreadable(key, bit)         the record yet. Nothing is pushed to a server over such a row (section 7.5).
      all()                           every local record
    The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion, reads}.
    `reads` is the newest row format this device could read when it last pulled from the server (section 7.5).
@@ -29,12 +29,22 @@ export class OtherAppError extends Error {}
 
 /**
  * Pull everything new from a server, merge it, and push what it lacks.
- * Returns a report: {pulled, applied, pushed, unknownFormat, damaged, repaired, keyring}.
+ * Returns a report: {pulled, applied, pushed, unknownFormat, held, damaged, repaired, keyring}. `held`: records
+ * waiting for an update, because this server has their rows in a format this device can't read.
  * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token), DifferentVaultError and OtherAppError.
  * `reads`: the newest row format this code reads; only tests set it.
  */
 export async function syncRound({ server, device, keys, http, reads = READS }) {
-  const report = { pulled: 0, applied: 0, pushed: 0, unknownFormat: 0, damaged: [], repaired: 0, keyring: "same" };
+  const report = {
+    pulled: 0,
+    applied: 0,
+    pushed: 0,
+    unknownFormat: 0,
+    held: 0,
+    damaged: [],
+    repaired: 0,
+    keyring: "same",
+  };
   const info = await http.info();
   if (server.id && server.id !== info.id) forget(server, device); // a different server at this URL
   server.id = info.id;
@@ -53,7 +63,9 @@ export async function syncRound({ server, device, keys, http, reads = READS }) {
   for (let conflicts = 0; ; ) {
     const pending = device.pending(server.bit);
     if (!pending.length) break;
-    const batch = await encryptBatch(keys, pending, info.limits);
+    const batch = await encryptBatch({ keys, pending, limits: info.limits, device, bit: server.bit });
+    report.held = batch.held;
+    if (!batch.rows.length) break; // all that's left waits for an update that reads this server's newer rows
     try {
       ({ head, mark } = await http.push(head, mark, batch.rows));
     } catch (e) {
@@ -135,7 +147,6 @@ async function pullAll({ server, device, keys, http, report }) {
   let since = server.cursor;
   let mark = server.mark ?? null;
   let start; // the vault's head and its mark when this device started pulling without marks
-  let names; // row name -> [kind, id] of this device's records, made when a row it can't read first turns up
   for (;;) {
     // The server checks every page (section 7.4): that the push with `mark` wrote the last row this device has; or,
     // while its pages come without marks, as when pulling everything, that nothing changed up to the head it started at
@@ -163,13 +174,14 @@ async function pullAll({ server, device, keys, http, report }) {
         if (e instanceof FormatError) {
           // A newer app's version: never push over it from here (section 7.5)
           report.unknownFormat++;
-          names ??= await rowNames(device, keys);
-          const found = names.get(row.key);
-          if (found) device.markUnreadable(found[0], found[1], server.bit);
-        } else if (e instanceof DamagedRowError) report.damaged.push(row.key);
-        else throw e;
+          device.markUnreadable(row.key, server.bit);
+        } else if (e instanceof DamagedRowError) {
+          report.damaged.push(row.key);
+          device.clearUnreadable(row.key, server.bit); // not a newer version: repairing it is fine
+        } else throw e;
         continue;
       }
+      device.clearUnreadable(row.key, server.bit); // this server's row is one this device reads now
       const local = device.get(record.kind, record.id);
       const order = local ? compareRecords(record, local) : 1;
       if (order > 0) winners.push(record);
@@ -190,13 +202,6 @@ async function pullAll({ server, device, keys, http, report }) {
   }
 }
 
-// The row names of this device's records
-async function rowNames(device, keys) {
-  const names = new Map();
-  for (const r of device.all()) names.set(await rowKey(keys, r.kind, r.id), [r.kind, r.id]);
-  return names;
-}
-
 // Damaged rows whose key belongs to a local record get this device's copy pushed over them (section 7.5).
 async function repair({ server, device, keys, report }) {
   if (!report.damaged.length) return;
@@ -211,16 +216,29 @@ async function repair({ server, device, keys, report }) {
   }
 }
 
-async function encryptBatch(keys, pending, limits) {
+// The next batch for a server: up to `limits.push` rows, leaving out records whose row there is one this device
+// can't read (`held`, counted) and records too large for the server (they stay pending, and are reported once
+// nothing else is left). Held records are skipped before the batch is cut, so they never take the place of others.
+async function encryptBatch({ keys, pending, limits, device, bit }) {
   const rows = [];
   const records = [];
-  for (const record of pending.slice(0, limits.push)) {
+  let held = 0,
+    large = 0;
+  for (const record of pending) {
+    if (rows.length >= limits.push) break;
     const row = await encryptRow(keys, record);
-    if (row.data.length > limits.row_bytes) continue; // too large for this server: stays pending, reported by the caller
+    if (device.unreadable(row.key) & (1 << bit)) {
+      held++;
+      continue;
+    }
+    if (row.data.length > limits.row_bytes) {
+      large++;
+      continue;
+    }
     rows.push(row);
     records.push(record);
   }
-  if (!rows.length)
+  if (!rows.length && large)
     throw new ServerError(413, { error: "too_large", message: "A record is too large for this server." });
-  return { rows, records };
+  return { rows, records, held };
 }
