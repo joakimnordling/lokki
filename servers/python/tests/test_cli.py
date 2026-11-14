@@ -60,6 +60,15 @@ def test_token_add_with_a_qr_code() -> None:
     assert added.endswith(pairing_qr("https://sync.example.com", token.group(1)))
 
 
+def test_token_add_with_a_qr_code_for_another_app() -> None:
+    run("vault", "add", "jocke")
+    added = run("token", "add", "jocke", "phone", "--qr", "--app", "other-app")
+    token = re.search(r"Token:\s+(lk_\S+)", added)
+    assert token is not None
+    assert added.endswith(pairing_qr("https://sync.example.com", token.group(1), "other-app"))
+    assert "--app" in fails("token", "add", "jocke", "tablet", "--qr", "--app", "Other App")
+
+
 def fails(*args: str) -> str:
     result = runner.invoke(app, list(args))
     assert result.exit_code != 0, result.output

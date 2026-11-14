@@ -1,8 +1,9 @@
 // The Sync sheets (standalone only): set up with a first server and a passphrase, servers and their status, passphrase.
+
+import { DamagedKeyringError, WrongPassphraseError } from "../../packages/sync/crypto.js";
+import { OtherAppError } from "../../packages/sync/engine.js";
+import { ServerError } from "../../packages/sync/http.js";
 import { ago, esc } from "../core/format.js";
-import { DamagedKeyringError, WrongPassphraseError } from "../sync/crypto.js";
-import { OtherAppError } from "../sync/engine.js";
-import { ServerError } from "../sync/http.js";
 import { hostOf, OTHER_APP, sync } from "../sync/manager.js";
 import { $ } from "./dom.js";
 import { ICON } from "./icons.js";

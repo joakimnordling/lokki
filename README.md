@@ -35,7 +35,8 @@ index.html          the page; loads src/app.js as an ES module (no build step ne
 public/             static files: styles, the Jost font, icons, web app manifest
 src/core/           pure functions: formatting, periods, statistics, ids, CSV and tables, zip, backup format
 src/data/           this device's copy: state, IndexedDB, local changes, backups
-src/sync/           syncing: encryption, merge rules and the sync engine for Lokki servers
+src/sync/           Lokki's side of syncing: its records, merge rules and the sync store
+packages/sync/      the sync protocol for any app: encryption, the sync engine, server client and pairing codes
 src/ui/             rendering, sheets, chart, entry list, preferences, files
 scripts/            dev server, the site build (with its service worker), screenshots
 tests/unit/         node:test unit tests

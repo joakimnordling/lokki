@@ -1,0 +1,21 @@
+{
+  "name": "lokki-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Lokki sync protocol for any app: encryption, the sync engine, the server client and pairing codes.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./b64.js": "./b64.js",
+    "./crypto.js": "./crypto.js",
+    "./engine.js": "./engine.js",
+    "./http.js": "./http.js",
+    "./manager.js": "./manager.js",
+    "./memory.js": "./memory.js",
+    "./pairing.js": "./pairing.js"
+  },
+  "dependencies": {
+    "hash-wasm": "4.13.0"
+  }
+}
