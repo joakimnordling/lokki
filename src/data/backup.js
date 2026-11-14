@@ -134,8 +134,10 @@ export async function applyRestore(p, bring) {
   const ops = [],
     list = [];
   const putM = (id, d, bm) => {
-    metricAll.set(id, { ...d, sb: 0 });
-    ops.push(["metrics", "put", { id, ...d, sb: 0 }]);
+    const ub = metricAll.get(id)?.ub; // servers with a newer Lokki's version: still not to be pushed over
+    const m = { ...d, sb: 0, ...(ub ? { ub } : {}) };
+    metricAll.set(id, m);
+    ops.push(["metrics", "put", { id, ...m }]);
     // the backup's view, only where this device has none of its own
     if (!hasView(id) && (bm.mode || bm.gran)) setView(id, viewOf(id, bm));
   };

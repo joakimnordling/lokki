@@ -1,5 +1,6 @@
 /* Local changes: saved on this device first, then synced. Every changed record gets sb = 0, "no server has this
-   version yet", and the sync engine sends it (src/sync). */
+   version yet", and the sync engine sends it (src/sync). Its ub, "servers with a newer Lokki's version of it", stays:
+   this device mustn't push over those (src/sync/device.js). */
 import { uuid4 } from "../core/ids.js";
 import { idb } from "./idb.js";
 import { hooks, metricAll, rebuild, recs, refreshMetrics, ui } from "./state.js";
@@ -10,6 +11,8 @@ export async function commitRecs(list) {
   const ops = [];
   for (const r of list) {
     r.sb = 0;
+    const ub = recs.get(r.id)?.ub;
+    if (ub) r.ub = ub;
     recs.set(r.id, r);
     ops.push(["recs", "put", r]);
   }
@@ -47,7 +50,7 @@ export function fail(e) {
 export async function saveMetric(id, data) {
   const prev = metricAll.get(id);
   const { id: _id, mode: _m, gran: _g, ...rest } = data;
-  const d = { ...rest, u: nextU(prev?.u), sb: 0 };
+  const d = { ...rest, u: nextU(prev?.u), sb: 0, ...(prev?.ub ? { ub: prev.ub } : {}) };
   metricAll.set(id, d);
   refreshMetrics();
   rebuild();
@@ -57,13 +60,14 @@ export async function saveMetric(id, data) {
 }
 // Deleting a metric starts a new generation (g = u), so the deletion beats edits made elsewhere before it was known.
 export function deleteMetricOps(mid, u) {
-  const d = { deleted: true, u, g: u, sb: 0 };
+  const prev = metricAll.get(mid);
+  const d = { deleted: true, u, g: u, sb: 0, ...(prev?.ub ? { ub: prev.ub } : {}) };
   metricAll.set(mid, d);
   // blank every entry too, so their contents leave the servers (protocol 6.3)
   const ops = [["metrics", "put", { id: mid, ...d }]];
   for (const r of [...recs.values()])
     if (r.m === mid && !r.d) {
-      const t = { id: r.id, m: r.m, y: r.y, u: nextU(r.u), d: true, sb: 0 };
+      const t = { id: r.id, m: r.m, y: r.y, u: nextU(r.u), d: true, sb: 0, ...(r.ub ? { ub: r.ub } : {}) };
       recs.set(r.id, t);
       ops.push(["recs", "put", t]);
     }

@@ -451,17 +451,19 @@ deleted.
 
 Per server:
 
-| Field             | Meaning                                        |
-| ----------------- | ---------------------------------------------- |
-| `url`, `token`    | Where and how to sign in                       |
-| `id`              | The server's ID from `/v1/info`                |
-| `bit`             | This server's bit number on this device (0–31) |
-| `cursor`          | Pulled up to this `seq`                        |
-| `mark`            | The mark that came with `cursor` (7.4)         |
-| `keyring_version` | Last keyring version seen                      |
+| Field             | Meaning                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `url`, `token`    | Where and how to sign in                                                                |
+| `id`              | The server's ID from `/v1/info`                                                         |
+| `bit`             | This server's bit number on this device (0–31)                                          |
+| `cursor`          | Pulled up to this `seq`                                                                 |
+| `mark`            | The mark that came with `cursor` (7.4)                                                  |
+| `keyring_version` | Last keyring version seen                                                               |
+| `reads`           | The newest row format this device's code read when it last pulled from the server (7.5) |
 
 Per record: a number whose bits say which servers have the record's current version. Bit `b` is set when server
-`b` is known to have exactly this version.
+`b` is known to have exactly this version. A second number, usually 0, has bit `b` set when server `b` holds a
+version of the record that this device can't read (7.5): the record is never pushed there.
 
 | Event                                                        | Bits                                                       |
 | ------------------------------------------------------------ | ---------------------------------------------------------- |
@@ -529,8 +531,15 @@ would keep a new device from finishing, which `history` should be large enough t
 
 ### 7.5 Rows a device can't read
 
-- **Unknown format** (a `data` prefix other than `v1.`): written by a newer app. The device leaves the row alone,
-  never overwrites it, and asks you to update Lokki.
+- **Unknown format** (a `data` prefix other than `v1.`): written by a newer app. The device asks you to update Lokki,
+  and never overwrites the row:
+  - If the row's key belongs to a local record, the device marks that server in the record's second number. It
+    doesn't push the record there, even after changing it here; it still goes to servers that don't have such a
+    version. The mark goes again when that server sends a version the device can read, and when the server is
+    removed or turns out to be a different or restored server.
+  - Otherwise the device has no version of that record, so there's nothing it could push over it.
+  - When an update lets the device read a newer format than `reads` says, it pulls everything from each server again
+    (from `cursor` 0, as in 7.4), so the rows it skipped are merged now.
 - **Damaged** (a known prefix that fails to decrypt, or a record whose `kind` and `id` don't give the row's `key`):
   - If the key belongs to a local record, the device pushes its own version, repairing the server.
   - Otherwise the device can't repair it and leaves it.
@@ -603,7 +612,8 @@ metrics and which are entries. The keyring isn't encrypted, so a server also see
 
 - The API version is in the path (`/v1/`); `GET /v1/info` lists the versions a server supports.
 - The encryption scheme is in each row's `data` prefix (`v1.`), bound into its additional data, and in the keyring's
-  `version`.
+  `version`. Devices never overwrite a row in a format they don't read, and pull everything again once an update
+  lets them read it (7.5).
 - Unknown fields in records and keyrings are ignored and kept, so newer clients can add fields.
 
 ## 14. Later

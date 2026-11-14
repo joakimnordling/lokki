@@ -63,9 +63,9 @@ function device(vault, ...links) {
   return d;
 }
 
-/** Sync with every server of the device; the reports of the last pass, or the first error. */
-async function sync(d) {
-  const results = await syncAll({ device: d, keys: d.keys, links: d.links });
+/** Sync with every server of the device; the reports of the last pass, or the first error. `reads`: as if updated. */
+async function sync(d, reads) {
+  const results = await syncAll({ device: d, keys: d.keys, links: d.links, ...(reads ? { reads } : {}) });
   const failed = results.find((r) => r.error);
   if (failed) throw failed.error;
   return results.map((r) => r.report);
@@ -286,6 +286,58 @@ describe("damaged, unknown and missing data", () => {
     const [fresh] = await sync(b);
     assert.deepEqual([fresh.damaged, fresh.unknownFormat], [[], 1]);
     assert.equal(value(b, "e1"), 1);
+  });
+
+  it("never pushes over a newer app's version, and pulls everything again once it can read more", async () => {
+    const vault = await newVault();
+    const [s0, s1] = [await servers[0].vault(), await servers[1].vault()];
+    const a = device(vault, [servers[0], s0.write], [servers[1], s1.write]);
+    a.put(metric("running"));
+    a.put(entry("e1", 1));
+    a.put(entry("e2", 2));
+    await sync(a);
+    // A newer Lokki rewrites e1 on the first server in a row format this code doesn't read
+    const http0 = new ServerClient(servers[0].url, s0.write);
+    const newer = { key: await rowKey(vault.keys, "entry", "e1"), data: "v2.from-a-newer-lokki" };
+    const { head, mark } = await http0.pull(0);
+    await http0.push(head, mark, [newer]);
+    const rowOf = async (key) => (await http0.pull(0)).rows.find((r) => r.key === key)?.data;
+
+    // This device edits e1 and e2: e2 goes everywhere, e1 only where there's no newer version
+    a.put(entry("e1", 10));
+    a.put(entry("e2", 20));
+    const [r0] = await sync(a);
+    assert.equal(r0.unknownFormat, 1);
+    assert.equal(await rowOf(newer.key), newer.data, "the newer version is still there");
+    const elsewhere = device(vault, [servers[1], s1.write]);
+    await sync(elsewhere);
+    assert.deepEqual([value(elsewhere, "e1"), value(elsewhere, "e2")], [10, 20], "the other server got both");
+    const onFirst = device(vault, [servers[0], s0.write]);
+    await sync(onFirst);
+    assert.equal(value(onFirst, "e2"), 20);
+    assert.deepEqual(
+      a.pending(0).map((r) => r.id),
+      [],
+      "e1 waits for this device to be able to read the first server's version",
+    );
+    assert.equal(a.records.get("entry:e1").unreadable, 1);
+
+    // Updated to read a newer format: everything is pulled again (the newer row is still beyond it here)
+    const [again] = await sync(a, 2);
+    assert.equal(again.pulled, 3, "metric, e1 and e2: from the start");
+    assert.equal(a.links[0].server.reads, 2);
+    assert.equal(await rowOf(newer.key), newer.data);
+
+    // A server that's removed or replaced takes its unreadable bits with it
+    a.clearBit(0);
+    assert.equal(a.records.get("entry:e1").unreadable, 0);
+    assert.deepEqual(
+      a
+        .pending(0)
+        .map((r) => r.id)
+        .sort(),
+      ["e1", "e2", "running"],
+    );
   });
 
   it("starts over with a server that lost changes, or is a different server at the same address", async () => {

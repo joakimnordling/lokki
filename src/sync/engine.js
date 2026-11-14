@@ -6,12 +6,16 @@
      apply(records, bit)             store pulled records that won; only `bit` set on them
      markHas(kind, id, bit)          the server has the current version
      markLacks(kind, id, bit)        it doesn't: push it there
-     pending(bit)                    local records the server lacks (never live entries of deleted metrics)
-     clearBit(bit)                   forget what this server has (a different or restored server)
+     markUnreadable(kind, id, bit)   the server has a version of it this device can't read (a newer app's): don't
+                                     push it there. apply, markHas and markLacks clear this again for that server.
+     pending(bit)                    local records the server lacks (never live entries of deleted metrics, nor
+                                     records it has a version of this device can't read)
+     clearBit(bit)                   forget what this server has (a different or restored server), readable or not
      all()                           every local record
-   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion}.
+   The server state is a plain object the caller keeps: {url, token, id, bit, cursor, mark, keyringVersion, reads}.
+   `reads` is the newest row format this device could read when it last pulled from the server (section 7.5).
    `mark` is the mark of the push that wrote row number `cursor` (section 7.4). */
-import { APP, DamagedRowError, decryptRow, encryptRow, FormatError, rowKey, verifyKeyring } from "./crypto.js";
+import { APP, DamagedRowError, decryptRow, encryptRow, FormatError, READS, rowKey, verifyKeyring } from "./crypto.js";
 import { ServerError } from "./http.js";
 import { compareRecords } from "./merge.js";
 
@@ -27,12 +31,18 @@ export class OtherAppError extends Error {}
  * Pull everything new from a server, merge it, and push what it lacks.
  * Returns a report: {pulled, applied, pushed, unknownFormat, damaged, repaired, keyring}.
  * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token), DifferentVaultError and OtherAppError.
+ * `reads`: the newest row format this code reads; only tests set it.
  */
-export async function syncRound({ server, device, keys, http }) {
+export async function syncRound({ server, device, keys, http, reads = READS }) {
   const report = { pulled: 0, applied: 0, pushed: 0, unknownFormat: 0, damaged: [], repaired: 0, keyring: "same" };
   const info = await http.info();
   if (server.id && server.id !== info.id) forget(server, device); // a different server at this URL
   server.id = info.id;
+
+  // This code reads a newer row format than when it last pulled from here: pull everything again, so the rows it
+  // skipped are merged now (section 7.5). A server without the field was last pulled by code reading this format.
+  if ((server.reads ?? reads) < reads) forget(server, device);
+  server.reads = reads;
 
   let vault = await http.vault();
   if (vault.head < server.cursor) forget(server, device); // restored from an older state (section 7.4)
@@ -64,14 +74,14 @@ export async function syncRound({ server, device, keys, http }) {
  * to the others in the same call: after a pass that brought something new, the servers that came before it get
  * another round. Returns [{server, report}] or [{server, error}] for each server, from the last pass.
  */
-export async function syncAll({ device, keys, links, maxPasses = 3 }) {
+export async function syncAll({ device, keys, links, maxPasses = 3, reads = READS }) {
   let results = [];
   for (let pass = 0; pass < maxPasses; pass++) {
     results = [];
     let applied = 0;
     for (const { server, http } of links) {
       try {
-        const report = await syncRound({ server, device, keys, http });
+        const report = await syncRound({ server, device, keys, http, reads });
         applied += report.applied;
         results.push({ server, report });
       } catch (error) {
@@ -125,6 +135,7 @@ async function pullAll({ server, device, keys, http, report }) {
   let since = server.cursor;
   let mark = server.mark ?? null;
   let start; // the vault's head and its mark when this device started pulling without marks
+  let names; // row name -> [kind, id] of this device's records, made when a row it can't read first turns up
   for (;;) {
     // The server checks every page (section 7.4): that the push with `mark` wrote the last row this device has; or,
     // while its pages come without marks, as when pulling everything, that nothing changed up to the head it started at
@@ -149,8 +160,13 @@ async function pullAll({ server, device, keys, http, report }) {
       try {
         record = await decryptRow(keys, row.key, row.data);
       } catch (e) {
-        if (e instanceof FormatError) report.unknownFormat++;
-        else if (e instanceof DamagedRowError) report.damaged.push(row.key);
+        if (e instanceof FormatError) {
+          // A newer app's version: never push over it from here (section 7.5)
+          report.unknownFormat++;
+          names ??= await rowNames(device, keys);
+          const found = names.get(row.key);
+          if (found) device.markUnreadable(found[0], found[1], server.bit);
+        } else if (e instanceof DamagedRowError) report.damaged.push(row.key);
         else throw e;
         continue;
       }
@@ -172,6 +188,13 @@ async function pullAll({ server, device, keys, http, report }) {
     }
     if (!page.more) return { head: page.head, mark: page.mark ?? null };
   }
+}
+
+// The row names of this device's records
+async function rowNames(device, keys) {
+  const names = new Map();
+  for (const r of device.all()) names.set(await rowKey(keys, r.kind, r.id), [r.kind, r.id]);
+  return names;
 }
 
 // Damaged rows whose key belongs to a local record get this device's copy pushed over them (section 7.5).

@@ -1,5 +1,7 @@
 /* The app's data as a device for the sync engine (engine.js): converts between the app's records and the protocol's,
-   and keeps each record's server bits (sb) in IndexedDB. */
+   and keeps each record's server bits in IndexedDB with it:
+     sb  servers known to have exactly this version
+     ub  servers holding a version of it this device can't read (a newer Lokki's): it's never pushed there. Missing: 0. */
 import { idb } from "../data/idb.js";
 import { metricAll, recs } from "../data/state.js";
 
@@ -65,13 +67,19 @@ export class AppDevice {
   }
   async apply(records, bit) {
     const ops = [];
+    // this server now has a version this device reads; others may still have one it doesn't
+    const ub = (old) => {
+      const left = (old?.ub || 0) & ~(1 << bit);
+      return left ? { ub: left } : {};
+    };
     for (const rec of records) {
       if (rec.kind === "entry") {
-        const r = { ...toEntry(rec, recs.get(rec.id)), sb: 1 << bit };
+        const old = recs.get(rec.id);
+        const r = { ...toEntry(rec, old), sb: 1 << bit, ...ub(old) };
         recs.set(r.id, r);
         ops.push(["recs", "put", r]);
       } else {
-        const m = { ...toMetric(rec), sb: 1 << bit };
+        const m = { ...toMetric(rec), sb: 1 << bit, ...ub(metricAll.get(rec.id)) };
         metricAll.set(rec.id, m);
         ops.push(["metrics", "put", { id: rec.id, ...m }]);
       }
@@ -79,26 +87,35 @@ export class AppDevice {
     await idb.write(ops);
     this.changed();
   }
-  #bits(kind, id, f) {
+  #bits(kind, id, f, field = "sb") {
     const target = kind === "entry" ? recs.get(id) : metricAll.get(id);
     if (!target) return;
-    const before = target.sb || 0;
-    target.sb = f(before);
-    if (target.sb !== before) this.dirty.add(`${kind === "entry" ? "e" : "m"}:${id}`);
+    const before = target[field] || 0;
+    const after = f(before);
+    if (after === before) return;
+    if (field === "ub" && !after) delete target.ub;
+    else target[field] = after;
+    this.dirty.add(`${kind === "entry" ? "e" : "m"}:${id}`);
   }
   markHas(kind, id, bit) {
     this.#bits(kind, id, (b) => b | (1 << bit));
+    this.#bits(kind, id, (b) => b & ~(1 << bit), "ub");
   }
   markLacks(kind, id, bit) {
     this.#bits(kind, id, (b) => b & ~(1 << bit));
+    this.#bits(kind, id, (b) => b & ~(1 << bit), "ub");
   }
-  /** Records the server lacks, metrics first; never live entries of a deleted metric. */
+  markUnreadable(kind, id, bit) {
+    this.#bits(kind, id, (b) => b | (1 << bit), "ub");
+  }
+  /** Records the server lacks, metrics first; never live entries of a deleted metric, nor records it has a newer
+      app's version of. */
   pending(bit) {
     const mask = 1 << bit;
     const out = [];
-    for (const [id, m] of metricAll) if (!((m.sb || 0) & mask)) out.push(metricRecord(id, m));
+    for (const [id, m] of metricAll) if (!(((m.sb || 0) | (m.ub || 0)) & mask)) out.push(metricRecord(id, m));
     for (const r of recs.values()) {
-      if ((r.sb || 0) & mask) continue;
+      if (((r.sb || 0) | (r.ub || 0)) & mask) continue;
       if (!r.d && metricAll.get(r.m)?.deleted) continue;
       out.push(entryRecord(r));
     }
@@ -129,8 +146,15 @@ export class AppDevice {
     return this.pending(bit).length;
   }
   clearBit(bit) {
-    for (const id of metricAll.keys()) this.#bits("metric", id, (b) => b & ~(1 << bit));
-    for (const r of recs.values()) this.#bits("entry", r.id, (b) => b & ~(1 << bit));
+    const clear = (b) => b & ~(1 << bit);
+    for (const id of metricAll.keys()) {
+      this.#bits("metric", id, clear);
+      this.#bits("metric", id, clear, "ub");
+    }
+    for (const r of recs.values()) {
+      this.#bits("entry", r.id, clear);
+      this.#bits("entry", r.id, clear, "ub");
+    }
   }
   all() {
     return [...[...metricAll].map(([id, m]) => metricRecord(id, m)), ...[...recs.values()].map(entryRecord)];
