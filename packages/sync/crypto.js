@@ -146,6 +146,9 @@ export function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+/** The same version of a record: the same object, or the same fields and values (canonicalJson). */
+export const sameRecord = (a, b) => a === b || (a != null && b != null && canonicalJson(a) === canonicalJson(b));
+
 /** Argon2id (version 0x13) of the passphrase, after Unicode NFC, with an entry's settings: 32 bytes. */
 export async function passphraseKey(passphrase, kdf) {
   if (kdf.name !== "argon2id") throw new Error(`unknown key derivation ${kdf.name}`);

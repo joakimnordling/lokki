@@ -28,13 +28,13 @@
    every server. Merging must give the same record on every device whatever order versions arrive in, and merging a
    record with itself must give it back. */
 import {
-  canonicalJson,
   DamagedRowError,
   decryptRow,
   encryptRow,
   FormatError,
   READABLE_ROW_FORMAT,
   rowKey,
+  sameRecord,
   verifyKeyring,
 } from "./crypto.js";
 import { ServerError } from "./http.js";
@@ -207,10 +207,10 @@ async function pullAll({ app, server, device, keys, http, report }) {
       device.clearUnreadable(row.key, server.bit); // this server's row is one this device reads now
       const local = device.get(record.kind, record.id);
       const result = local ? app.merge(record, local) : record;
-      const isServers = same(result, record);
-      if (isServers && local && same(result, local)) device.markHas(record.kind, record.id, server.bit);
+      const isServers = sameRecord(result, record);
+      if (isServers && local && sameRecord(result, local)) device.markHas(record.kind, record.id, server.bit);
       else if (isServers) winners.push(record);
-      else if (same(result, local)) device.markLacks(record.kind, record.id, server.bit);
+      else if (sameRecord(result, local)) device.markLacks(record.kind, record.id, server.bit);
       else merged.push(result); // neither version: a change made here, for every server
     }
     if (winners.length) await device.apply(winners, server.bit);
@@ -225,9 +225,6 @@ async function pullAll({ app, server, device, keys, http, report }) {
     if (!page.more) return { head: page.head, mark: page.mark ?? null };
   }
 }
-
-// The same version of a record: the same object, or the same fields and values
-const same = (a, b) => a === b || (a != null && b != null && canonicalJson(a) === canonicalJson(b));
 
 // Damaged rows whose key belongs to a local record get this device's copy pushed over them (section 7.5).
 async function repair({ server, device, keys, report }) {

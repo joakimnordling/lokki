@@ -1,6 +1,7 @@
 // A device that keeps everything in memory: the reference adapter for the sync engine, used by tests and tools.
 // `merge(remote, local)` is the app's rule for two versions of a record (as in the engine's app settings), and
 // `held(record, get)` says which records it keeps back from servers for now (Lokki: live entries of a deleted metric).
+import { sameRecord } from "./crypto.js";
 
 const id = (kind, recordId) => `${kind}:${recordId}`;
 
@@ -66,7 +67,7 @@ export class MemoryDevice {
   put(record) {
     const current = this.get(record.kind, record.id);
     const result = current ? this.merge(record, current) : record;
-    if (result === current) return false;
+    if (sameRecord(result, current)) return false; // nothing new: it keeps its server bits
     this.records.set(id(record.kind, record.id), { record: result, bits: 0 });
     return true;
   }
