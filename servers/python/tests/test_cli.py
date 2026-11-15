@@ -66,7 +66,7 @@ def test_token_add_with_a_qr_code_for_another_app() -> None:
     token = re.search(r"Token:\s+(lk_\S+)", added)
     assert token is not None
     assert added.endswith(pairing_qr("https://sync.example.com", token.group(1), "other-app"))
-    assert "--app" in fails("token", "add", "jocke", "tablet", "--qr", "--app", "Other App")
+    assert "dashes" in fails("token", "add", "jocke", "tablet", "--qr", "--app", "Other App")
 
 
 def fails(*args: str) -> str:

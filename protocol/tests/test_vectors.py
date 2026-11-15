@@ -23,7 +23,7 @@ from vectors.generate import OUT, generate
 
 VECTORS: dict[str, Any] = json.loads(OUT.read_text())
 APP = "lokki"
-READ = {"app": APP, "kinds": ("entry", "metric")}
+READ: dict[str, Any] = {"app": APP, "kinds": ("entry", "metric")}
 KEYS = derive_keys(bytes.fromhex(VECTORS["data_key"]), APP)
 SMALL = {"name": "argon2id", "m": 64, "t": 1, "p": 1}
 
@@ -133,7 +133,8 @@ def test_other_kinds_of_entries_are_skipped_and_kept() -> None:
 
 def test_another_apps_vectors() -> None:
     other = VECTORS["other_app"]
-    app, read = other["app"], {"app": other["app"], "kinds": tuple(other["kinds"])}
+    app = other["app"]
+    read: dict[str, Any] = {"app": app, "kinds": tuple(other["kinds"])}
     keys = derive_keys(bytes.fromhex(VECTORS["data_key"]), app)
     assert keys.row_names.hex() == other["derived_keys"]["row_names"]
     assert keys != KEYS
