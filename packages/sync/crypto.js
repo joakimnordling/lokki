@@ -135,10 +135,11 @@ export async function decryptRow(keys, key, data, { app, kinds }) {
   return record;
 }
 
-/** Sorted keys, no whitespace: what the keyring's mac is computed over (section 4.4). Like JSON.stringify, it leaves
-    out keys whose value is undefined (or a function) and writes those in arrays as null, so a record compares equal
-    to its copy after a round trip through a server. */
+/** Sorted keys, no whitespace: what the keyring's mac is computed over (section 4.4). Otherwise like JSON.stringify:
+    it uses toJSON (a Date becomes its string), leaves out keys whose value is undefined (or a function) and writes
+    those in arrays as null, so a record compares equal to its copy after a round trip through a server. */
 export function canonicalJson(value) {
+  if (typeof value?.toJSON === "function") value = value.toJSON();
   const none = (v) => v === undefined || typeof v === "function" || typeof v === "symbol";
   if (Array.isArray(value)) return `[${value.map((v) => (none(v) ? "null" : canonicalJson(v))).join(",")}]`;
   if (value && typeof value === "object")

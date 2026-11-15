@@ -33,4 +33,13 @@ describe("the in-memory device", () => {
     assert.equal(canonicalJson(merged), '{"a":1,"list":[1,null]}');
     assert.equal(canonicalJson({ b: { z: undefined, y: 2 } }), '{"b":{"y":2}}');
   });
+
+  it("writes what JSON.stringify writes, apart from the order of keys", () => {
+    const record = { when: new Date(Date.UTC(2026, 10, 15)), list: [new Date(0), () => 1], b: 1, a: null };
+    assert.equal(
+      canonicalJson(record),
+      '{"a":null,"b":1,"list":["1970-01-01T00:00:00.000Z",null],"when":"2026-11-15T00:00:00.000Z"}',
+    );
+    assert.ok(sameRecord(record, JSON.parse(JSON.stringify(record))));
+  });
 });
