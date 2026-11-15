@@ -87,12 +87,50 @@ RECORDS: list[dict[str, Any]] = [
 ]
 
 
+LOKKI = "lokki"
+# Another app on the same protocol: the same data key gives it other keys, row names and rows
+OTHER_APP = "other-app"
+OTHER_RECORD: dict[str, Any] = {
+    "kind": "note",
+    "id": UUID,
+    "text": "Same key, other app",
+    "u": 1794120000000,
+}
+
+
+def other_app() -> dict[str, Any]:
+    keys = derive_keys(DATA_KEY, OTHER_APP)
+    nonce = fixed(150, 12)
+    key, data = encrypt_row(keys, OTHER_RECORD, app=OTHER_APP, nonce=nonce)
+    keyring, _ = new_keyring(
+        PASSPHRASE,
+        app=OTHER_APP,
+        now=1794130000000,
+        data_key=DATA_KEY,
+        vault="Jq9wq3sKp0m2A1xYbXo3Vg",
+        entry_id="a7Kq2m",
+        salt=fixed(200, 16),
+        nonce=fixed(220, 12),
+    )
+    return {
+        "app": OTHER_APP,
+        "kinds": ["note"],
+        "derived_keys": {
+            "encryption": keys.encryption.hex(),
+            "row_names": keys.row_names.hex(),
+            "keyring_mac": keys.keyring_mac.hex(),
+        },
+        "row": {"record": OTHER_RECORD, "nonce": nonce.hex(), "key": key, "data": data},
+        "keyring": keyring,
+    }
+
+
 def generate() -> dict[str, Any]:
-    keys = derive_keys(DATA_KEY)
+    keys = derive_keys(DATA_KEY, LOKKI)
     rows: list[dict[str, Any]] = []
     for i, record in enumerate(RECORDS):
         nonce = fixed(100 + i, 12)
-        key, data = encrypt_row(keys, record, nonce)
+        key, data = encrypt_row(keys, record, app=LOKKI, nonce=nonce)
         rows.append(
             {
                 "record": record,
@@ -106,6 +144,7 @@ def generate() -> dict[str, Any]:
     small_kdf = {"name": "argon2id", "m": 64, "t": 2, "p": 1, "salt": "c2FsdHNhbHRzYWx0c2FsdA"}
     keyring, _ = new_keyring(
         PASSPHRASE,
+        app=LOKKI,
         now=1794130000000,
         data_key=DATA_KEY,
         vault="Jq9wq3sKp0m2A1xYbXo3Vg",
@@ -161,6 +200,7 @@ def generate() -> dict[str, Any]:
             },
             "keyring": keyring,
         },
+        "other_app": other_app(),
     }
 
 

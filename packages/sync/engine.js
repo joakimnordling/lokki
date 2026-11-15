@@ -3,10 +3,12 @@
    The device is an adapter (see memory.js for the reference one):
      keyring() / setKeyring(k)       the vault keyring this device holds
      get(kind, id)                   the local record, in the protocol's shape, or null
-     apply(records, bit)             store pulled records that won; only `bit` set on them
+     apply(records, bit)             store records that won or were merged; only `bit` set on them, or no bits at all
+                                     for `bit` null (merged here: a change every server lacks)
      markHas(kind, id, bit)          the server has the current version
      markLacks(kind, id, bit)        it doesn't: push it there
-     pending(bit)                    local records the server lacks (never live entries of deleted metrics)
+     pending(bit)                    local records the server lacks, less any the app keeps back (Lokki: live entries
+                                     of deleted metrics)
      clearBit(bit)                   forget what this server has (a different or restored server), and its unreadable bits
      unreadable(key)                 bits of the servers holding row `key` in a format this device can't read: a
      markUnreadable(key, bit)          newer app's. Kept per row name, not per record, since this device may not have
@@ -16,19 +18,26 @@
    pulledUsingRowFormat}.
    `pulledUsingRowFormat` is the newest row format this device's code could decrypt and parse when it last pulled
    from the server (section 7.5).
-   `mark` is the mark of the push that wrote row number `cursor` (section 7.4). */
+   `mark` is the mark of the push that wrote row number `cursor` (section 7.4).
+
+   `app` is the app's settings: {name, kinds, merge}. `name` is in every label and bound text (crypto.js) and must
+   match the keyring's `app`; a row holding a kind not in `kinds` counts as damaged; and `merge(remote, local)` is the
+   record to keep when a server's version meets this device's: one of the two (whole-record rules, like Lokki's), or
+   a new record that takes something from each (field by field). The engine tells them apart by value: the server's
+   version is stored as the server's, this device's is pushed there, and a new one is stored as a change made here, for
+   every server. Merging must give the same record on every device whatever order versions arrive in, and merging a
+   record with itself must give it back. */
 import {
-  APP,
   DamagedRowError,
   decryptRow,
   encryptRow,
   FormatError,
   READABLE_ROW_FORMAT,
   rowKey,
+  sameRecord,
   verifyKeyring,
 } from "./crypto.js";
 import { ServerError } from "./http.js";
-import { compareRecords } from "./merge.js";
 
 const MAX_CONFLICTS = 5; // pushes refused because another device pushed first, per round
 const MAX_REPAIRS = 200; // damaged rows replaced from this device's copy, per round
@@ -45,7 +54,7 @@ export class OtherAppError extends Error {}
  * Throws ServerError (e.g. status 0 when offline, 401 for a revoked token), DifferentVaultError and OtherAppError.
  * `rowFormat`: the newest row format this code can decrypt and parse; only tests set it, to act as an updated app.
  */
-export async function syncRound({ server, device, keys, http, rowFormat = READABLE_ROW_FORMAT }) {
+export async function syncRound({ app, server, device, keys, http, rowFormat = READABLE_ROW_FORMAT }) {
   const report = {
     pulled: 0,
     applied: 0,
@@ -68,21 +77,21 @@ export async function syncRound({ server, device, keys, http, rowFormat = READAB
 
   let vault = await http.vault();
   if (vault.head < server.cursor) forget(server, device); // restored from an older state (section 7.4)
-  vault = await syncKeyring({ server, device, keys, http, vault, report });
+  vault = await syncKeyring({ app, server, device, keys, http, vault, report });
 
-  let { head, mark } = await pullAll({ server, device, keys, http, report });
+  let { head, mark } = await pullAll({ app, server, device, keys, http, report });
   await repair({ server, device, keys, report });
   for (let conflicts = 0; ; ) {
     const pending = device.pending(server.bit);
     if (!pending.length) break;
-    const batch = await encryptBatch({ keys, pending, limits: info.limits, device, bit: server.bit });
+    const batch = await encryptBatch({ app, keys, pending, limits: info.limits, device, bit: server.bit });
     report.held = batch.held;
     if (!batch.rows.length) break; // all that's left waits for an update that reads this server's newer rows
     try {
       ({ head, mark } = await http.push(head, mark, batch.rows));
     } catch (e) {
       if (!(e instanceof ServerError && e.status === 409) || ++conflicts > MAX_CONFLICTS) throw e;
-      ({ head, mark } = await pullAll({ server, device, keys, http, report }));
+      ({ head, mark } = await pullAll({ app, server, device, keys, http, report }));
       continue;
     }
     for (const r of batch.records) device.markHas(r.kind, r.id, server.bit);
@@ -98,14 +107,14 @@ export async function syncRound({ server, device, keys, http, rowFormat = READAB
  * to the others in the same call: after a pass that brought something new, the servers that came before it get
  * another round. Returns [{server, report}] or [{server, error}] for each server, from the last pass.
  */
-export async function syncAll({ device, keys, links, maxPasses = 3, rowFormat = READABLE_ROW_FORMAT }) {
+export async function syncAll({ app, device, keys, links, maxPasses = 3, rowFormat = READABLE_ROW_FORMAT }) {
   let results = [];
   for (let pass = 0; pass < maxPasses; pass++) {
     results = [];
     let applied = 0;
     for (const { server, http } of links) {
       try {
-        const report = await syncRound({ server, device, keys, http, rowFormat });
+        const report = await syncRound({ app, server, device, keys, http, rowFormat });
         applied += report.applied;
         results.push({ server, report });
       } catch (error) {
@@ -124,11 +133,12 @@ function forget(server, device) {
   server.keyringVersion = 0;
 }
 
-async function syncKeyring({ server, device, keys, http, vault, report }) {
+async function syncKeyring({ app, server, device, keys, http, vault, report }) {
   for (let tries = 0; tries < MAX_CONFLICTS; tries++) {
     const mine = device.keyring();
     let theirs = vault.keyring;
-    if (theirs && theirs.app !== APP) throw new OtherAppError(`this server's vault is for another app (${theirs.app})`);
+    if (theirs && theirs.app !== app.name)
+      throw new OtherAppError(`this server's vault is for another app (${theirs.app})`);
     if (theirs && mine && theirs.vault !== mine.vault)
       throw new DifferentVaultError("this server holds a different vault");
     if (theirs && !(await verifyKeyring(keys, theirs))) {
@@ -155,7 +165,7 @@ async function syncKeyring({ server, device, keys, http, vault, report }) {
   return vault;
 }
 
-async function pullAll({ server, device, keys, http, report }) {
+async function pullAll({ app, server, device, keys, http, report }) {
   let since = server.cursor;
   let mark = server.mark ?? null;
   let start; // the vault's head and its mark when this device started pulling without marks
@@ -177,11 +187,12 @@ async function pullAll({ server, device, keys, http, report }) {
       continue;
     }
     const winners = [];
+    const merged = [];
     for (const row of page.rows) {
       report.pulled++;
       let record;
       try {
-        record = await decryptRow(keys, row.key, row.data);
+        record = await decryptRow(keys, row.key, row.data, { app: app.name, kinds: app.kinds });
       } catch (e) {
         if (e instanceof FormatError) {
           // A newer app's version: never push over it from here (section 7.5)
@@ -195,15 +206,16 @@ async function pullAll({ server, device, keys, http, report }) {
       }
       device.clearUnreadable(row.key, server.bit); // this server's row is one this device reads now
       const local = device.get(record.kind, record.id);
-      const order = local ? compareRecords(record, local) : 1;
-      if (order > 0) winners.push(record);
-      else if (order === 0) device.markHas(record.kind, record.id, server.bit);
-      else device.markLacks(record.kind, record.id, server.bit);
+      const result = local ? app.merge(record, local) : record;
+      const isServers = sameRecord(result, record);
+      if (isServers && local && sameRecord(result, local)) device.markHas(record.kind, record.id, server.bit);
+      else if (isServers) winners.push(record);
+      else if (sameRecord(result, local)) device.markLacks(record.kind, record.id, server.bit);
+      else merged.push(result); // neither version: a change made here, for every server
     }
-    if (winners.length) {
-      await device.apply(winners, server.bit);
-      report.applied += winners.length;
-    }
+    if (winners.length) await device.apply(winners, server.bit);
+    if (merged.length) await device.apply(merged, null);
+    report.applied += winners.length + merged.length;
     [since, mark] = [page.cursor, page.mark ?? null];
     // Kept only with a mark: a cursor the server can't vouch for later would mean starting over
     if (page.mark || !page.cursor) {
@@ -231,7 +243,7 @@ async function repair({ server, device, keys, report }) {
 // The next batch for a server: up to `limits.push` rows, leaving out records whose row there is one this device
 // can't read (`held`, counted) and records too large for the server (they stay pending, and are reported once
 // nothing else is left). Held records are skipped before the batch is cut, so they never take the place of others.
-async function encryptBatch({ keys, pending, limits, device, bit }) {
+async function encryptBatch({ app, keys, pending, limits, device, bit }) {
   const rows = [];
   const records = [];
   let held = 0,
@@ -243,7 +255,7 @@ async function encryptBatch({ keys, pending, limits, device, bit }) {
       held++;
       continue;
     }
-    const row = await encryptRow(keys, record);
+    const row = await encryptRow(keys, record, { app: app.name });
     if (row.data.length > limits.row_bytes) {
       large++;
       continue;

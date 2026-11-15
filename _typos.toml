@@ -1,6 +1,6 @@
 # Metric names and test data are partly Swedish and Finnish; keep them out of spell checking.
 [files]
-extend-exclude = ["tests/fixtures/", "*.woff2", "*.svg", "public/fonts/", "package-lock.json", "src/ui/lucide.js"]
+extend-exclude = ["tests/fixtures/", "protocol/vectors/*.json", "*.woff2", "*.svg", "public/fonts/", "package-lock.json", "src/ui/lucide.js"]
 
 [default]
 # Unicode ranges in @font-face rules

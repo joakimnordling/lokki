@@ -1,6 +1,10 @@
 """
 Keys, row names, row encryption and the vault keyring (docs/sync-protocol.md, section 4).
 
+Several apps can use the protocol, each with its own name (``lokki`` for Lokki) in its key labels,
+additional data and keyrings, so one app's keys never open another's rows. Every function that
+needs it takes the app's name.
+
 Everything here is deterministic when given the "random" values (nonces, salts, IDs), which is how
 the test vectors in ``protocol/vectors`` are made.
 """
@@ -30,6 +34,14 @@ PAD_STEP = 64
 DEFAULT_KDF: Json = {"name": "argon2id", "m": 65536, "t": 3, "p": 1}
 
 _B64URL = re.compile(r"^[A-Za-z0-9_-]*$")
+_APP_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+
+
+def app_name(app: str) -> str:
+    """The app's name, if it's one: lowercase letters, digits and dashes, at most 32."""
+    if not _APP_NAME.fullmatch(app):
+        raise ValueError(f"not an app name: {app!r}")
+    return app
 
 
 class FormatError(Exception):
@@ -76,12 +88,13 @@ def _hkdf(data_key: bytes, info: str) -> bytes:
     )
 
 
-def derive_keys(data_key: bytes) -> Keys:
-    """HKDF-SHA256 with no salt and the labels from section 4.1."""
+def derive_keys(data_key: bytes, app: str) -> Keys:
+    """HKDF-SHA256 with no salt and the labels from section 4.1, e.g. ``lokki/v1/encryption``."""
+    app = app_name(app)
     return Keys(
-        encryption=_hkdf(data_key, "lokki/v1/encryption"),
-        row_names=_hkdf(data_key, "lokki/v1/row-names"),
-        keyring_mac=_hkdf(data_key, "lokki/v1/keyring-mac"),
+        encryption=_hkdf(data_key, f"{app}/v1/encryption"),
+        row_names=_hkdf(data_key, f"{app}/v1/row-names"),
+        keyring_mac=_hkdf(data_key, f"{app}/v1/keyring-mac"),
     )
 
 
@@ -106,20 +119,22 @@ def pad(text: str) -> bytes:
     return data + b" " * (size - len(data))
 
 
-def _row_aad(key: str) -> bytes:
-    return f"lokki/row/{ROW_VERSION}/{key}".encode()
+def _row_aad(app: str, key: str) -> bytes:
+    return f"{app_name(app)}/row/{ROW_VERSION}/{key}".encode()
 
 
-def encrypt_row(keys: Keys, record: Json, nonce: bytes | None = None) -> tuple[str, str]:
+def encrypt_row(
+    keys: Keys, record: Json, *, app: str, nonce: bytes | None = None
+) -> tuple[str, str]:
     """A record as a row: its key and its encrypted ``data``."""
     key = row_key(keys, record["kind"], record["id"])
     nonce = os.urandom(12) if nonce is None else nonce
-    sealed = AESGCM(keys.encryption).encrypt(nonce, pad(record_json(record)), _row_aad(key))
+    sealed = AESGCM(keys.encryption).encrypt(nonce, pad(record_json(record)), _row_aad(app, key))
     return key, f"{ROW_VERSION}.{b64url(nonce + sealed)}"
 
 
-def decrypt_row(keys: Keys, key: str, data: str) -> Json:
-    """The record in a row. Raises FormatError or DamagedRowError (section 7.5)."""
+def decrypt_row(keys: Keys, key: str, data: str, *, app: str, kinds: tuple[str, ...]) -> Json:
+    """The record in a row, one of the app's ``kinds``. Raises FormatError or DamagedRowError."""
     version, dot, payload = data.partition(".")
     if not dot or version != ROW_VERSION:
         raise FormatError(f"unknown row format {version!r}")
@@ -127,13 +142,13 @@ def decrypt_row(keys: Keys, key: str, data: str) -> Json:
         raw = unb64url(payload)
         if len(raw) < 12 + 16:
             raise DamagedRowError("too short")
-        plain = AESGCM(keys.encryption).decrypt(raw[:12], raw[12:], _row_aad(key))
+        plain = AESGCM(keys.encryption).decrypt(raw[:12], raw[12:], _row_aad(app, key))
         record = json.loads(plain)
     except (InvalidTag, ValueError) as error:
         raise DamagedRowError(str(error)) from error
     if (
         not isinstance(record, dict)
-        or record.get("kind") not in ("entry", "metric")  # pyright: ignore[reportUnknownMemberType]
+        or record.get("kind") not in kinds  # pyright: ignore[reportUnknownMemberType]
         or not isinstance(record.get("id"), str)  # pyright: ignore[reportUnknownMemberType]
     ):
         raise DamagedRowError("not a record")
@@ -168,8 +183,8 @@ def passphrase_key(passphrase: str, kdf: Json) -> bytes:
     )
 
 
-def _key_aad(vault: str, entry_id: str) -> bytes:
-    return f"lokki/key/v1/{vault}/{entry_id}".encode()
+def _key_aad(app: str, vault: str, entry_id: str) -> bytes:
+    return f"{app_name(app)}/key/v1/{vault}/{entry_id}".encode()
 
 
 def keyring_mac(keys: Keys, keyring: Json) -> str:
@@ -183,6 +198,7 @@ def passphrase_entry(
     vault: str,
     passphrase: str,
     *,
+    app: str,
     now: int,
     entry_id: str | None = None,
     salt: bytes | None = None,
@@ -195,7 +211,7 @@ def passphrase_entry(
     settings["salt"] = b64url(os.urandom(16) if salt is None else salt)
     nonce = os.urandom(12) if nonce is None else nonce
     wrapped = AESGCM(passphrase_key(passphrase, settings)).encrypt(
-        nonce, data_key, _key_aad(vault, entry_id)
+        nonce, data_key, _key_aad(app, vault, entry_id)
     )
     return {
         "id": entry_id,
@@ -206,16 +222,12 @@ def passphrase_entry(
     }
 
 
-# The app a keyring is for (section 4.4)
-APP = "lokki"
-
-
-def seal_keyring(keys: Keys, vault: str, entries: list[Json], u: int) -> Json:
-    """A complete keyring with its mac."""
+def seal_keyring(keys: Keys, vault: str, entries: list[Json], u: int, *, app: str) -> Json:
+    """A complete keyring with its mac. Its format is ``lokki-keyring`` whatever the app."""
     keyring: Json = {
         "format": "lokki-keyring",
         "version": 1,
-        "app": APP,
+        "app": app_name(app),
         "vault": vault,
         "keys": entries,
         "u": u,
@@ -227,6 +239,7 @@ def seal_keyring(keys: Keys, vault: str, entries: list[Json], u: int) -> Json:
 def new_keyring(
     passphrase: str,
     *,
+    app: str,
     now: int,
     data_key: bytes | None = None,
     vault: str | None = None,
@@ -239,12 +252,20 @@ def new_keyring(
     data_key = os.urandom(32) if data_key is None else data_key
     vault = b64url(os.urandom(16)) if vault is None else vault
     entry = passphrase_entry(
-        data_key, vault, passphrase, now=now, entry_id=entry_id, salt=salt, nonce=nonce, kdf=kdf
+        data_key,
+        vault,
+        passphrase,
+        app=app,
+        now=now,
+        entry_id=entry_id,
+        salt=salt,
+        nonce=nonce,
+        kdf=kdf,
     )
-    return seal_keyring(derive_keys(data_key), vault, [entry], now), data_key
+    return seal_keyring(derive_keys(data_key, app), vault, [entry], now, app=app), data_key
 
 
-def unlock(keyring: Json, passphrase: str) -> bytes:
+def unlock(keyring: Json, passphrase: str, *, app: str) -> bytes:
     """The data key, if the passphrase opens an entry and the keyring's mac is right."""
     vault: str = keyring["vault"]
     for entry in keyring["keys"]:
@@ -253,21 +274,25 @@ def unlock(keyring: Json, passphrase: str) -> bytes:
         raw = unb64url(entry["wrapped"])
         try:
             data_key = AESGCM(passphrase_key(passphrase, entry["kdf"])).decrypt(
-                raw[:12], raw[12:], _key_aad(vault, entry["id"])
+                raw[:12], raw[12:], _key_aad(app, vault, entry["id"])
             )
         except InvalidTag:
             continue
-        if not hmac.compare_digest(keyring_mac(derive_keys(data_key), keyring), keyring["mac"]):
+        if not hmac.compare_digest(
+            keyring_mac(derive_keys(data_key, app), keyring), keyring["mac"]
+        ):
             raise DamagedKeyringError("the keyring's mac doesn't match")
         return data_key
     raise WrongPassphraseError("no entry opens with this passphrase")
 
 
 def change_passphrase(
-    keyring: Json, data_key: bytes, passphrase: str, *, now: int, **entry_options: Any
+    keyring: Json, data_key: bytes, passphrase: str, *, app: str, now: int, **entry_options: Any
 ) -> Json:
     """The keyring with its passphrase entry replaced (other entries kept), newer ``u``."""
     others = [e for e in keyring["keys"] if e.get("type") != "passphrase"]
-    entry = passphrase_entry(data_key, keyring["vault"], passphrase, now=now, **entry_options)
+    entry = passphrase_entry(
+        data_key, keyring["vault"], passphrase, app=app, now=now, **entry_options
+    )
     u = max(now, keyring["u"] + 1)  # newer than the keyring it replaces, even with a slow clock
-    return seal_keyring(derive_keys(data_key), keyring["vault"], [entry, *others], u)
+    return seal_keyring(derive_keys(data_key, app), keyring["vault"], [entry, *others], u, app=app)

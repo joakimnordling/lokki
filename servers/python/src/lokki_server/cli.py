@@ -15,7 +15,7 @@ from lokki_server.clock import iso, now_ms
 from lokki_server.config import Settings
 from lokki_server.models import Scope
 from lokki_server.names import check_label, check_vault_name
-from lokki_server.pairing import pairing_qr
+from lokki_server.pairing import DEFAULT_APP, is_app_name, pairing_qr
 from lokki_server.storage import Storage, migrate, open_storage
 from lokki_server.storage.base import NameTaken, VaultId
 
@@ -129,6 +129,12 @@ def _label(value: str) -> str:
         raise typer.BadParameter(str(e)) from None
 
 
+def _app_name(value: str) -> str:
+    if not is_app_name(value):
+        raise typer.BadParameter("lowercase letters, digits and dashes, at most 32")
+    return value
+
+
 VaultName = Annotated[
     str,
     typer.Argument(
@@ -229,6 +235,14 @@ async def token_add(
             help="Also print a QR code to scan in the app (Sync → Scan QR Code)",
         ),
     ] = False,
+    app_name: Annotated[
+        str,
+        typer.Option(
+            "--app",
+            help="The app the QR code is for, if not Lokki: the name its codes start with",
+            callback=_app_name,
+        ),
+    ] = DEFAULT_APP,
 ) -> None:
     """Add a token to a vault and print the URL and token to enter in the app."""
     async with _storage() as storage:
@@ -250,7 +264,7 @@ async def token_add(
     typer.echo(f"Token:  {token}    (shown only now)")
     if qr:
         typer.echo("\nOr scan this in the app's Sync screen (Scan QR Code):\n")
-        typer.echo(pairing_qr(url, token), nl=False)
+        typer.echo(pairing_qr(url, token, app_name), nl=False)
 
 
 @token_app.command("list")

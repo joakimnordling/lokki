@@ -35,6 +35,7 @@ development. The other commands:
 | `vault delete NAME`                 | Deletes a vault with everything in it and its tokens      |
 | `token add VAULT LABEL [--scope …]` | A new token; `--scope read` for one that can only read    |
 | `token add VAULT LABEL --qr`        | Also prints a QR code: Sync → Scan QR Code in the app     |
+| `… --qr --app NAME`                 | The QR code for another app on the protocol (not Lokki)   |
 | `token list VAULT`                  | The vault's tokens and when each was last used            |
 | `token revoke VAULT LABEL`          | The device using that token can no longer sync            |
 | `migrate`                           | Updates the database's tables without starting the server |

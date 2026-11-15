@@ -1,7 +1,7 @@
 // The standalone site syncing through the real Python server (servers/python), driven through the app's own screens.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { ServerClient } from "../../src/sync/http.js";
+import { ServerClient } from "../../packages/sync/http.js";
 import { startServer } from "../sync/server.js";
 import { home, startHarness, toastText } from "./harness.js";
 

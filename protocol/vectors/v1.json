@@ -193,5 +193,48 @@
       "u": 1794130000000,
       "mac": "hejcxu9vNGSQ7tOY8P3H2Q00wUb5EWhsPGqIsT-Fe7Q"
     }
+  },
+  "other_app": {
+    "app": "other-app",
+    "kinds": ["note"],
+    "derived_keys": {
+      "encryption": "d329dc1331aff909d1d61947a63440118b46f3b9a8b32427c078ba861e5178ab",
+      "row_names": "a818f2de7b5b094c7021aacec58e8803f8edc4d95914cf6a84119fd3343b60b3",
+      "keyring_mac": "8c90791d25cb09d2879bd47490e1d19feb984685d4f622f257a724bfecaf2b12"
+    },
+    "row": {
+      "record": {
+        "kind": "note",
+        "id": "6f1c2a90-3b7e-4d1a-9c55-0e8f4b2d7a11",
+        "text": "Same key, other app",
+        "u": 1794120000000
+      },
+      "nonce": "969798999a9b9c9d9e9fa0a1",
+      "key": "dM1yi_QcUiRLMKNuaNKK0A",
+      "data": "v1.lpeYmZqbnJ2en6ChIlZ6OrQ_KgaL9t1ntTVj9GKgk4mWuC4xDe2d-_xApiiV3FxHHYXBzIcCLYG9R4V3mD74DIELa3u9kPL7tpBH7sha1ETKc8PzDtW6fekEjVctYKlNSjVg3g8JzU1XmFew6gEZbvVlYyjDVvrlSokIRaX3oRgpYHWE00fqAdLgvAiOO98OjDp6hWIVVjE5PeENMhYs27e0TXTree0ZAz0KHbOmFOS1B7Y95zUe5iRITKBvh9DLwdbJBRX17xNBNdfLXrtsZHNNEG2B4_9eE8qIfQ"
+    },
+    "keyring": {
+      "format": "lokki-keyring",
+      "version": 1,
+      "app": "other-app",
+      "vault": "Jq9wq3sKp0m2A1xYbXo3Vg",
+      "keys": [
+        {
+          "id": "a7Kq2m",
+          "type": "passphrase",
+          "created": 1794130000000,
+          "kdf": {
+            "name": "argon2id",
+            "m": 65536,
+            "t": 3,
+            "p": 1,
+            "salt": "yMnKy8zNzs_Q0dLT1NXW1w"
+          },
+          "wrapped": "3N3e3-Dh4uPk5ebnQpwncX7bOOHswaHW1vtuV2i_wpuwxIpWJJza8zf2S5dmVSmnWPjiuC1uKtFWyxJ0"
+        }
+      ],
+      "u": 1794130000000,
+      "mac": "PhV0HRE3N-CVNpI48hHqedhlyUr5BpfKU4xkh6G4RUM"
+    }
   }
 }

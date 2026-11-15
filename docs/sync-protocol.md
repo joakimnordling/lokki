@@ -133,6 +133,11 @@ passphrase ──Argon2id(salt)──▶ passphrase key ──unwraps──▶ d
   passphrase key). Changing the passphrase re-wraps the data key; no data is re-encrypted.
 - Devices keep the three derived keys as non-extractable WebCrypto keys in IndexedDB. They store neither the
   passphrase nor the data key.
+- **Other apps.** Another app can use this protocol and the same servers with its own name (the keyring's `app`, 4.4)
+  in place of `lokki` in every label and additional data of section 4: `<app>/v1/encryption`, `<app>/row/v1/<key>`,
+  `<app>/key/v1/<vault>/<id>` and so on. Its keys then never open Lokki's rows, nor Lokki's its. It has its own kinds
+  of records, row versions and merge rule. The JavaScript implementation is `packages/sync`, and the test vectors
+  include one for an app called `other-app`.
 - Sign-in to a server (5.2) is separate and has nothing to do with these keys.
 
 ### 4.2 Row names: `key`
@@ -261,6 +266,7 @@ Token:  lk_6Yq3kM0p…        (shown only now)
 - There is no sign-up through the API.
 - With `--qr`, the command also prints both as a QR code holding `lokki:sync?url=…&token=…` (URL-encoded); the app's
   Scan QR Code fills them in from it. The `lokki:` scheme keeps phones' camera apps from opening it as a web link.
+  For another app, `--app <name>` starts the code with that app's name instead, and each app takes only its own.
 
 ### 5.3 API
 

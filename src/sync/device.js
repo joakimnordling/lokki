@@ -73,11 +73,11 @@ export class AppDevice {
     const ops = [];
     for (const rec of records) {
       if (rec.kind === "entry") {
-        const r = { ...toEntry(rec, recs.get(rec.id)), sb: 1 << bit };
+        const r = { ...toEntry(rec, recs.get(rec.id)), sb: bit == null ? 0 : 1 << bit };
         recs.set(r.id, r);
         ops.push(["recs", "put", r]);
       } else {
-        const m = { ...toMetric(rec), sb: 1 << bit };
+        const m = { ...toMetric(rec), sb: bit == null ? 0 : 1 << bit };
         metricAll.set(rec.id, m);
         ops.push(["metrics", "put", { id: rec.id, ...m }]);
       }
@@ -163,9 +163,9 @@ export class AppDevice {
   all() {
     return [...[...metricAll].map(([id, m]) => metricRecord(id, m)), ...[...recs.values()].map(entryRecord)];
   }
-  /** Save the bits changed since the last call. */
+  /** Save the bits changed since the last call, with `also`: the sync store's ["put", row] / ["delete", k]. */
   async persist(also = []) {
-    await idb.write([...this.ops(), ...also]);
+    await idb.write([...this.ops(), ...also.map(([op, value]) => ["sync", op, value])]);
   }
   /**
    * The writes that save the bits changed since the last call, to make in one transaction with the servers' state:
