@@ -138,16 +138,24 @@ export async function decryptRow(keys, key, data, { app, kinds }) {
 /** Sorted keys, no whitespace: what the keyring's mac is computed over (section 4.4). Otherwise like JSON.stringify:
     it uses toJSON (a Date becomes its string), leaves out keys whose value is undefined (or a function) and writes
     those in arrays as null, so a record compares equal to its copy after a round trip through a server. */
-export function canonicalJson(value) {
-  if (typeof value?.toJSON === "function") value = value.toJSON();
-  const none = (v) => v === undefined || typeof v === "function" || typeof v === "symbol";
-  if (Array.isArray(value)) return `[${value.map((v) => (none(v) ? "null" : canonicalJson(v))).join(",")}]`;
-  if (value && typeof value === "object")
-    return `{${Object.keys(value)
-      .filter((k) => !none(value[k]))
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`)
-      .join(",")}}`;
+export const canonicalJson = (value) => canonical(plain(value));
+
+// A value as JSON sees it: through its toJSON, once, as JSON.stringify does; undefined for what JSON leaves out
+const plain = (v) => {
+  if (typeof v?.toJSON === "function") v = v.toJSON();
+  return typeof v === "function" || typeof v === "symbol" ? undefined : v;
+};
+function canonical(value) {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return `[${value.map((v) => canonical(plain(v)) ?? "null").join(",")}]`;
+  if (value && typeof value === "object") {
+    const fields = [];
+    for (const k of Object.keys(value).sort()) {
+      const json = canonical(plain(value[k]));
+      if (json !== undefined) fields.push(`${JSON.stringify(k)}:${json}`);
+    }
+    return `{${fields.join(",")}}`;
+  }
   return JSON.stringify(value);
 }
 

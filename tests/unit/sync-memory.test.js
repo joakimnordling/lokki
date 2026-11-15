@@ -41,5 +41,11 @@ describe("the in-memory device", () => {
       '{"a":null,"b":1,"list":["1970-01-01T00:00:00.000Z",null],"when":"2026-11-15T00:00:00.000Z"}',
     );
     assert.ok(sameRecord(record, JSON.parse(JSON.stringify(record))));
+    // toJSON is called once, and what it gives that JSON can't hold is left out, as JSON.stringify does
+    const nothing = { toJSON: () => undefined };
+    const twice = { toJSON: () => ({ toJSON: () => "deeper" }) };
+    const odd = { a: 1, gone: nothing, list: [nothing], twice };
+    assert.equal(canonicalJson(odd), JSON.stringify(odd));
+    assert.equal(canonicalJson(odd), '{"a":1,"list":[null],"twice":{}}');
   });
 });
