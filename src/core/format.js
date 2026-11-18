@@ -31,6 +31,7 @@ export function dayLabel(t) {
 export function periodLabel(t, gran) {
   const d = new Date(t),
     yr = ` ${d.getFullYear()}`;
+  if (gran === "yearly") return String(d.getFullYear());
   if (gran === "monthly") return `${MON[d.getMonth()]} ${d.getFullYear()}`;
   if (gran === "weekly") {
     const e = new Date(t);

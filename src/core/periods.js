@@ -1,6 +1,6 @@
 import { prefs } from "./prefs.js";
 
-// Start of the day, week (on the configured first weekday) or month that time t falls in, as epoch ms.
+// Start of the day, week (on the configured first weekday), month or year that time t falls in, as epoch ms.
 export function startOf(t, gran, weekStart = prefs.weekStart) {
   const d = new Date(t);
   d.setHours(0, 0, 0, 0);
@@ -9,6 +9,8 @@ export function startOf(t, gran, weekStart = prefs.weekStart) {
     d.setDate(d.getDate() - wd);
   } else if (gran === "monthly") {
     d.setDate(1);
+  } else if (gran === "yearly") {
+    d.setMonth(0, 1);
   }
   return +d;
 }
