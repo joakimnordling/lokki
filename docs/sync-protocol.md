@@ -106,9 +106,10 @@ payloads small). A record's JSON is what gets encrypted (section 4).
 
 ### Not synced
 
-The chart view of a metric (All Values / Averages / Totals, Daily / Weekly / Monthly) is a per-device setting. It is
-never synced. Backups include the backing-up device's view as `mode` and `gran`; restoring sets them only for metrics
-that have no view on the restoring device yet.
+The chart view of a metric (All Values / Averages / Totals, Daily / Weekly / Monthly / Yearly) is a per-device
+setting. It is never synced. Backups include the backing-up device's view as `mode` and `gran`; restoring sets them
+only for metrics that have no view on the restoring device yet. Versions of Lokki without Yearly ignore a `gran` of
+`yearly`.
 
 ### Backups
 

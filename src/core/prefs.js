@@ -48,7 +48,7 @@ export const prefs = {
    synced, so switching it on one device never changes another. Metrics from before this kept their view in the
    metric record; that is used until this device saves a view of its own. */
 export const MODES = ["all", "avg", "totals"];
-export const GRANS = ["daily", "weekly", "monthly"];
+export const GRANS = ["daily", "weekly", "monthly", "yearly"];
 export function viewOf(mid, metric) {
   const saved = store.get(`view:${mid}`);
   const mode = saved?.mode ?? metric?.mode;

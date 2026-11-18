@@ -9,7 +9,21 @@ import { $ } from "./dom.js";
 import { goEntries } from "./entries.js";
 import { ICON } from "./icons.js";
 
+// Yearly is offered once a metric's first entry is at least two years old: before that it'd be a bar or two
+export function hasYears(mid, now = new Date()) {
+  const es = entriesOf(mid);
+  if (!es.length) return false;
+  const first = es.reduce((a, e) => (e.t < a ? e.t : a), es[0].t);
+  return new Date(first) <= new Date(now.getFullYear() - 2, now.getMonth(), now.getDate(), 23, 59, 59);
+}
+
 export function detailRender() {
+  const years = hasYears(ui.mid);
+  // Saved as Yearly, but too little data for it now (or a new metric after Yearly): Monthly, kept as its view
+  if (ui.gran === "yearly" && !years) {
+    ui.gran = "monthly";
+    saveView();
+  }
   const main = $("#main"),
     mid = ui.mid,
     mode = ui.mode,
@@ -22,7 +36,7 @@ export function detailRender() {
   let h = `<div class="seg">${segBtn("mode", "all", "All Values")}${segBtn("mode", "avg", "Averages")}${segBtn("mode", "totals", "Totals")}</div>`;
   h += `<div class="chartwrap"><div class="chart" id="chart" tabindex="0" aria-label="Chart. Use arrow keys to move between periods."><div class="spacer" id="spacer"></div></div><canvas id="cv"></canvas></div>`;
   if (mode !== "all")
-    h += `<div class="seg">${segBtn("gran", "daily", "Daily")}${segBtn("gran", "weekly", "Weekly")}${segBtn("gran", "monthly", "Monthly")}</div>`;
+    h += `<div class="seg">${segBtn("gran", "daily", "Daily")}${segBtn("gran", "weekly", "Weekly")}${segBtn("gran", "monthly", "Monthly")}${years ? segBtn("gran", "yearly", "Yearly") : ""}</div>`;
   if (!ser.length) {
     main.innerHTML = `${h}<div class="state"><b>No entries yet</b>Tap + below to log the first value.</div>`;
     bindDetail();
@@ -182,7 +196,7 @@ function bindDetail() {
   if (nl) nl.onclick = goEntries;
 }
 
-/* Per-metric view (All Values/Averages/Totals + Daily/Weekly/Monthly), kept on this device (core/prefs.js) */
+/* Per-metric view (All Values/Averages/Totals + Daily/Weekly/Monthly/Yearly), kept on this device (core/prefs.js) */
 export function loadView(mid) {
   const view = viewOf(mid, metrics.get(mid));
   ui.rankStep = 0;

@@ -1,6 +1,6 @@
-/* Demo data: a year of made-up logs ending at a given moment, the same every time for the same moment.
-   The app shows it at ?demo, in a database of its own (src/data/demo.js); the README's screenshots use it too
-   (scripts/screenshots.js). Nothing here is anyone's real data. */
+/* Demo data: a year of made-up logs ending at a given moment, five for Cycling, so it has a yearly view; the same every
+   time for the same moment. The app shows it at ?demo, in a database of its own (src/data/demo.js); the README's
+   screenshots use it too (scripts/screenshots.js). Nothing here is anyone's real data. */
 
 /** Whether this page is the demo: ?demo in its address. */
 export const DEMO = typeof location !== "undefined" && new URLSearchParams(location.search).has("demo");
@@ -69,8 +69,22 @@ function* day(d, i, days, r) {
     yield ["reading", 22, between(0, 59), Math.round(between(10, 40) * (wd % 6 === 0 ? 1.6 : 1) * (1.3 - 0.4 * s))];
 }
 
+// Cycling's older years, before the demo's year: a few rides a week in the warmer months, more each year. From random
+// numbers of their own, so the other metrics come out the same as without them.
+const OLD_YEARS = 4;
+function* cyclingHistory(from, to) {
+  const r = rng(20221108);
+  const years = to.getFullYear() - from.getFullYear();
+  for (const d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+    const s = summer(d),
+      keen = 0.6 + (0.4 * (d.getFullYear() - from.getFullYear())) / years;
+    if ([1, 5, 0].includes(d.getDay()) && r() < (0.1 + 0.75 * s) * keen)
+      yield [d, 17, r() * 59, Math.round((12 + r() * 18) * (0.6 + 0.8 * s))];
+  }
+}
+
 /**
- * A year of logs up to `end` (a Date), none after it. Metrics as {id, name, type, created, mode?, gran?, u}, entries
+ * A year of logs up to `end` (a Date), none after it, and a few more years of Cycling. Metrics as {id, name, type, created, mode?, gran?, u}, entries
  * as this device keeps them: {id, m, y, t, v, u}.
  */
 export function demoData(end) {
@@ -79,8 +93,13 @@ export function demoData(end) {
   const last = at(end, end.getHours(), end.getMinutes());
   const r = rng(20261108);
   let u = end.getTime() - 400 * 864e5;
-  const metrics = DEMO_METRICS.map((m) => ({ created: at(first, 8, 0), ...m, u: u++ }));
+  const older = new Date(first.getFullYear() - OLD_YEARS, first.getMonth(), first.getDate());
+  const metrics = DEMO_METRICS.map((m) => ({ created: at(m.id === "cycling" ? older : first, 8, 0), ...m, u: u++ }));
   const entries = [];
+  for (const [d, h, min, v] of cyclingHistory(older, first)) {
+    const t = at(d, h, min);
+    entries.push({ id: `cycling.${t}`, m: "cycling", y: d.getFullYear(), t, v, u: u++ });
+  }
   for (let d = new Date(first), i = 0; i < days; d.setDate(d.getDate() + 1), i++)
     for (const [m, h, min, v] of day(d, i, days, r)) {
       const t = at(d, h, min);

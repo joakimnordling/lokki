@@ -37,12 +37,14 @@ describe("periods", () => {
     assert.equal(startOf(thu, "weekly", 0), local("2026-11-01T00:00:00"));
     assert.equal(startOf(local("2026-11-01T10:00:00"), "weekly", 1), local("2026-10-26T00:00:00"));
   });
-  it("starts days and months at midnight", () => {
+  it("starts days, months and years at midnight", () => {
     assert.equal(startOf(local("2026-11-05T15:00:00"), "daily"), local("2026-11-05T00:00:00"));
     assert.equal(startOf(local("2026-11-05T15:00:00"), "monthly"), local("2026-11-01T00:00:00"));
+    assert.equal(startOf(local("2026-11-05T15:00:00"), "yearly"), local("2026-01-01T00:00:00"));
   });
   it("labels periods", () => {
     assert.equal(periodLabel(local("2026-11-01T00:00:00"), "monthly"), "Nov 2026");
+    assert.equal(periodLabel(local("2026-01-01T00:00:00"), "yearly"), "2026");
     assert.equal(periodLabel(local("2026-11-02T00:00:00"), "weekly"), "Nov 2 - Nov 8 2026");
     assert.equal(periodLabel(local("2026-12-28T00:00:00"), "weekly"), "Dec 28 2026 - Jan 3 2027");
     assert.equal(periodLabel(local("2026-11-05T00:00:00"), "daily"), "Nov 5 2026");

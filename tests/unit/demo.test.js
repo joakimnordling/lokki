@@ -16,7 +16,10 @@ describe("demo data", () => {
   it("covers the year up to the moment, and nothing after it", () => {
     for (const end of [END, new Date(2026, 0, 1, 0, 5), new Date(2026, 1, 28, 7, 15)]) {
       const { entries } = demoData(end);
-      const ts = entries.map((e) => e.t).sort();
+      const ts = entries
+        .filter((e) => e.m !== "cycling")
+        .map((e) => e.t)
+        .sort();
       assert.ok(ts.at(-1) <= local(end), `${ts.at(-1)} after ${local(end)}`);
       assert.ok(ts[0] >= local(new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())));
       assert.ok(ts[0].slice(0, 10) <= local(new Date(end.getFullYear() - 1, end.getMonth(), end.getDate() + 3)));
@@ -42,6 +45,19 @@ describe("demo data", () => {
     assert.ok(entries.every((e) => ids.has(e.m) && typeof e.v === "number" && e.y === +e.t.slice(0, 4)));
     assert.equal(new Set(entries.map((e) => e.id)).size, entries.length);
     assert.equal(new Set([...metrics, ...entries].map((r) => r.u)).size, metrics.length + entries.length);
+  });
+
+  it("has five years of Cycling, more each year, without changing the other metrics' year", () => {
+    const { metrics, entries } = demoData(END);
+    const rides = entries.filter((e) => e.m === "cycling");
+    assert.equal(rides[0].t.slice(0, 4), "2021");
+    assert.equal(metrics.find((m) => m.id === "cycling").created.slice(0, 4), "2021");
+    const perYear = (y) => rides.filter((e) => e.y === y).length;
+    assert.ok(perYear(2022) < perYear(2024), `${perYear(2022)} rides in 2022, ${perYear(2024)} in 2024`);
+    assert.ok(
+      rides.every((e, i) => i === 0 || e.t > rides[i - 1].t),
+      "in order",
+    );
   });
 
   it("tells a story: weight goes down over the year", () => {
