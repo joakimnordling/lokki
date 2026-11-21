@@ -63,6 +63,26 @@ export class MemoryDevice {
     return [...this.records.values()].map((r) => r.record);
   }
 
+  // For a sync manager's status (manager.js): which servers lack which records
+  /** How many records lack one of these servers' bits, and how many lack them all. */
+  lacking(bits) {
+    const all = bits.reduce((a, b) => a | (1 << b), 0);
+    let missing = 0,
+      nowhere = 0;
+    for (const { record, bits: has } of this.records.values()) {
+      if (this.held(record, (kind, recordId) => this.get(kind, recordId))) continue;
+      if ((has & all) !== all) missing++;
+      if (!(has & all)) nowhere++;
+    }
+    return { missing, nowhere };
+  }
+  anyNowhere(bits) {
+    return this.lacking(bits).nowhere > 0;
+  }
+  lacks(bit) {
+    return this.pending(bit).length;
+  }
+
   /** A change made on this device, merged with the version it has: no server has the result yet. */
   put(record) {
     const current = this.get(record.kind, record.id);

@@ -27,7 +27,7 @@ export function versionLine() {
 
 export function openClear() {
   const synced = sync.vault && sync.servers.length;
-  const lost = synced ? sync.status().unsynced : 0;
+  const lost = synced ? sync.status().onlyHere : 0;
   const warn = lost
     ? `<p class="lead warn">${lost === 1 ? "1 change hasn't" : `${fmt(lost)} changes haven't`} reached any server yet and would be lost. Sync first, or back up.</p>`
     : "";
