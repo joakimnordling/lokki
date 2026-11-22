@@ -4,7 +4,9 @@
      keyring() / setKeyring(k)       the vault keyring this device holds
      get(kind, id)                   the local record, in the protocol's shape, or null
      apply(records, bit)             store records that won or were merged; only `bit` set on them, or no bits at all
-                                     for `bit` null (merged here: a change every server lacks)
+                                     for `bit` null (merged here: a change every server lacks). It must change what
+                                     get() returns before its first await: the engine decides and applies with no
+                                     await in between, so no change made on this device can come between
      markHas(kind, id, bit)          the server has the current version
      markLacks(kind, id, bit)        it doesn't: push it there
      pending(bit)                    local records the server lacks, less any the app keeps back (Lokki: live entries
@@ -94,7 +96,11 @@ export async function syncRound({ app, server, device, keys, http, rowFormat = R
       ({ head, mark } = await pullAll({ app, server, device, keys, http, report }));
       continue;
     }
-    for (const r of batch.records) device.markHas(r.kind, r.id, server.bit);
+    // The server has what was sent: a record changed here while the push was on its way still lacks it
+    for (const r of batch.records) {
+      const now = device.get(r.kind, r.id);
+      if (now && sameRecord(now, r)) device.markHas(r.kind, r.id, server.bit);
+    }
     server.cursor = head;
     server.mark = mark;
     report.pushed += batch.records.length;
@@ -186,8 +192,9 @@ async function pullAll({ app, server, device, keys, http, report }) {
       [since, mark, start] = [0, null, undefined];
       continue;
     }
-    const winners = [];
-    const merged = [];
+    // Decrypt the page first, then decide and apply with no await in between: a change made here while this waits
+    // is never written over with a version decided before it
+    const records = [];
     for (const row of page.rows) {
       report.pulled++;
       let record;
@@ -205,6 +212,11 @@ async function pullAll({ app, server, device, keys, http, report }) {
         continue;
       }
       device.clearUnreadable(row.key, server.bit); // this server's row is one this device reads now
+      records.push(record);
+    }
+    const winners = [];
+    const merged = [];
+    for (const record of records) {
       const local = device.get(record.kind, record.id);
       const result = local ? app.merge(record, local) : record;
       const isServers = sameRecord(result, record);
@@ -213,8 +225,13 @@ async function pullAll({ app, server, device, keys, http, report }) {
       else if (sameRecord(result, local)) device.markLacks(record.kind, record.id, server.bit);
       else merged.push(result); // neither version: a change made here, for every server
     }
-    if (winners.length) await device.apply(winners, server.bit);
-    if (merged.length) await device.apply(merged, null);
+    // Both start at once (no await between them), and both finish before an error from either is passed on
+    const saved = await Promise.allSettled([
+      winners.length && device.apply(winners, server.bit),
+      merged.length && device.apply(merged, null),
+    ]);
+    const failed = saved.find((r) => r.status === "rejected");
+    if (failed) throw failed.reason;
     report.applied += winners.length + merged.length;
     [since, mark] = [page.cursor, page.mark ?? null];
     // Kept only with a mark: a cursor the server can't vouch for later would mean starting over
