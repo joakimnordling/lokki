@@ -147,8 +147,18 @@ describe("standalone sync", () => {
     assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences (sync has a problem)");
     await open(A);
     assert.match(await A.textContent("#syncBody"), /Can't reach the server/);
+    // Lokki has no Pause button, but a server paused on this device shows as paused, not with its old error
+    const bit = await A.evaluate(() => window.__lokki.sync.servers[0].bit);
+    await A.evaluate((b) => window.__lokki.sync.setPaused(b, true), bit);
+    await home(A);
+    await A.evaluate(() => window.__lokki.sync.notify()); // the list redraws on a change only when no sheet is open
+    assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences (sync is paused)");
+    await open(A);
+    assert.match(await A.textContent("#syncBody"), /Paused on this device/);
+    assert.doesNotMatch(await A.textContent("#syncBody"), /Can't reach the server/);
     await A.context().setOffline(false);
-    await syncNow(A);
+    await A.evaluate((b) => window.__lokki.sync.setPaused(b, false), bit);
+    await synced(A);
     await home(A);
     assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences");
     assert.equal(await A.$(".hbtn .dot"), null);

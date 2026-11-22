@@ -26,9 +26,11 @@ export function render() {
     const label =
       state === "bad"
         ? "Preferences (sync has a problem)"
-        : state
-          ? "Preferences (changes waiting to sync)"
-          : "Preferences";
+        : state === "paused" // every server paused on this device (Lokki has no Pause button yet)
+          ? "Preferences (sync is paused)"
+          : state
+            ? "Preferences (changes waiting to sync)"
+            : "Preferences";
     hdr.innerHTML = `<button class="hbtn" id="hType" aria-label="Filter by log type">${ICON.grid}</button><h1>My Logs</h1><button class="hbtn right" id="hSet" aria-label="${label}">${ICON.gear}${dot}</button>`;
     $("#hType").onclick = openTypeFilter;
     $("#hSet").onclick = openSettings;

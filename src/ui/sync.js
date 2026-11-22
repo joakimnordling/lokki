@@ -180,6 +180,7 @@ function unlockVault(url, token, keyring) {
 // ---- the overview
 
 function serverState(s, running) {
+  if (s.paused) return [ICON.sending, "Paused on this device", false]; // its last error is old news
   if (running) return [ICON.syncing, "Syncing…", false];
   if (!s.last) return [ICON.sending, "Not synced yet", false];
   if (!s.last.ok) return [s.last.error?.startsWith("Can't reach") ? ICON.offline : ICON.failing, s.last.error, true];

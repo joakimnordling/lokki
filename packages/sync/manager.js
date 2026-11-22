@@ -156,6 +156,7 @@ export function createSyncManager({ app, store, makeDevice, words, onSynced, bit
     /** Pause a server on this device, or resume it (and sync soon). A round already running finishes as it is. */
     async setPaused(bit, paused) {
       const server = this.servers.find((s) => s.bit === bit);
+      if (!server) throw new Error(`No server with bit ${bit}.`);
       server.paused = paused;
       server.tries = 0;
       await this.saveServer(server);

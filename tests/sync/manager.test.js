@@ -213,6 +213,7 @@ describe("pausing a server", () => {
     assert.equal(m.status().failing, false);
     assert.equal(m.headerState(), null);
     await m.removeServer(two.bit);
+    await assert.rejects(m.setPaused(two.bit, false), /No server with bit 1/);
     assert.deepEqual(
       m.servers.map((s) => s.bit),
       [one.bit],
