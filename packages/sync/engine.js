@@ -225,10 +225,13 @@ async function pullAll({ app, server, device, keys, http, report }) {
       else if (sameRecord(result, local)) device.markLacks(record.kind, record.id, server.bit);
       else merged.push(result); // neither version: a change made here, for every server
     }
-    await Promise.all([
+    // Both start at once (no await between them), and both finish before an error from either is passed on
+    const saved = await Promise.allSettled([
       winners.length && device.apply(winners, server.bit),
       merged.length && device.apply(merged, null),
     ]);
+    const failed = saved.find((r) => r.status === "rejected");
+    if (failed) throw failed.reason;
     report.applied += winners.length + merged.length;
     [since, mark] = [page.cursor, page.mark ?? null];
     // Kept only with a mark: a cursor the server can't vouch for later would mean starting over
