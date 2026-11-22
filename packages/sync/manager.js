@@ -3,14 +3,19 @@
    whatever its device keeps there (Lokki's: "unreadable:<key>"). The keys are non-extractable CryptoKeys; neither the
    passphrase nor the data key is ever stored.
 
-   createSyncManager({app, store, makeDevice, words, onSynced}):
+   createSyncManager({app, store, makeDevice, words, onSynced, bits}):
      app            the app's settings for the engine: {name, kinds, merge} (engine.js)
      store          the app's key-value store for the above: all() -> rows, write(ops) with ["put", row] / ["delete", k]
      makeDevice     (vault, unreadable) -> the device (engine.js); vault: {keyring, save(keyring)}, unreadable: the
                     store's "unreadable:<key>" rows. The device also has persist(ops): save its changes and `ops` (in
                     the store's form) in one transaction, plus lacks(bit), lacking(bits) and anyNowhere(bits) for status.
      words          {otherApp}: what to say when a server's vault is for another app
-     onSynced       called after each sync, to show what changed */
+     onSynced       called after each sync, to show what changed
+     bits           {from, to}: the server bits (sb) new servers may get, 0 to 30 by default; an app that uses some
+                    bits for something else leaves them out. Servers stored with a bit outside it keep working.
+
+   A server can be paused on this device ({paused: true}, setPaused): rounds leave it out, with its cursor and the
+   records' bits as they were, until it's resumed. */
 import { deriveKeys, newKeyring, changePassphrase as rewrap, unlock } from "./crypto.js";
 import { DifferentVaultError, OtherAppError, syncAll } from "./engine.js";
 import { ServerClient } from "./http.js";
@@ -21,11 +26,21 @@ const AFTER_CHANGE_MS = 3000;
 // and only show the server as failing once these tries have failed too. A server's Retry-After is honoured.
 const RETRY_MS = [5000, 20000];
 
-export function createSyncManager({ app, store, makeDevice, words, onSynced }) {
+export function createSyncManager({ app, store, makeDevice, words, onSynced, bits = { from: 0, to: 30 } }) {
   const describe = (error) => describeError(error, words);
+  // JavaScript's bitwise operators work on 32-bit signed integers, so bits 0 to 30 keep sb a positive, exact number;
+  // 1 << 31 is negative and 1 << 32 is 1
+  if (
+    !Number.isInteger(bits.from) ||
+    !Number.isInteger(bits.to) ||
+    bits.from < 0 ||
+    bits.from > bits.to ||
+    bits.to > 30
+  )
+    throw new RangeError(`server bits must be whole numbers with 0 ≤ from ≤ to ≤ 30, not ${JSON.stringify(bits)}`);
   return {
     vault: null, // {keyring, keys}
-    servers: [], // [{bit, url, token, id, cursor, mark, keyringVersion, name, last: {at, ok, error, report}}]
+    servers: [], // [{bit, url, token, id, cursor, mark, keyringVersion, name, paused, last: {at, ok, error, report}}]
     running: false,
     again: false,
     timer: 0,
@@ -109,12 +124,11 @@ export function createSyncManager({ app, store, makeDevice, words, onSynced }) {
       return { info, keyring: vault.keyring };
     },
     async addServer(url, token, name) {
+      // Each server is one bit in every record's server bits (sb): the lowest free one in the app's range
       const used = new Set(this.servers.map((s) => s.bit));
-      let bit = 0;
+      let bit = bits.from;
       while (used.has(bit)) bit++;
-      // Each server is one bit in every record's server bits (sb). JavaScript's bitwise operators work on 32-bit
-      // signed integers, so bits 0 to 30 keep sb a positive, exact number; 1 << 31 is negative and 1 << 32 is 1.
-      if (bit > 30) throw new Error("Too many servers.");
+      if (bit > bits.to) throw new Error("Too many servers.");
       const server = {
         k: `server:${bit}`,
         bit,
@@ -138,6 +152,15 @@ export function createSyncManager({ app, store, makeDevice, words, onSynced }) {
       Object.assign(server, changes);
       await this.saveServer(server);
       this.soon(0);
+    },
+    /** Pause a server on this device, or resume it (and sync soon). A round already running finishes as it is. */
+    async setPaused(bit, paused) {
+      const server = this.servers.find((s) => s.bit === bit);
+      if (!server) throw new Error(`No server with bit ${bit}.`);
+      server.paused = paused;
+      server.tries = 0;
+      await this.saveServer(server);
+      if (!paused) this.soon(0);
     },
     async removeServer(bit) {
       this.servers = this.servers.filter((s) => s.bit !== bit);
@@ -166,8 +189,11 @@ export function createSyncManager({ app, store, makeDevice, words, onSynced }) {
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.now(), ms);
     },
+    active() {
+      return this.servers.filter((s) => !s.paused);
+    },
     async now() {
-      if (!this.vault || !this.servers.length) return;
+      if (!this.vault || !this.active().length) return;
       if (this.running) {
         this.again = true;
         return;
@@ -175,7 +201,7 @@ export function createSyncManager({ app, store, makeDevice, words, onSynced }) {
       this.running = true;
       this.notify();
       try {
-        const links = this.servers.map((server) => ({ server, http: this.client(server.url, server.token) }));
+        const links = this.active().map((server) => ({ server, http: this.client(server.url, server.token) }));
         const results = await syncAll({ app, device: this.device, keys: this.vault.keys, links });
         let retry = null;
         for (const { server, report, error } of results) {
@@ -208,23 +234,36 @@ export function createSyncManager({ app, store, makeDevice, words, onSynced }) {
       }
     },
 
-    /** For the top bar, cheaply: "bad" when a server failed, "waiting" when a change reached no server yet. */
+    /** For the top bar, cheaply: "bad" when a server failed, "paused" when every server is, "waiting" when a change
+        reached no server that isn't paused. */
     headerState() {
       if (!this.vault || !this.servers.length) return null;
-      if (this.servers.some((s) => s.last && !s.last.ok)) return "bad";
-      return this.device.anyNowhere(this.servers.map((s) => s.bit)) ? "waiting" : null;
+      const active = this.active();
+      if (!active.length) return "paused";
+      if (active.some((s) => s.last && !s.last.ok)) return "bad";
+      return this.device.anyNowhere(active.map((s) => s.bit)) ? "waiting" : null;
     },
-    /** Status for the UI: per server, and overall ("unsynced" when a change hasn't reached any server). */
+    /** Status for the UI: per server, and overall. `waiting`: changes no server that isn't paused has yet (0 when
+        all are paused); `onlyHere`: changes no server has at all, paused ones too, which deleting this device's data
+        would lose. `active`: how many servers aren't paused. A paused server never counts as failing. */
     status() {
-      const counts = this.servers.length ? this.device.lacking(this.servers.map((s) => s.bit)) : { nowhere: 0 };
-      const servers = this.servers.map((s) => ({ ...s, lacks: this.device.lacks(s.bit) }));
-      const failing = servers.some((s) => s.last && !s.last.ok);
+      const all = this.servers.map((s) => s.bit);
+      const active = this.active().map((s) => s.bit);
+      const onlyHere = all.length ? this.device.lacking(all).nowhere : 0;
+      const waiting = !active.length
+        ? 0
+        : active.length === all.length
+          ? onlyHere
+          : this.device.lacking(active).nowhere;
+      const servers = this.servers.map((s) => ({ ...s, paused: !!s.paused, lacks: this.device.lacks(s.bit) }));
       return {
         setUp: !!this.vault,
         running: this.running,
         servers,
-        unsynced: this.servers.length ? counts.nowhere : 0,
-        failing,
+        active: active.length,
+        waiting,
+        onlyHere,
+        failing: servers.some((s) => !s.paused && s.last && !s.last.ok),
       };
     },
   };

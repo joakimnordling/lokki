@@ -23,7 +23,7 @@ export function syncSummary() {
   if (!st.setUp) return "Off. Keep your logs on several devices through a server you choose, end-to-end encrypted.";
   if (!st.servers.length) return "No servers. Add one to sync.";
   if (st.failing) return "A server has a problem. Tap to see.";
-  if (st.unsynced) return `${st.unsynced === 1 ? "1 change" : `${st.unsynced} changes`} waiting to sync.`;
+  if (st.waiting) return `${st.waiting === 1 ? "1 change" : `${st.waiting} changes`} waiting to sync.`;
   return `On, with ${st.servers.length === 1 ? "1 server" : `${st.servers.length} servers`}. End-to-end encrypted.`;
 }
 
@@ -180,6 +180,7 @@ function unlockVault(url, token, keyring) {
 // ---- the overview
 
 function serverState(s, running) {
+  if (s.paused) return [ICON.sending, "Paused on this device", false]; // its last error is old news
   if (running) return [ICON.syncing, "Syncing…", false];
   if (!s.last) return [ICON.sending, "Not synced yet", false];
   if (!s.last.ok) return [s.last.error?.startsWith("Can't reach") ? ICON.offline : ICON.failing, s.last.error, true];
@@ -199,8 +200,8 @@ function overviewBody() {
       return `<button class="setrow" data-server="${s.bit}"><span class="srv"><span class="${bad ? "bad" : ""}">${icon}</span><span>${esc(s.name)}<small class="${bad ? "bad" : ""}">${esc(text)}</small></span></span><span>›</span></button>`;
     })
     .join("");
-  const summary = st.unsynced
-    ? `${st.unsynced === 1 ? "1 change" : `${st.unsynced} changes`} on this device haven't reached any server yet.`
+  const summary = st.onlyHere
+    ? `${st.onlyHere === 1 ? "1 change" : `${st.onlyHere} changes`} on this device haven't reached any server yet.`
     : st.servers.length
       ? "Everything on this device has reached at least one server."
       : "Add a server to sync.";

@@ -57,6 +57,9 @@ const results = await syncAll({ app: APP, device, keys: await deriveKeys(dataKey
 
 A browser app would rather use `createSyncManager` (see `manager.js` and Lokki's `src/sync/manager.js`), which keeps the
 keyring, the non-extractable keys and each server's state in the app's store.
+An app that uses some of the records' server bits for something else gives it the range it may hand out
+(`bits: { from, to }`, 0 to 30 by default). A server can be paused on one device (`setPaused`); `status()` then tells
+changes `waiting` for a server that isn't paused from those `onlyHere`, on no server at all.
 
 ## Installing
 

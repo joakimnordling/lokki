@@ -147,9 +147,28 @@ describe("standalone sync", () => {
     assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences (sync has a problem)");
     await open(A);
     assert.match(await A.textContent("#syncBody"), /Can't reach the server/);
-    await A.context().setOffline(false);
-    await syncNow(A);
+    // Lokki has no Pause button, but a server paused on this device shows as paused, not with its old error
+    const bit = await A.evaluate(() => window.__lokki.sync.servers[0].bit);
+    await A.evaluate((b) => window.__lokki.sync.setPaused(b, true), bit);
     await home(A);
+    assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences (sync is paused)");
+    await open(A);
+    assert.match(await A.textContent("#syncBody"), /Paused on this device/);
+    assert.doesNotMatch(await A.textContent("#syncBody"), /Can't reach the server/);
+    await A.context().setOffline(false);
+    await A.evaluate((b) => window.__lokki.sync.setPaused(b, false), bit);
+    await synced(A);
+    await home(A);
+    assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences");
+    assert.equal(await A.$(".hbtn .dot"), null);
+
+    // A change that syncs while Preferences is open: the dot is gone once the sheet closes
+    await A.click("#hSet");
+    await A.evaluate((m) => window.__test.add(m, "2026-11-08T10:00:00", 12, ""), mid);
+    assert.ok(await A.$(".hbtn .dot"), "waiting while it's open");
+    await syncNow(A);
+    await A.keyboard.press("Escape");
+    assert.equal(await A.$("#scrim"), null);
     assert.equal(await A.getAttribute("#hSet", "aria-label"), "Preferences");
     assert.equal(await A.$(".hbtn .dot"), null);
   });

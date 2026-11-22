@@ -62,9 +62,19 @@ render();
   const listShown = () => ui.view === "list" && !document.querySelector(".scrim");
   if (!DEMO) {
     await sync.load();
+    // A sync change redraws the list (the Settings button's dot), but not under an open sheet: the page there is
+    // pinned in place. One that came while a sheet was open is drawn when the last sheet closes.
+    let missed = false;
     sync.onChange(() => {
       if (listShown()) render();
+      else missed = true;
     });
+    new MutationObserver(() => {
+      if (missed && !$("#layer").childElementCount) {
+        missed = false;
+        if (listShown()) render();
+      }
+    }).observe($("#layer"), { childList: true });
   }
   S.localReady = true;
   render();
