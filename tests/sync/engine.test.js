@@ -97,6 +97,60 @@ const visible = (d) =>
     .map((r) => JSON.stringify(r))
     .sort();
 
+describe("changes made here while a round is on its way", () => {
+  it("an edit made while a push is on its way isn't taken as sent, and is sent too", async () => {
+    const vault = await newVault();
+    const { write } = await servers[0].vault();
+    const a = device(vault, [servers[0], write]);
+    a.put(metric("milk"));
+    a.put(entry("e1", 1));
+    const http = a.links[0].http;
+    const push = http.push.bind(http);
+    http.push = async (...args) => {
+      const answer = await push(...args);
+      http.push = push;
+      a.put(entry("e1", 2)); // after the server took version 1, before the device marks it as sent
+      return answer;
+    };
+    const [report] = await sync(a);
+    assert.equal(report.pushed, 3, "the metric and version 1, then the edit, in the same round");
+    assert.equal(a.lacks(0), 0);
+    const b = device(vault, [servers[0], write]);
+    await sync(b);
+    assert.equal(value(b, "e1"), 2, "the other device gets the edit");
+  });
+
+  it("an edit made while a pulled page is being read isn't written over by the server's older version", async () => {
+    const vault = await newVault();
+    const { write } = await servers[0].vault();
+    const a = device(vault, [servers[0], write]);
+    a.put(metric("milk"));
+    a.put(entry("e1", 1));
+    a.put(entry("e2", 1));
+    await sync(a);
+    const b = device(vault, [servers[0], write]);
+    await sync(b);
+    a.put(entry("e1", 2));
+    a.put(entry("e2", 2));
+    await sync(a);
+
+    // b pulls both; while it reads the second row, an edit is made to the first, newer than a's
+    let read = 0;
+    const clear = b.clearUnreadable.bind(b);
+    b.clearUnreadable = (key, bit) => {
+      if (++read === 2) b.put(entry("e1", 3));
+      return clear(key, bit);
+    };
+    await sync(b);
+    b.clearUnreadable = clear;
+    assert.equal(value(b, "e1"), 3, "the edit made here is kept");
+    assert.equal(value(b, "e2"), 2);
+    assert.equal(b.lacks(0), 0, "and sent");
+    await sync(a);
+    assert.equal(value(a, "e1"), 3);
+  });
+});
+
 describe("two devices, one server", () => {
   it("send and receive changes, and a new device joins with the passphrase", async () => {
     const vault = await newVault();
